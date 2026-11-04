@@ -64,8 +64,8 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 
 ## Current implementation status
 
-- FreeLLM 0.5.2 sidecar code is integrated on the release-candidate branch; it is optional and not running in production.
-- GitHub Actions run #78 passed on commit `47235bf505b3332a2e88fc27282a37a6b78b2af5`: 64 tests, Qudron and FreeLLM Docker builds, Compose profile validation, sidecar health/bearer-auth smoke test, and Cairo timezone check.
+- FreeLLM 0.5.2 sidecar code is integrated on the release-candidate branch; it is optional and not running in production. Quota/cooldown state is persisted in a named Docker volume across sidecar restarts.
+- GitHub Actions run #82 passed on commit `29749aa503f8b5bf6c18f555c1a3032705704e54`: 64 tests, Qudron and FreeLLM Docker builds, Compose profile validation, sidecar health/bearer-auth smoke test, and Cairo timezone check. Run #79 also passed on the earlier documentation-updated commit.
 - No provider API keys, OAuth sessions, or customer credentials have been installed. The CI test validates sidecar startup/authentication, not successful live inference from each upstream provider.
 - OmniRoute remains an evaluated candidate, not yet integrated. Its current README advertises 231 providers, 50+ free tiers and OAuth/web-cookie routes; those are upstream claims and each route still needs provider-terms, privacy and security review. The repository is MIT licensed, but some OAuth/web-cookie/CLI subscription integrations may be subject to separate upstream provider terms. Never enable web-cookie adapters for customer data or bypass a provider's terms.
 - Qudron is still not merged or deployed. The release candidate still needs a host, owner-approved provider configuration, exact prices/budgets and an approved release.

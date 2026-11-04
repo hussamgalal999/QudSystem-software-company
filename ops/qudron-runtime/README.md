@@ -42,7 +42,8 @@ Memory is deliberately not a customer-record database. Do not put CV source docu
 
 After deployment, external orchestrators can enqueue approved internal draft/research jobs:
 - `POST /jobs` with `Authorization: Bearer <QUDRON_API_TOKEN>`.
-- `GET /jobs/{job_id}` with the same header to read a task status.
+- `GET /jobs/{job_id}` with the same header to read a task status without disclosing internal filesystem paths.
+- `GET /jobs/{job_id}/result` with the same header to fetch a completed, size-limited Markdown artifact from inside the configured reports directory; path traversal and outside paths are rejected.
 - Requests require a caller-supplied idempotency key; duplicate submissions return the existing job instead of creating duplicate work.
 - Intake is allowlisted to internal research/draft/review task types. CV customer-data tasks, payment reconciliation, customer support with customer records, and financial actions are intentionally blocked from this generic endpoint.
 - The default Docker mapping binds the port to localhost. Remote integrations must use HTTPS, a private network or authenticated reverse proxy, request logging, and secret rotation. Never expose this endpoint directly to the public internet.
@@ -70,7 +71,9 @@ This runtime currently creates research, drafts, operational memory notes, and h
 
 - SQLite WAL queue with atomic job claiming.
 - Bounded worker concurrency and capped exponential retry.
-- Stale lease recovery after crashes/restarts.
+- Stale lease recovery after crashes/restarts, plus heartbeat renewal while long model calls are active.
+- Completion and failure writes are guarded by current lease ownership, preventing a stale worker from overwriting a job reclaimed by another worker.
+- SQLite connection context managers close handles after transactions.
 - Idempotent recurring schedule enqueueing within an interval.
 - Health/status endpoint, logs, durable artifact paths.
 - Unit tests for concurrent claims, stale recovery, recurring idempotency, memory scoping/redaction, swarm planning, and payment callback verification.

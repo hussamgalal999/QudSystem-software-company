@@ -439,7 +439,7 @@ def mcp_get_job_result(job_id: str) -> str | None:
         if not report_path.is_relative_to(root) or not report_path.is_file():
             return None
         if report_path.stat().st_size > 100_000:
-            return report_path.read_text(encoding="utf-8")[:100_000] + "\\n\\n[Report truncated by MCP gateway.]"
+            return report_path.read_text(encoding="utf-8")[:100_000] + "\n\n[Report truncated by MCP gateway.]"
         return report_path.read_text(encoding="utf-8")
     except OSError:
         return None
@@ -476,7 +476,7 @@ def ensure_api_token() -> str:
         temp = API_TOKEN_FILE.with_name(API_TOKEN_FILE.name + ".tmp")
         fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(configured + "\\n")
+            handle.write(configured + "\n")
         os.replace(temp, API_TOKEN_FILE)
         try:
             os.chmod(API_TOKEN_FILE, 0o600)
@@ -491,7 +491,7 @@ def ensure_api_token() -> str:
         token = secrets.token_urlsafe(48)
         fd = os.open(API_TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(token + "\\n")
+            handle.write(token + "\n")
     if len(token) < 32:
         raise RuntimeError("Persisted Qudron API token is too short; rotate it safely.")
     try:

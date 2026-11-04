@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'ops/qudron-runtime/**'
+      - 'integrations/OpenDots'
+      - '.gitmodules'
       - '.github/workflows/qudron-ci.yml'
   push:
     branches: [main]
     paths:
       - 'ops/qudron-runtime/**'
+      - 'integrations/OpenDots'
+      - '.gitmodules'
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -16,12 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Compile runtime modules
-        run: python -m py_compile ops/qudron-runtime/*.py
+        run: |
+          python -m py_compile ops/qudron-runtime/*.py ops/qudron-runtime/scripts/*.py
+          sh -n ops/qudron-runtime/scripts/opendots-entrypoint.sh
       - name: Validate runtime JSON configuration
         run: |
           python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
@@ -40,8 +47,10 @@ jobs:
         working-directory: ops/qudron-runtime
         run: |
           cp .env.example .env
-          docker compose --profile free-ai --profile telegram config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots --profile telegram config --quiet
           rm -f .env
+      - name: Build pinned OpenDots application
+        run: docker build -f integrations/OpenDots/Dockerfile --target app -t qudron-opendots:ci integrations/OpenDots
       - name: Smoke-test FreeLLM sidecar authentication and health
         run: |
           docker run -d --name qudron-freellm-ci \

@@ -72,7 +72,7 @@ payment_guard.py provides a fail-closed HMAC callback verification primitive and
 
 ## Recurring jobs and operational boundaries
 
-schedule.json has recurring research and draft jobs. The current scheduler uses UTC interval timing; the timezone field documents the business timezone but does not implement local wall-clock scheduling.
+schedule.json has recurring research and draft jobs. Local schedules now support IANA timezones, wall-clock `at_local` times, fixed weekdays, and anchored every-N-day intervals. The QudSystem schedule is configured for `Africa/Cairo`. After downtime, the scheduler enqueues only the latest missed local slot rather than flooding the queue with every missed run. Legacy `every_minutes` schedules remain supported. Validate local schedules with the included tests before changing their cadence.
 
 This runtime currently creates research, drafts, operational memory notes, and health information. It does not publish posts, send sales messages, accept customer payments, transfer money, issue refunds, or modify production customer accounts. Those actions require connected provider credentials, idempotency, audit logs, authorization checks, and end-to-end tests.
 
@@ -83,7 +83,8 @@ This runtime currently creates research, drafts, operational memory notes, and h
 - Stale lease recovery after crashes/restarts, plus heartbeat renewal while long model calls are active.
 - Completion and failure writes are guarded by current lease ownership, preventing a stale worker from overwriting a job reclaimed by another worker.
 - SQLite connection context managers close handles after transactions.
-- Idempotent recurring schedule enqueueing within an interval.
+- Idempotent recurring schedule enqueueing for interval-based and local wall-clock schedules.
+- IANA timezone, local time, weekday, anchored every-N-day, and bounded catch-up scheduling tests.
 - Health/status endpoint, logs, durable artifact paths.
 - Unit tests for concurrent claims, stale recovery, recurring idempotency, memory scoping/redaction, swarm planning, and payment callback verification.
 

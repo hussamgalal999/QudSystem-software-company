@@ -33,6 +33,7 @@ services:
     env_file: [.env]
     environment:
       FREELM_KEYLESS: ${FREELM_KEYLESS:-auto}
+      FREELM_PERSIST: "1"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -40,14 +41,21 @@ services:
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
       ZAI_API_KEY: ${ZAI_API_KEY:-}
       KILO_API_KEY: ${KILO_API_KEY:-}
       COHERE_API_KEY: ${COHERE_API_KEY:-}
       FREELM_SERVER_KEY: ${FREELM_SERVER_KEY:-}
     expose: ["4000"]
+    volumes:
+      - freellm-state:/root/.cache/freelm
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=5)"]
       interval: 30s
       timeout: 8s
       retries: 3
       start_period: 60s
+
+volumes:
+  freellm-state:
+    name: qudron-freellm-state

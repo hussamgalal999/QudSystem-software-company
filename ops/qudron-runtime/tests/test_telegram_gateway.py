@@ -73,5 +73,40 @@ class TelegramGatewayTests(unittest.TestCase):
         self.assertIn("job-123", gateway.send.call_args.args[1])
 
 
+    def test_completed_report_notification_is_persistently_deduplicated(self):
+        import tempfile
+        from pathlib import Path
+        from telegram_gateway import TelegramGateway
+        with tempfile.TemporaryDirectory() as tmp:
+            gateway = TelegramGateway()
+            gateway.notification_db_path = Path(tmp) / "notifications.sqlite3"
+            gateway.owner_ids = {"111"}
+            gateway.qudron = Mock(return_value={"latest_jobs": [{
+                "id": "job-abc", "title": "Research report", "status": "completed", "result_available": True
+            }]})
+            gateway.qudron_result_text = Mock(return_value="# Verified report\nFindings")
+            gateway.send = Mock()
+            self.assertEqual(gateway.poll_completion_notifications(), 1)
+            self.assertEqual(gateway.poll_completion_notifications(), 0)
+            gateway.send.assert_called_once()
+            self.assertIn("Verified report", gateway.send.call_args.args[1])
+
+    def test_failed_task_notification_hides_internal_error_details(self):
+        import tempfile
+        from pathlib import Path
+        from telegram_gateway import TelegramGateway
+        with tempfile.TemporaryDirectory() as tmp:
+            gateway = TelegramGateway()
+            gateway.notification_db_path = Path(tmp) / "notifications.sqlite3"
+            gateway.owner_ids = {"111"}
+            gateway.qudron = Mock(return_value={"latest_jobs": [{
+                "id": "job-failed", "title": "Research task", "status": "failed", "error": "private provider detail"
+            }]})
+            gateway.send = Mock()
+            self.assertEqual(gateway.poll_completion_notifications(), 1)
+            self.assertIn("failed", gateway.send.call_args.args[1])
+            self.assertNotIn("private provider detail", gateway.send.call_args.args[1])
+
+
 if __name__ == "__main__":
     unittest.main()

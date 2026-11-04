@@ -41,7 +41,8 @@ class ModelRoutingTests(unittest.TestCase):
             "LLM_FAST_API_KEY":"test-secret",
             "LLM_FAST_MODEL":"fast-instruct",
             "LLM_FAST_INPUT_USD_PER_1M":"1",
-            "LLM_FAST_OUTPUT_USD_PER_1M":"1"
+            "LLM_FAST_OUTPUT_USD_PER_1M":"1",
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD":"1"
         }, clear=True):
             with patch("qudron_worker.urllib.request.urlopen", side_effect=fake_urlopen):
                 response = worker.call_llm(
@@ -94,8 +95,16 @@ class ModelRoutingTests(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(remaining, 0)
 
-    def test_non_cvpen_work_does_not_require_cvpen_specific_budget(self):
+    def test_generic_model_calls_fail_closed_without_a_daily_or_monthly_budget(self):
         with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "daily or monthly model budget"):
+                worker.reserve_model_budget(
+                    "research-job","research_analyst","balanced","research-model",500,
+                    task_type="research"
+                )
+
+    def test_non_cvpen_work_can_skip_local_budget_only_in_explicit_dev_mode(self):
+        with patch.dict("os.environ", {"QUDRON_REQUIRE_MODEL_BUDGET":"false"}, clear=True):
             reservation = worker.reserve_model_budget(
                 "research-job","research_analyst","balanced","research-model",500,
                 task_type="research"

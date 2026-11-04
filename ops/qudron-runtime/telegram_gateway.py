@@ -124,7 +124,12 @@ class TelegramGateway:
             return
         chat = message.get("chat", {})
         chat_id = str(chat.get("id", "")) if isinstance(chat, dict) else ""
-        if not chat_id or chat_id not in self.owner_ids:
+        # Owner commands are accepted only in a one-to-one private chat.
+        if not isinstance(chat, dict) or chat.get("type") != "private":
+            return
+        sender = message.get("from", {})
+        sender_id = str(sender.get("id", "")) if isinstance(sender, dict) else ""
+        if not chat_id or chat_id not in self.owner_ids or sender_id != chat_id:
             return
         text = message.get("text", "")
         if not isinstance(text, str):

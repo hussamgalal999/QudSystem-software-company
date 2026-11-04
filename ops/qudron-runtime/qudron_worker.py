@@ -404,7 +404,7 @@ def profile_cost_rates(profile: str) -> tuple[float | None, float | None]:
         if value < 0:
             raise ValueError(f"{name} must be >= 0")
         return value
-    return read_rate("LLM_INPUT_USD_PER_1M"), read_rate("LLM_OUTPUT_USD_PER_1M")
+    return read_rate("INPUT_USD_PER_1M"), read_rate("OUTPUT_USD_PER_1M")
 
 
 def configured_budget(name: str) -> float | None:

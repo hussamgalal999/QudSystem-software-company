@@ -50,17 +50,67 @@ def request_json(url: str, token: str, method: str = "GET",
         return json.loads(raw.decode("utf-8"))
 
 
-def find_dot_id(workspace: Any) -> str:
-    if not isinstance(workspace, dict) or not isinstance(workspace.get("dots"), list):
-        raise BootstrapError("OpenDots workspace response has no dots list")
-    dots = workspace["dots"]
-    for dot in dots:
-        if isinstance(dot, dict) and dot.get("id") and str(dot.get("name", "")).lower() in {"dot", "qudron"}:
-            return str(dot["id"])
-    for dot in dots:
-        if isinstance(dot, dict) and dot.get("id"):
-            return str(dot["id"])
-    raise BootstrapError("OpenDots has no initial Dot to attach the Qudron connection to")
+def ensure_commander_dot(workspace: Any, owner_token: str) -> str:
+    if not isinstance(workspace, dict):
+        raise BootstrapError("OpenDots workspace response is invalid")
+    spaces = workspace.get("spaces")
+    dots = workspace.get("dots")
+    if not isinstance(spaces, list) or not isinstance(dots, list):
+        raise BootstrapError("OpenDots workspace response is missing spaces or dots")
+
+    space_name = "Qudron Command Room"
+    space = next(
+        (item for item in spaces
+         if isinstance(item, dict) and item.get("name") == space_name and item.get("id")),
+        None,
+    )
+    if space is None:
+        space = request_json(
+            f"{OPENDOTS_URL}/api/spaces",
+            owner_token,
+            method="POST",
+            payload={
+                "name": space_name,
+                "description": "The control room for Qudron: tasks, reports, model operations, and capability status.",
+            },
+        )
+    space_id = str(space.get("id", "")) if isinstance(space, dict) else ""
+    if not space_id:
+        raise BootstrapError("OpenDots did not return a Qudron Space ID")
+
+    dot_name = "Qudron Commander"
+    dot = next(
+        (item for item in dots
+         if isinstance(item, dict) and item.get("name") == dot_name and item.get("id")),
+        None,
+    )
+    if dot is None:
+        dot = request_json(
+            f"{OPENDOTS_URL}/api/dots",
+            owner_token,
+            method="POST",
+            payload={
+                "spaceId": space_id,
+                "spaceIds": [space_id],
+                "name": dot_name,
+                "instructions": (
+                    "You are the OpenDots control interface for Qudron, a separate autonomous execution platform. "
+                    "OpenDots is the conversation and control surface; Qudron is the system that executes tasks. "
+                    "Use the Qudron MCP connection as the source of truth for status, usage, queued work, and completed reports. "
+                    "Submit only supported research, analysis, or draft jobs. Wait for a job to complete and retrieve its report before claiming it is done. "
+                    "The Qudron submission tool changes state and must remain Ask first. Never claim publishing, payments, account changes, private customer-data processing, or shell access are available through this connection. "
+                    "Prefer small, idempotent tasks and report evidence and limitations clearly."
+                ),
+                "researchAllowed": True,
+                "memoryAllowed": True,
+                "appsAllowed": False,
+                "composioToolkits": [],
+            },
+        )
+    dot_id = str(dot.get("id", "")) if isinstance(dot, dict) else ""
+    if not dot_id:
+        raise BootstrapError("OpenDots did not return a Qudron Commander Dot ID")
+    return dot_id
 
 
 def main() -> int:
@@ -75,7 +125,7 @@ def main() -> int:
     for attempt in range(1, 31):
         try:
             workspace = request_json(f"{OPENDOTS_URL}/api/workspace", owner_token)
-            dot_id = find_dot_id(workspace)
+            dot_id = ensure_commander_dot(workspace, owner_token)
             connections = request_json(
                 f"{OPENDOTS_URL}/api/dots/{dot_id}/connections", owner_token
             )
@@ -92,14 +142,21 @@ def main() -> int:
                 connection_id = existing.get("id")
                 if not connection_id:
                     raise BootstrapError("Existing Qudron connection has no ID")
-                request_json(
+                refreshed = request_json(
                     f"{OPENDOTS_URL}/api/connections/{connection_id}/refresh",
                     owner_token,
                     method="POST",
                     payload={},
                 )
-                print("Qudron MCP connection already exists; tool catalogue refreshed.")
-                return 0
+                if isinstance(refreshed, dict) and refreshed.get("error"):
+                    request_json(
+                        f"{OPENDOTS_URL}/api/connections/{connection_id}",
+                        owner_token,
+                        method="DELETE",
+                    )
+                else:
+                    print("Qudron Commander is connected; the MCP tool catalogue was refreshed.")
+                    return 0
 
             result = request_json(
                 f"{OPENDOTS_URL}/api/dots/{dot_id}/connections",
@@ -113,7 +170,7 @@ def main() -> int:
             )
             if not isinstance(result, dict) or not result.get("id"):
                 raise BootstrapError("OpenDots did not confirm creation of the Qudron MCP connection")
-            print("Qudron MCP connection created for the initial OpenDots Dot.")
+            print("Qudron MCP connection created for the dedicated Qudron Commander Dot.")
             return 0
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, BootstrapError) as exc:
             last_error = type(exc).__name__

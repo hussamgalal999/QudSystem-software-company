@@ -32,13 +32,18 @@ class SwarmEngineTests(unittest.TestCase):
 
     def test_execute_swarm_invokes_each_agent_and_returns_final(self):
         calls = []
+        seen_contexts = []
         def fake_call(agent, instruction, context):
             calls.append(agent["id"])
+            seen_contexts.append(context)
             return "draft" if len(calls) == 1 else ("review" if len(calls) == 2 else "final")
         result = execute_swarm({"task_type":"social_post_draft"}, fake_call, max_agents=3)
         self.assertEqual(len(calls), 3)
         self.assertIn("Agents invoked: 3", result)
         self.assertTrue(result.endswith("final"))
+        self.assertIn("draft", seen_contexts[1])
+        self.assertIn("draft", seen_contexts[2])
+        self.assertIn("review", seen_contexts[2])
 
     def test_empty_agent_output_fails_closed(self):
         def fake_call(agent, instruction, context):

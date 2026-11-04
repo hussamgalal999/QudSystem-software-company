@@ -1,0 +1,26 @@
+# Build the pinned CopilotKit/OpenDots source with a narrow, fail-closed
+# bootstrap patch that exposes Qudron as a dedicated control Dot via MCP.
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY integrations/OpenDots/package*.json ./
+RUN npm ci
+COPY integrations/OpenDots/ ./
+COPY ops/qudron-runtime/prepare_opendots.mjs /tmp/prepare_opendots.mjs
+RUN node /tmp/prepare_opendots.mjs
+RUN npm run build
+
+FROM node:24-bookworm-slim AS app
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=4310 DATABASE_PATH=/data/opendots.sqlite
+WORKDIR /app
+COPY integrations/OpenDots/package*.json ./
+RUN npm ci --omit=dev \
+    && (getent group 10001 >/dev/null || groupadd --gid 10001 freelm-readers) \
+    && usermod -aG 10001 node \
+    && mkdir -p /data \
+    && chown node:node /data
+COPY --from=build /app/dist ./dist
+COPY ops/qudron-runtime/start_opendots.sh /usr/local/bin/start_opendots
+RUN chmod 0755 /usr/local/bin/start_opendots
+USER node
+EXPOSE 4310
+ENTRYPOINT ["/usr/local/bin/start_opendots"]

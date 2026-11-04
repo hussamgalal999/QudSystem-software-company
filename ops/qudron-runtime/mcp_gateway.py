@@ -187,6 +187,7 @@ def handle_mcp_request(
     get_agents: Callable[[], Any] | None = None,
     get_models: Callable[[], Any] | None = None,
     search_capabilities: Callable[[str, str | None, int], Any] | None = None,
+    enqueue_batch: Callable[[dict[str, Any]], Any] | None = None,
 ) -> dict[str, Any] | None:
     """Process one stateless JSON-RPC request. None means a notification."""
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":

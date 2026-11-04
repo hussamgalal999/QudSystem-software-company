@@ -1,192 +1,192 @@
 {
   "version": 1,
   "agents": [
-    [
-      "operations_commander",
-      "Operations Commander",
-      "reasoning",
-      "Plan and coordinate complex service workflows; surface blockers and ownership."
-    ],
-    [
-      "research_analyst",
-      "Research Analyst",
-      "balanced",
-      "Conduct source-led research; separate observed facts, inference, and unknowns."
-    ],
-    [
-      "evidence_checker",
-      "Evidence & Citation Auditor",
-      "balanced",
-      "Check factual claims, source quality, uncertainty, and unsupported assertions."
-    ],
-    [
-      "brand_strategist",
-      "Brand Strategist",
-      "balanced",
-      "Protect QudSystem brand positioning, customer trust, and message-market fit."
-    ],
-    [
-      "copywriter",
-      "Conversion Copywriter",
-      "balanced",
-      "Write clear, locally appropriate marketing and product copy."
-    ],
-    [
-      "brand_quality",
-      "Brand & Claims Reviewer",
-      "balanced",
-      "Review tone, clarity, brand fit, exaggeration, and proof requirements."
-    ],
-    [
-      "video_producer",
-      "Short-form Video Producer",
-      "balanced",
-      "Create feasible scripts, shot lists, hooks, and production notes."
-    ],
-    [
-      "localization_specialist",
-      "Arabic-English Localization Specialist",
-      "balanced",
-      "Localize language naturally without literal or culturally awkward phrasing."
-    ],
-    [
-      "creative_qa",
-      "Creative QA Reviewer",
-      "balanced",
-      "Check video/story consistency, subtitles, timing, and CTA."
-    ],
-    [
-      "language_qa",
-      "Language QA Reviewer",
-      "balanced",
-      "Review grammar, terminology, and meaning preservation."
-    ],
-    [
-      "seo_strategist",
-      "SEO Strategist",
-      "balanced",
-      "Map search intent, page architecture, and organic growth opportunities."
-    ],
-    [
-      "technical_seo",
-      "Technical SEO Analyst",
-      "balanced",
-      "Review crawlability, indexation, performance, schema, and technical risks."
-    ],
-    [
-      "market_research",
-      "Market Research Analyst",
-      "balanced",
-      "Identify segments, demand evidence, alternatives, and competitor positioning."
-    ],
-    [
-      "sales_qualifier",
-      "Sales Qualification Specialist",
-      "balanced",
-      "Build ethical qualification criteria and relevant outreach drafts."
-    ],
-    [
-      "privacy_qa",
-      "Privacy & Outreach Compliance Reviewer",
-      "reasoning",
-      "Minimize personal data and prevent spam, unlawful profiling, or unsupported contact claims."
-    ],
-    [
-      "customer_success",
-      "Customer Success Specialist",
-      "balanced",
-      "Handle service explanations, expectations, complaints, and next-step drafts."
-    ],
-    [
-      "policy_checker",
-      "Service Policy Reviewer",
-      "balanced",
-      "Check offer terms, scope, refund boundaries, and customer promises."
-    ],
-    [
-      "career_strategist",
-      "Career Strategist",
-      "reasoning",
-      "Translate client-provided career facts into a role-specific CV strategy without inventing credentials."
-    ],
-    [
-      "cv_writer",
-      "ATS CV Writer",
-      "balanced",
-      "Draft evidence-based Arabic or English CV content from supplied facts."
-    ],
-    [
-      "ats_specialist",
-      "ATS Compatibility Specialist",
-      "balanced",
-      "Review structure, headings, parsing, keywords, and role alignment; never promise ATS scores as guarantees."
-    ],
-    [
-      "fact_checker",
-      "CV Fact & Evidence Auditor",
-      "reasoning",
-      "Flag unsupported dates, employers, metrics, degrees, certifications, and achievements."
-    ],
-    [
-      "cv_qa",
-      "CV Final Quality Reviewer",
-      "balanced",
-      "Check completeness, consistency, readability, privacy, and export readiness."
-    ],
-    [
-      "finance_ops",
-      "Finance Operations Analyst",
-      "balanced",
-      "Reconcile expected versus reported amounts and identify discrepancies; never move funds."
-    ],
-    [
-      "payment_verifier",
-      "Payment Evidence Reviewer",
-      "reasoning",
-      "Interpret verified payment-provider events; do not treat screenshots or SMS alone as proof of settlement."
-    ],
-    [
-      "compliance_reviewer",
-      "Risk & Compliance Reviewer",
-      "reasoning",
-      "Identify authorization, privacy, fraud, and audit requirements."
-    ],
-    [
-      "product_manager",
-      "Product Manager",
-      "balanced",
-      "Prioritize customer problems, scope, acceptance criteria, and service readiness."
-    ],
-    [
-      "software_engineer",
-      "Automation & Integration Engineer",
-      "reasoning",
-      "Design and implement APIs, webhooks, workers, and safe integrations."
-    ],
-    [
-      "reliability_engineer",
-      "Reliability & Incident Engineer",
-      "reasoning",
-      "Investigate failed jobs, retries, observability, recovery, and service-level indicators."
-    ],
-    [
-      "qa_engineer",
-      "Test & Release Engineer",
-      "balanced",
-      "Create automated test plans, regression cases, and release gates."
-    ],
-    [
-      "data_analyst",
-      "Business Data Analyst",
-      "balanced",
-      "Analyze funnel, quality, cost, throughput, and revenue metrics without fabricating measurements."
-    ],
-    [
-      "strategy_council",
-      "Long-horizon Strategy Council",
-      "reasoning",
-      "Compare strategic options, downside scenarios, operating constraints, and investment priorities."
-    ]
+    {
+      "id": "operations_commander",
+      "name": "Operations Commander",
+      "profile": "reasoning",
+      "responsibilities": "Plan and coordinate complex service workflows; surface blockers and ownership."
+    },
+    {
+      "id": "research_analyst",
+      "name": "Research Analyst",
+      "profile": "balanced",
+      "responsibilities": "Conduct source-led research; separate observed facts, inference, and unknowns."
+    },
+    {
+      "id": "evidence_checker",
+      "name": "Evidence & Citation Auditor",
+      "profile": "balanced",
+      "responsibilities": "Check factual claims, source quality, uncertainty, and unsupported assertions."
+    },
+    {
+      "id": "brand_strategist",
+      "name": "Brand Strategist",
+      "profile": "balanced",
+      "responsibilities": "Protect QudSystem brand positioning, customer trust, and message-market fit."
+    },
+    {
+      "id": "copywriter",
+      "name": "Conversion Copywriter",
+      "profile": "balanced",
+      "responsibilities": "Write clear, locally appropriate marketing and product copy."
+    },
+    {
+      "id": "brand_quality",
+      "name": "Brand & Claims Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Review tone, clarity, brand fit, exaggeration, and proof requirements."
+    },
+    {
+      "id": "video_producer",
+      "name": "Short-form Video Producer",
+      "profile": "balanced",
+      "responsibilities": "Create feasible scripts, shot lists, hooks, and production notes."
+    },
+    {
+      "id": "localization_specialist",
+      "name": "Arabic-English Localization Specialist",
+      "profile": "balanced",
+      "responsibilities": "Localize language naturally without literal or culturally awkward phrasing."
+    },
+    {
+      "id": "creative_qa",
+      "name": "Creative QA Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check video/story consistency, subtitles, timing, and CTA."
+    },
+    {
+      "id": "language_qa",
+      "name": "Language QA Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Review grammar, terminology, and meaning preservation."
+    },
+    {
+      "id": "seo_strategist",
+      "name": "SEO Strategist",
+      "profile": "balanced",
+      "responsibilities": "Map search intent, page architecture, and organic growth opportunities."
+    },
+    {
+      "id": "technical_seo",
+      "name": "Technical SEO Analyst",
+      "profile": "balanced",
+      "responsibilities": "Review crawlability, indexation, performance, schema, and technical risks."
+    },
+    {
+      "id": "market_research",
+      "name": "Market Research Analyst",
+      "profile": "balanced",
+      "responsibilities": "Identify segments, demand evidence, alternatives, and competitor positioning."
+    },
+    {
+      "id": "sales_qualifier",
+      "name": "Sales Qualification Specialist",
+      "profile": "balanced",
+      "responsibilities": "Build ethical qualification criteria and relevant outreach drafts."
+    },
+    {
+      "id": "privacy_qa",
+      "name": "Privacy & Outreach Compliance Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Minimize personal data and prevent spam, unlawful profiling, or unsupported contact claims."
+    },
+    {
+      "id": "customer_success",
+      "name": "Customer Success Specialist",
+      "profile": "balanced",
+      "responsibilities": "Handle service explanations, expectations, complaints, and next-step drafts."
+    },
+    {
+      "id": "policy_checker",
+      "name": "Service Policy Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check offer terms, scope, refund boundaries, and customer promises."
+    },
+    {
+      "id": "career_strategist",
+      "name": "Career Strategist",
+      "profile": "reasoning",
+      "responsibilities": "Translate client-provided career facts into a role-specific CV strategy without inventing credentials."
+    },
+    {
+      "id": "cv_writer",
+      "name": "ATS CV Writer",
+      "profile": "balanced",
+      "responsibilities": "Draft evidence-based Arabic or English CV content from supplied facts."
+    },
+    {
+      "id": "ats_specialist",
+      "name": "ATS Compatibility Specialist",
+      "profile": "balanced",
+      "responsibilities": "Review structure, headings, parsing, keywords, and role alignment; never promise ATS scores as guarantees."
+    },
+    {
+      "id": "fact_checker",
+      "name": "CV Fact & Evidence Auditor",
+      "profile": "reasoning",
+      "responsibilities": "Flag unsupported dates, employers, metrics, degrees, certifications, and achievements."
+    },
+    {
+      "id": "cv_qa",
+      "name": "CV Final Quality Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check completeness, consistency, readability, privacy, and export readiness."
+    },
+    {
+      "id": "finance_ops",
+      "name": "Finance Operations Analyst",
+      "profile": "balanced",
+      "responsibilities": "Reconcile expected versus reported amounts and identify discrepancies; never move funds."
+    },
+    {
+      "id": "payment_verifier",
+      "name": "Payment Evidence Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Interpret verified payment-provider events; do not treat screenshots or SMS alone as proof of settlement."
+    },
+    {
+      "id": "compliance_reviewer",
+      "name": "Risk & Compliance Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Identify authorization, privacy, fraud, and audit requirements."
+    },
+    {
+      "id": "product_manager",
+      "name": "Product Manager",
+      "profile": "balanced",
+      "responsibilities": "Prioritize customer problems, scope, acceptance criteria, and service readiness."
+    },
+    {
+      "id": "software_engineer",
+      "name": "Automation & Integration Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Design and implement APIs, webhooks, workers, and safe integrations."
+    },
+    {
+      "id": "reliability_engineer",
+      "name": "Reliability & Incident Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Investigate failed jobs, retries, observability, recovery, and service-level indicators."
+    },
+    {
+      "id": "qa_engineer",
+      "name": "Test & Release Engineer",
+      "profile": "balanced",
+      "responsibilities": "Create automated test plans, regression cases, and release gates."
+    },
+    {
+      "id": "data_analyst",
+      "name": "Business Data Analyst",
+      "profile": "balanced",
+      "responsibilities": "Analyze funnel, quality, cost, throughput, and revenue metrics without fabricating measurements."
+    },
+    {
+      "id": "strategy_council",
+      "name": "Long-horizon Strategy Council",
+      "profile": "reasoning",
+      "responsibilities": "Compare strategic options, downside scenarios, operating constraints, and investment priorities."
+    }
   ],
   "teams": {
     "research": [

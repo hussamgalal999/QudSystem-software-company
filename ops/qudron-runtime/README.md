@@ -117,7 +117,7 @@ Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-co
 
 1. Copy `.env.example` to `.env`.
 2. Generate a unique random `FREELM_SERVER_KEY` (at least 32 random bytes). Do not reuse `QUDRON_API_TOKEN`.
-3. The sample `.env` sets `FREELM_KEYLESS=auto`: if no provider keys are present, FreeLLM uses its documented anonymous endpoints as a last resort. This is intended only for public, non-sensitive test prompts. For provider-key-only operation, set `FREELM_KEYLESS=0` and add official provider keys you own and are authorized to use (for example Google AI Studio, Groq, OpenRouter, Cloudflare, Mistral, NVIDIA NIM, Z.ai or Kilo).
+3. The sample `.env` sets `FREELM_KEYLESS=auto`: if no provider keys are present, FreeLLM uses its documented anonymous endpoints as a last resort. This is intended only for public, non-sensitive test prompts. For provider-key-only operation, set `FREELM_KEYLESS=0` and add official provider keys you own and are authorized to use (for example Google AI Studio, Groq, OpenRouter, Cloudflare, Mistral, NVIDIA NIM, Z.ai or Kilo; Cerebras is trial-credit based and may require a card).
 4. In `.env`, explicitly route only the FAST profile to the sidecar:
    ```dotenv
    LLM_FAST_BASE_URL=http://freellm:4000/v1
@@ -140,6 +140,7 @@ Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-co
 - With `FREELM_KEYLESS=auto`, FreeLLM uses anonymous public endpoints only when no keyed providers are configured. It documents Kilo Gateway free routes and OVHcloud anonymous endpoints as low-quota keyless fallbacks. Availability and limits can change at any time.
 - Anonymous endpoints may log prompts and are not approved for CVs, personal data, customer records, payment evidence, secrets, or confidential QudSystem material. Use keyless mode only for public, non-sensitive test prompts.
 - Free tiers are not unlimited, guaranteed, or necessarily suitable for commercial workloads. The provider's own terms, account quotas, region restrictions and data handling apply.
+- FreeLLM quota/cooldown state is persisted in a named Docker volume so a routine sidecar restart does not immediately reset local provider pacing. This does not change or extend upstream quotas.
 - Do not add multiple keys to evade a provider's quota or terms. Only use separately authorized keys within each provider's published rules.
 - This sidecar is an optional provider adapter, not proof that any provider is currently reachable. Run the provider's live `freelm doctor` checks and a harmless end-to-end Qudron test before relying on it.
 - Keep CVPen and other personal-data workflows on a provider approved for that data. Anonymous/keyless routing is not allowed for customer-data jobs.

@@ -488,6 +488,12 @@ def mcp_get_models() -> dict[str, Any]:
                     "display_name": model.get("display_name"),
                     "enabled_in_catalog": bool(model.get("enabled", False)),
                     "source": model.get("source"),
+                    "api_protocols": model.get("api_protocols", []),
+                    "execution_protocol": model.get("execution_protocol", "openai_chat_completions"),
+                    "requires_provider_key": bool(model.get("requires_provider_key", True)),
+                    "compatible_with_current_chat_completions_router": model.get("execution_protocol", "openai_chat_completions") == "openai_chat_completions",
+                    "context_tokens": model.get("context_tokens"),
+                    "max_output_tokens": model.get("max_output_tokens"),
                 }
                 for model in models if isinstance(model, dict)
             ],

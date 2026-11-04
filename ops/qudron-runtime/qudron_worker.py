@@ -796,6 +796,22 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     input_rate, output_rate = profile_cost_rates(profile)
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
                       "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    selected_base_url = (os.getenv(f"{profile_prefix}_BASE_URL") or LLM_BASE_URL).strip()
+    anonymous_free_route = is_anonymous_freellm_route(selected_base_url)
+    if anonymous_free_route:
+        # Anonymous routes are quota-limited free-tier endpoints; no paid key is
+        # configured. Record their provider charge as zero, but keep the daily
+        # budget and provider quotas active. Never infer zero cost for keyed APIs.
+        input_rate = 0.0 if input_rate is None else input_rate
+        output_rate = 0.0 if output_rate is None else output_rate
+    if not anonymous_free_route and (input_rate == 0 or output_rate == 0) and os.getenv(
+        "QUDRON_ALLOW_ZERO_RATE_PROVIDER", "false"
+    ).strip().lower() not in {"1", "true", "yes", "on"}:
+        raise RuntimeError(
+            "A keyed/custom provider has a zero token price configured. Set exact "
+            "input/output rates; set QUDRON_ALLOW_ZERO_RATE_PROVIDER=true only after "
+            "verifying that the provider explicitly charges zero."
+        )
     if input_rate is None or output_rate is None:
         raise RuntimeError(
             "Qudron model budget is enabled, but exact input/output price rates are missing "
@@ -1025,6 +1041,18 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
             "Configure an approved authenticated/private provider for customer data, private code, "
             "support, finance, CVs, security incidents or confidential work."
         )
+    lowered = user_text.lower()
+    restricted_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if any(marker in lowered for marker in restricted_markers):
+        raise RuntimeError(
+            "The request contains an explicit confidential/customer/credential marker; "
+            "anonymous free-model routing is blocked."
+        )
     # Existing redaction rules cover common contact/identity/payment/token patterns.
     # If any sensitive-looking value would be redacted, fail closed rather than ship it.
     if redact_sensitive_text(user_text) != user_text:
@@ -1060,6 +1088,10 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         f"Your specialist identity is {agent.get('name', agent.get('id', 'Specialist'))}. "
         f"Responsibilities: {agent.get('responsibilities', 'Complete the assigned specialist stage.')}"
     )
+    anonymous_route = is_anonymous_freellm_route(base_url)
+    if anonymous_route:
+        # Never send Qudron's persistent internal memory to anonymous public APIs.
+        memory_context = "[omitted: private Qudron memory is not sent to anonymous providers]"
     user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
         f"Original task and instructions:\n{str(job['prompt'])[:MAX_INPUT_CHARS]}\n\n"

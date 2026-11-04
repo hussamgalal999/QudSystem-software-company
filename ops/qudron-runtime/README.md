@@ -42,6 +42,25 @@ The health port is bound to localhost by default. Put an authenticated reverse p
 
 Completed drafts are saved under reports/; durable task state and sanitized memory are in data/; logs are in logs/.
 
+## Owner command channel — Telegram (optional)
+
+An owner-only Telegram long-polling gateway is included as an optional Compose profile. It opens no inbound webhook or public port. It supports:
+- /help — command guide.
+- /status — queue counts and a short latest-jobs summary.
+- /usage — daily/monthly calls, tokens and known model cost.
+- /task <request> — enqueue an internal research task using Qudron's authenticated API.
+
+Setup:
+1. Create a bot with Telegram's official BotFather and keep its token secret.
+2. Obtain your own numeric chat ID using a trusted Telegram bot/tool; add only your ID to TELEGRAM_OWNER_CHAT_IDS.
+3. Set TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_CHAT_IDS in the private .env file. Keep QUDRON_API_TOKEN configured with a random 32+ character secret.
+4. Start the runtime and gateway: docker compose up -d --build qudron, then docker compose --profile telegram up -d --build telegram-gateway.
+5. Inspect only operational logs: docker compose logs --tail=100 telegram-gateway.
+
+The gateway ignores messages from non-allowlisted chat IDs. It accepts text commands only. Task submissions use Telegram update IDs as idempotency keys, so replayed updates after a restart do not create duplicate jobs. It does not send customer messages, publish content, access local files, process payments or execute financial actions.
+
+Do not paste the bot token or API token into ChatGPT, GitHub issues, screenshots or logs. Telegram is a convenient owner-control channel, not an end-to-end private vault; avoid sending customer CVs, identity documents, payment evidence or other sensitive personal data through it.
+
 ## Memory
 
 SQLite memory now has:

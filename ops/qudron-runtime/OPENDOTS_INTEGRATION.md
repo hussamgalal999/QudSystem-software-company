@@ -17,11 +17,14 @@ OpenDots listens on `http://127.0.0.1:4310`. Qudron's authenticated API/MCP is b
 
 The one-shot `opendots-bootstrap` service uses the official OpenDots owner API. It creates a `Qudron Command Room` Space and a dedicated `Qudron Commander` Dot, then registers or refreshes the Qudron MCP connection on that Dot.
 
+The connected Dot is the visible command surface for Qudron, not a second execution engine. OpenDots handles conversation, voice UI, approvals, pages, and the optional computer surface; Qudron owns the agent workforce, durable jobs, model routing, tool policy, execution, retries, and reports. The Dot should delegate substantive work to Qudron rather than create a competing agent swarm inside OpenDots.
+
 The connected Dot exposes:
 - Qudron service state, registered agents/teams, queue counts and queue capacity.
 - Model call/token usage and known-cost totals.
 - Job status and completed Markdown report retrieval.
-- An approval-gated tool to submit supported internal research, analysis, and draft jobs.
+- An approval-gated tool to submit one supported internal research, analysis, or draft job.
+- An approval-gated batch tool for up to 100 independently keyed jobs, atomically admitted into Qudron’s durable queue.
 
 The submit tool is explicitly non-read-only. OpenDots therefore marks it Ask first and presents the exact request to the owner before it is queued. It cannot use this MCP connection to publish to Facebook, send customer messages, process payments, access CV customer data, change provider accounts, or execute arbitrary shell commands. Those capabilities require their own narrowly scoped integrations and approval policies.
 
@@ -65,3 +68,12 @@ Qudron can continue running background jobs if OpenDots is closed. Stopping Open
 - Bootstrap: creates a dedicated Commander Dot and idempotently attaches the MCP server using official OpenDots API routes; no direct SQLite writes.
 - CI: checks Python compilation, bootstrap tests, shell syntax, Compose configuration, Qudron/FreeLLM/OpenDots image builds, and sidecar bearer authentication.
 - Not yet a production deployment: no remote always-on VM or reverse proxy is provisioned here, no CopilotKit Intelligence project key is available in the host, and no Realtime voice key or PSTN/SMS service is connected.
+
+
+## Provider capability tiers
+
+OpenDots and Qudron use separate model-routing decisions. The visible Dot can use a fast conversational model for short UI turns, while Qudron chooses a task-specific provider/model for each delegated job. Keep the provider catalogue dynamic: refresh official model lists and capabilities (reasoning, tools, vision, audio, context, output limits, region/account access, and API compatibility) rather than pinning "latest" names forever.
+
+The top-tier Anthropic, OpenAI and Google models are **not keyless services**. Use their official APIs or an authorized cloud marketplace route (such as Bedrock or Vertex) when credentials and entitlements are configured. A free anonymous gateway may supply lightweight public research/draft models, not an Opus-/frontier-GPT-/Gemini-Pro-equivalent guarantee. Never disguise one model as another or route sensitive data to anonymous endpoints.
+
+Voice calls inside OpenDots use its configured Realtime speech provider. They are browser/WebRTC calls, not PSTN. Qudron can continue the long-running delegated job while the Dot stays on the call. International phone calls and SMS require a separate verified telephony account/number and explicit regional compliance; do not simulate them with browser voice.

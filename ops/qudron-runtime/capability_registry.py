@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,11 +34,22 @@ def _connect(path: str | Path) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=20000")
+    db.execute("PRAGMA foreign_keys=ON")
     return db
 
 
+@contextmanager
+def _database(path: str | Path):
+    db = _connect(path)
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
 def initialize_registry(path: str | Path) -> None:
-    with _connect(path) as db:
+    with _database(path) as db:
         db.executescript("""
         CREATE TABLE IF NOT EXISTS capabilities (
           id TEXT PRIMARY KEY,
@@ -110,7 +122,7 @@ def register_capability(path: str | Path, item: dict[str, Any]) -> dict[str, Any
                 raise CapabilityRegistryError(f"{field} must be an ISO timestamp") from exc
 
     now = _now()
-    with _connect(path) as db:
+    with _database(path) as db:
         db.execute("""
         INSERT INTO capabilities
         (id,kind,name,description,version,source_url,license,status,trust_score,
@@ -140,7 +152,7 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
 
 def get_capability(path: str | Path, capability_id: str) -> dict[str, Any] | None:
     initialize_registry(path)
-    with _connect(path) as db:
+    with _database(path) as db:
         row = db.execute("SELECT * FROM capabilities WHERE id=?", (capability_id,)).fetchone()
     return _decode(row) if row else None
 
@@ -170,7 +182,7 @@ def search_capabilities(path: str | Path, query: str = "", kind: str | None = No
         sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY trust_score DESC, updated_at DESC LIMIT ?"
     params.append(limit)
-    with _connect(path) as db:
+    with _database(path) as db:
         rows = db.execute(sql, params).fetchall()
     return [_decode(row) for row in rows]
 
@@ -180,7 +192,7 @@ def add_relation(path: str | Path, capability_id: str, related_id: str,
     if relation not in {"alternative", "depends_on", "implements", "supersedes"}:
         raise CapabilityRegistryError("unsupported relation type")
     initialize_registry(path)
-    with _connect(path) as db:
+    with _database(path) as db:
         db.execute("INSERT OR IGNORE INTO capability_relations VALUES (?,?,?,?)",
                    (capability_id, related_id, relation, _now()))
 
@@ -190,7 +202,7 @@ def find_alternatives(path: str | Path, capability_id: str, limit: int = 4) -> l
     if not 1 <= limit <= 20:
         raise CapabilityRegistryError("limit must be between 1 and 20")
     initialize_registry(path)
-    with _connect(path) as db:
+    with _database(path) as db:
         target = db.execute("SELECT * FROM capabilities WHERE id=?", (capability_id,)).fetchone()
         if not target:
             return []
@@ -217,7 +229,7 @@ def find_alternatives(path: str | Path, capability_id: str, limit: int = 4) -> l
 def list_stale_capabilities(path: str | Path, before_iso: str) -> list[dict[str, Any]]:
     """Return verified/active records with missing or old verification timestamps."""
     initialize_registry(path)
-    with _connect(path) as db:
+    with _database(path) as db:
         rows = db.execute("""
           SELECT * FROM capabilities
           WHERE status IN ('verified','active','limited')

@@ -112,3 +112,8 @@ A passing CI run proves the tested code/configuration passed those checks. It do
 ### Release gate for CVPen's ten-agent swarm
 
 A CVPen creation task is intentionally blocked until `QUDRON_CVPEN_JOB_BUDGET_USD` and the exact token price rates for every model profile used by its agents are configured. The eight reviewer calls are parallel, so the shared SQLite reservation transaction accounts for all in-flight calls against the same order cap. Keep the PR in draft until the complete CI workflow passes on the latest head SHA; a prior green run does not validate later commits.
+
+
+### Verification status (4 November 2026)
+
+The ten-agent CVPen swarm and shared per-order model-budget guard passed GitHub Actions run #63: 64 unit/safety tests, Python compilation, runtime JSON validation, Docker image build, and timezone-database verification. Keep this PR in draft until a fresh run validates the exact latest commit and deployment-specific smoke tests are completed.

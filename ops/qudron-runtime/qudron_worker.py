@@ -1580,6 +1580,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 get_agents=mcp_get_agents,
                 get_models=mcp_get_models,
                 search_capabilities=mcp_search_capabilities,
+                enqueue_batch=enqueue_api_batch,
             )
         except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
             self._send_json(400, {"error": "invalid_mcp_request"})

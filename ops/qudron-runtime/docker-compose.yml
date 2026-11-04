@@ -12,6 +12,7 @@ services:
       # when no provider keys are configured; sensitive workflows are blocked by Qudron.
       LLM_BASE_URL: ${LLM_BASE_URL:-http://freellm:4000/v1}
       LLM_MODEL: ${LLM_MODEL:-auto}
+      FREELM_KEYLESS: ${FREELM_KEYLESS:-auto}
       LLM_API_KEY_FILE: /run/freellm/server.key
       LLM_FAST_API_KEY_FILE: /run/freellm/server.key
     ports: ["127.0.0.1:8765:8765"]

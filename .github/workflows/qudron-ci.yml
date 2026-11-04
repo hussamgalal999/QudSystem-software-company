@@ -44,10 +44,15 @@ jobs:
         run: |
           docker run -d --name qudron-freellm-ci \
             -e FREELM_SERVER_KEY=ci-only-secret-not-for-production \
-            -e FREELM_KEYLESS=0 \
+            -e FREELM_KEYLESS=auto \
             qudron-freellm:ci
           trap 'docker rm -f qudron-freellm-ci >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
+            running=$(docker inspect -f '{{.State.Running}}' qudron-freellm-ci 2>/dev/null || echo false)
+            if [ "$running" != "true" ]; then
+              docker logs qudron-freellm-ci
+              exit 1
+            fi
             if docker exec qudron-freellm-ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=2)" >/dev/null 2>&1; then
               break
             fi
@@ -58,12 +63,12 @@ jobs:
           import urllib.request
           base = "http://127.0.0.1:4000"
           try:
-              urllib.request.urlopen(base + "/v1/models", timeout=5)
-              raise SystemExit("unauthenticated /v1/models unexpectedly succeeded")
+              urllib.request.urlopen(base + "/v1", timeout=5)
+              raise SystemExit("unauthenticated /v1 unexpectedly succeeded")
           except urllib.error.HTTPError as exc:
               assert exc.code == 401, exc.code
           request = urllib.request.Request(
-              base + "/v1/models",
+              base + "/v1",
               headers={"Authorization": "Bearer ci-only-secret-not-for-production"},
           )
           with urllib.request.urlopen(request, timeout=5) as response:

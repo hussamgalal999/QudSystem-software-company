@@ -1,0 +1,50 @@
+import type{Env,TaskPayload}from"./workflow";
+import{validateIntake,normalizeIdempotencyKey}from"./policy";
+export{QudronTaskWorkflow}from"./workflow";
+const HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:HEADERS});}
+function bearer(request:Request,token:string){
+ const h=request.headers.get("authorization")||"",s=h.startsWith("Bearer ")?h.slice(7):"";
+ if(!token||s.length!==token.length)return false;let d=0;for(let i=0;i<token.length;i++)d|=token.charCodeAt(i)^s.charCodeAt(i);return d===0;
+}
+function owners(env:Env){return new Set((env.TELEGRAM_OWNER_CHAT_IDS||"").split(",").map(x=>x.trim()).filter(Boolean));}
+async function createTask(env:Env,kind:"research"|"draft",title:string,prompt:string,id:string){
+ const payload:TaskPayload={taskId:id,kind,title,prompt,createdAt:new Date().toISOString()};
+ try{return{instance:await env.QUDRON_WORKFLOW.create({id,params:payload}),created:true};}
+ catch{return{instance:await env.QUDRON_WORKFLOW.get(id),created:false};}
+}
+async function handleTelegram(request:Request,env:Env){
+ if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||request.headers.get("x-telegram-bot-api-secret-token")!==env.TELEGRAM_WEBHOOK_SECRET)return json({error:"unauthorized"},401);
+ const update=await request.json()as Record<string,any>,message=update.message,chatId=String(message?.chat?.id??"");
+ if(!chatId||!owners(env).has(chatId))return json({ok:true,ignored:true});
+ const text=typeof message?.text==="string"?message.text.trim():"",parts=text.split(/\s+/),command=(parts.shift()||"").split("@")[0].toLowerCase(),argument=parts.join(" ");
+ let reply="Unknown command. Send /help.";
+ if(command==="/start"||command==="/help")reply="Qudron Cloud pilot\n/status <task-id> — task status\n/task <request> — internal research task\nOnly synthetic/public information is allowed. External publishing and customer messaging are disabled.";
+ else if(command==="/task"){
+  const checked=validateIntake({kind:"research",title:"Telegram owner research task",prompt:argument});
+  if(!checked.ok)reply=checked.error;
+  else{const n=Number(update.update_id);if(!Number.isSafeInteger(n)||n<1)reply="Invalid Telegram update ID; task was not submitted.";
+   else{const id="tg-"+n,{instance,created}=await createTask(env,"research","Telegram owner research task",checked.task.prompt,id);reply="Task "+(created?"accepted":"already received")+".\nID: "+instance.id+"\nUse /status "+instance.id;}}
+ }else if(command==="/status"){
+  if(!argument||argument.length>100||!/^[A-Za-z0-9._:-]+$/.test(argument))reply="Usage: /status <task-id>";
+  else{try{const instance=await env.QUDRON_WORKFLOW.get(argument),s=await instance.status();reply="Task "+argument+"\nStatus: "+s.status+(s.output?"\nResult available in authenticated API.":"");}catch{reply="Task not found.";}}
+ }
+ await fetch("https://api.telegram.org/bot"+env.TELEGRAM_BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:chatId,text:reply.slice(0,3900),disable_web_page_preview:true})});
+ return json({ok:true});
+}
+export default{async fetch(request:Request,env:Env):Promise<Response>{
+ const url=new URL(request.url);
+ if(request.method==="GET"&&url.pathname==="/health")return json({service:"Qudron Cloudflare Control Plane",status:"healthy",timestamp:new Date().toISOString()});
+ if(request.method==="POST"&&url.pathname==="/telegram/webhook"){try{return await handleTelegram(request,env);}catch{return json({error:"telegram_handler_failed"},500);}}
+ if(!bearer(request,env.QUDRON_API_TOKEN))return json({error:"unauthorized"},401);
+ if(request.method==="POST"&&url.pathname==="/api/tasks"){
+  let input:unknown;try{input=await request.json();}catch{return json({error:"invalid_json"},400);}
+  const checked=validateIntake(input);if(!checked.ok)return json({error:checked.error},400);
+  const key=normalizeIdempotencyKey(request.headers.get("idempotency-key")),id=key?("api-"+key).slice(0,100):"api-"+crypto.randomUUID();
+  const{instance,created}=await createTask(env,checked.task.kind,checked.task.title,checked.task.prompt,id);
+  return json({taskId:instance.id,created,status:(await instance.status()).status},created?202:200);
+ }
+ const match=url.pathname.match(/^\/api\/tasks\/([A-Za-z0-9._:-]{1,100})$/);
+ if(request.method==="GET"&&match){try{const instance=await env.QUDRON_WORKFLOW.get(match[1]),s=await instance.status();return json({taskId:match[1],...s});}catch{return json({error:"task_not_found"},404);}}
+ return json({error:"not_found"},404);
+}};

@@ -1,5 +1,7 @@
 # Qudron Runtime — restart-safe AI swarm worker
 
+**Hosting decision:** Before choosing a host, review [HOSTING_DECISION_2026-11-04.md](./HOSTING_DECISION_2026-11-04.md). The current Python/Docker runtime needs a Docker host; the Cloudflare zero-monthly-cost route requires a separate event-driven Worker implementation and is not deployed yet.
+
 Qudron is a self-hosted operating layer for QudSystem. It separates ChatGPT's interactive control role from background task execution. Once deployed on an always-on host and configured with model endpoints, the worker can continue queued tasks independently of a ChatGPT conversation.
 
 ## Specialist swarm registry

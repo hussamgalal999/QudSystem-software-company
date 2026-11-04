@@ -532,7 +532,7 @@ def mcp_get_models() -> dict[str, Any]:
 
 
 def mcp_search_capabilities(query: str, kind: str | None, limit: int) -> list[dict[str, Any]]:
-    path = Path(os.getenv("QUDRON_CAPABILITY_DB", str(DATA_DIR / "capabilities.sqlite3")))
+    path = Path(os.getenv("QUDRON_CAPABILITY_DB", str(DB_PATH.parent / "capabilities.sqlite3")))
     records = search_capability_registry(
         path,
         query=query,

@@ -40,6 +40,30 @@
       "task_type": "seo_plan",
       "title": "QudSystem SEO improvement plan",
       "prompt": "Create a prioritized SEO plan for a small Egyptian software and AI company targeting Egypt and English-speaking international customers. Include service-page structure, search-intent clusters, technical SEO checks, internal linking, and a 4-week content roadmap. Flag anything requiring live website inspection."
+    },
+    {
+      "id": "daily-operations-review",
+      "every_minutes": 1440,
+      "role": "COO & Reliability Reviewer",
+      "task_type": "research",
+      "title": "Daily operations review and error-prevention plan",
+      "prompt": "Produce a daily operational review framework for QudSystem's active workstreams. Prioritize identifying blockers, quality risks, missed handoffs, duplicated effort, and errors that should be fixed today. Clearly distinguish observed evidence from unknowns: this worker may not have access to live execution logs or external app statuses, so never claim a real task was completed or failed unless evidence is supplied. Deliver a same-day action queue with severity, owner role, validation test, and rollback note."
+    },
+    {
+      "id": "three-day-optimization",
+      "every_minutes": 4320,
+      "role": "Process Optimization & QA Lead",
+      "task_type": "research",
+      "title": "Three-day process optimization review",
+      "prompt": "Run a structured optimization review for QudSystem's service delivery and internal agent workflows. Evaluate time/cost/quality trade-offs, failure modes, repeated rework, prompt clarity, automation opportunities, and customer experience. Propose the smallest high-impact improvements, expected measurable outcomes, risks, and an experiment plan. Do not invent operating metrics; mark missing measurements and propose how to collect them."
+    },
+    {
+      "id": "weekly-deep-strategy",
+      "every_minutes": 10080,
+      "role": "Chief Strategy & Research Council",
+      "task_type": "research",
+      "title": "Weekly deep strategic reasoning and portfolio review",
+      "prompt": "Conduct a deep weekly strategy review for QudSystem across CVPen, custom software and AI automation services, mini-apps, QudSchool/Qudemy, and Vision Guard Systems. Prioritize revenue potential, customer segment precision, competitor positioning, differentiation, delivery economics, brand trust, and execution capacity. For CVPen, build a realistic path toward EGP 100,000-200,000 monthly revenue using explicit price x volume x conversion assumptions, funnel math, channel experiments, and capacity constraints; do not promise results or fabricate competitor intelligence. Include long-horizon strategic options, short-horizon next-week actions, downside scenarios, and a decision log of assumptions to validate."
     }
   ]
 }

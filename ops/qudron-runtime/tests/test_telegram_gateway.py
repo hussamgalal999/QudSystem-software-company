@@ -36,8 +36,24 @@ class TelegramGatewayTests(unittest.TestCase):
         gateway.send = Mock()
         gateway.handle_update({
             "update_id": 10,
-            "message": {"chat": {"id": 222}, "text": "/status"},
+            "message": {"chat": {"id": 222, "type": "private"}, "from": {"id": 222}, "text": "/status"},
         })
+        gateway.send.assert_not_called()
+
+    def test_group_chat_is_rejected_even_if_chat_id_is_allowlisted(self):
+        from telegram_gateway import TelegramGateway
+        gateway = TelegramGateway()
+        gateway.owner_ids = {"-100111"}
+        gateway.send = Mock()
+        gateway.handle_update({"update_id": 11, "message": {"chat": {"id": -100111, "type": "supergroup"}, "from": {"id": 111}, "text": "/status"}})
+        gateway.send.assert_not_called()
+
+    def test_private_chat_sender_must_match_allowlisted_owner(self):
+        from telegram_gateway import TelegramGateway
+        gateway = TelegramGateway()
+        gateway.owner_ids = {"111"}
+        gateway.send = Mock()
+        gateway.handle_update({"update_id": 12, "message": {"chat": {"id": 111, "type": "private"}, "from": {"id": 222}, "text": "/status"}})
         gateway.send.assert_not_called()
 
     def test_owner_task_command_uses_update_id_for_idempotency(self):
@@ -50,7 +66,7 @@ class TelegramGatewayTests(unittest.TestCase):
         })
         gateway.handle_update({
             "update_id": 42,
-            "message": {"chat": {"id": 111}, "text": "/task research Minya market"},
+            "message": {"chat": {"id": 111, "type": "private"}, "from": {"id": 111}, "text": "/task research Minya market"},
         })
         gateway.enqueue_research.assert_called_once_with(42, "research Minya market")
         gateway.send.assert_called_once()

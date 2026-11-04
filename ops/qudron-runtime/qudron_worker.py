@@ -556,6 +556,15 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     reservation_id = uuid.uuid4().hex
     with connect_db() as db:
         db.execute("BEGIN IMMEDIATE")
+        # Release abandoned reservations after process crashes or provider timeouts.
+        # The TTL is at least 10 minutes and at least 3x the configured HTTP timeout.
+        reservation_cutoff = (
+            now - dt.timedelta(seconds=max(600, LLM_TIMEOUT * 3))
+        ).isoformat(timespec="seconds")
+        db.execute(
+            "DELETE FROM llm_usage_reservations WHERE created_at<?",
+            (reservation_cutoff,),
+        )
         if daily_budget is not None:
             day = now.date().isoformat() + "%"
             spent = db.execute(

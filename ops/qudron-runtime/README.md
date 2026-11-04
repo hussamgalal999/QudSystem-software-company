@@ -212,3 +212,36 @@ Research jobs can automatically retrieve up to five live web sources from DeepSe
 The `github-capability-mining` schedule runs once every seven days at 03:30 Africa/Cairo. It calls the bounded read-only miner and registers repository metadata/tree-path candidates in the SQLite capability registry. The default batch is 50 repositories; set `QUDRON_GITHUB_MINE_MAX_REPOSITORIES` to 1-200. It is internal-only and is not accepted by the generic external task intake API.
 
 If `GITHUB_OWNER` or `GITHUB_TOKEN` is absent, the scheduled job writes a clear skipped report and makes no GitHub request. Use a fine-grained read-only token scoped to the intended repositories. This pass does not download source, verify licenses, run tests, execute repository code or promote a candidate to active.
+
+
+## Multi-provider model gateway (keyless starter)
+
+The included FreeLLM sidecar is now the default OpenAI-compatible gateway when `LLM_BASE_URL` is blank. It is pinned to `freelm==0.5.2`; its own local server key is generated inside the persistent `freellm-state` volume, not committed to Git. It can discover and fail over among published free-tier endpoints. The gateway itself does not supply unlimited inference: anonymous endpoints have tight per-IP quotas, provider free tiers change, and each provider's data handling applies.
+
+**Keyless mode is for public, non-sensitive work only.** Qudron's worker will fail closed before sending jobs involving CV customer data, support records, payments, incident/security reports, private source code or other sensitive workflows through this route. It also refuses a keyless request if its prompt contains a value that the existing PII/token redactor would mask. Add an approved provider key or private model endpoint before enabling those workflows. Do not place private customer records, credentials, private source code or payment evidence in an anonymous/free endpoint.
+
+When no provider keys are configured, `FREELM_KEYLESS=auto` selects only documented anonymous/free routes. To force official provider keys only, set `FREELM_KEYLESS=0`. Add keys via the host secret manager (not Git) when available. The router handles provider/model discovery and failover; Qudron still records call/token usage and maintains its own budget/concurrency gates.
+
+## Batch task intake and capacity
+
+- `POST /jobs` remains available for one job.
+- `POST /jobs/batch` atomically accepts 1-100 internal draft/research jobs, each with its own idempotency key.
+- `QUDRON_MAX_PENDING_JOBS` defaults to 100,000 active/pending jobs (configurable up to 1,000,000); excess submissions fail with a capacity error rather than silently dropping work.
+- `GET /status` includes active queue depth, maximum capacity and remaining slots.
+- The 100,000 figure is the **durable backlog target**, not 100,000 live model calls. The current SQLite deployment is a single-host starter with bounded worker/model concurrency. Horizontal execution at high volume needs a shared Postgres job ledger and a durable broker/consumer group (Cloudflare Queues or NATS JetStream are candidates), provider-specific rate limits, idempotency leases and autoscaling. Do not increase one provider's concurrency to match queue size.
+
+A missing `QUDRON_API_TOKEN` is now handled by generating a random owner token in the private `data/api_token` file with mode 0600. Keep the data directory private and back it up encrypted. An explicitly configured token takes precedence.
+
+## OpenDots workspace integration
+
+The repository pins the upstream MIT-licensed [CopilotKit/OpenDots](https://github.com/CopilotKit/OpenDots) source under `integrations/OpenDots` (see `.gitmodules`). A Streamable HTTP MCP server is exposed at `/mcp`; OpenDots can read Qudron status, usage, job status and reports, and submit only internal draft/research tasks. Submission is not marked read-only, so OpenDots defaults it to **Ask first**.
+
+The one-time connection is configured in OpenDots under a Dot's **Edit specialist → Connections**:
+- URL: `http://qudron:8765/mcp`
+- Bearer token: the private Qudron API token in `data/api_token` (or the `QUDRON_API_TOKEN` host secret).
+
+Keep the submission tool approval enabled. OpenDots conversations require a CopilotKit Intelligence project (hosted, local evaluation or licensed self-hosted) and a model. The app can start in setup mode without those credentials; it does not invent replies. Its optional computer service uses Docker/OpenBot and requires Docker Engine, enough RAM and per-Dot computer credentials. See `OPENDOTS_INTEGRATION.md`.
+
+## Social distribution
+
+The current Metricool adapter deliberately creates drafts only. Use it as the distribution layer for Facebook, Instagram, YouTube and other supported destinations after connecting the official Metricool API. The publication workflow should produce platform-specific variants, campaign IDs, media metadata, UTM tags, an approval record and post-publication evidence. No public post is considered complete until its provider returns a published ID and permalink. Never bypass Meta login or use personal cookies scraped from a browser to publish.

@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
-STATE_DIR="${FREELM_STATE_DIR:-/root/.cache/freelm}"
+STATE_DIR="${FREELM_STATE_DIR:-/home/freelm/.cache/freelm}"
 mkdir -p "$STATE_DIR"
-chmod 700 "$STATE_DIR" 2>/dev/null || true
+chmod 750 "$STATE_DIR" 2>/dev/null || true
 KEY_FILE="$STATE_DIR/server.key"
 
 if [ -n "${FREELM_SERVER_KEY:-}" ]; then
@@ -17,5 +17,6 @@ else
   FREELM_SERVER_KEY="$(cat "$KEY_FILE")"
 fi
 export FREELM_SERVER_KEY
-chmod 600 "$KEY_FILE" 2>/dev/null || true
+chgrp 10001 "$KEY_FILE" 2>/dev/null || true
+chmod 640 "$KEY_FILE" 2>/dev/null || true
 exec freelm serve --host 0.0.0.0 --port 4000 --quiet

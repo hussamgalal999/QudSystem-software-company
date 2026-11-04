@@ -32,3 +32,6 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Build container
         run: docker build -t qudron-runtime:ci ops/qudron-runtime
+      - name: Verify timezone database inside runtime image
+        run: |
+          docker run --rm --entrypoint python qudron-runtime:ci -c "from zoneinfo import ZoneInfo; import datetime; z=ZoneInfo('Africa/Cairo'); print(datetime.datetime.now(z).isoformat())"

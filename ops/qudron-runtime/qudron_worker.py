@@ -516,6 +516,13 @@ def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
     stamp = iso_now()
     with connect_db() as db:
         db.execute("BEGIN IMMEDIATE")
+        if cost_usd is None and reservation_id:
+            reserved = db.execute(
+                "SELECT reserved_cost_usd FROM llm_usage_reservations WHERE id=?",
+                (reservation_id,),
+            ).fetchone()
+            if reserved is not None:
+                cost_usd = float(reserved["reserved_cost_usd"])
         db.execute(
             """INSERT INTO llm_usage
             (id,job_id,agent_id,profile,model,prompt_tokens,completion_tokens,total_tokens,cost_usd,created_at)
@@ -792,6 +799,8 @@ def status_snapshot() -> dict[str, Any]:
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
+        "registered_teams": len(AGENT_REGISTRY.get("teams", {})),
+        "teams": sorted((AGENT_REGISTRY.get("teams") or {}).keys()),
     }
 
 class HealthHandler(BaseHTTPRequestHandler):

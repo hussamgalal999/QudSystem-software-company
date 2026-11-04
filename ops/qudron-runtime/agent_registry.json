@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "agents": [
+    [
+      "operations_commander",
+      "Operations Commander",
+      "reasoning",
+      "Plan and coordinate complex service workflows; surface blockers and ownership."
+    ],
+    [
+      "research_analyst",
+      "Research Analyst",
+      "balanced",
+      "Conduct source-led research; separate observed facts, inference, and unknowns."
+    ],
+    [
+      "evidence_checker",
+      "Evidence & Citation Auditor",
+      "balanced",
+      "Check factual claims, source quality, uncertainty, and unsupported assertions."
+    ],
+    [
+      "brand_strategist",
+      "Brand Strategist",
+      "balanced",
+      "Protect QudSystem brand positioning, customer trust, and message-market fit."
+    ],
+    [
+      "copywriter",
+      "Conversion Copywriter",
+      "balanced",
+      "Write clear, locally appropriate marketing and product copy."
+    ],
+    [
+      "brand_quality",
+      "Brand & Claims Reviewer",
+      "balanced",
+      "Review tone, clarity, brand fit, exaggeration, and proof requirements."
+    ],
+    [
+      "video_producer",
+      "Short-form Video Producer",
+      "balanced",
+      "Create feasible scripts, shot lists, hooks, and production notes."
+    ],
+    [
+      "localization_specialist",
+      "Arabic-English Localization Specialist",
+      "balanced",
+      "Localize language naturally without literal or culturally awkward phrasing."
+    ],
+    [
+      "creative_qa",
+      "Creative QA Reviewer",
+      "balanced",
+      "Check video/story consistency, subtitles, timing, and CTA."
+    ],
+    [
+      "language_qa",
+      "Language QA Reviewer",
+      "balanced",
+      "Review grammar, terminology, and meaning preservation."
+    ],
+    [
+      "seo_strategist",
+      "SEO Strategist",
+      "balanced",
+      "Map search intent, page architecture, and organic growth opportunities."
+    ],
+    [
+      "technical_seo",
+      "Technical SEO Analyst",
+      "balanced",
+      "Review crawlability, indexation, performance, schema, and technical risks."
+    ],
+    [
+      "market_research",
+      "Market Research Analyst",
+      "balanced",
+      "Identify segments, demand evidence, alternatives, and competitor positioning."
+    ],
+    [
+      "sales_qualifier",
+      "Sales Qualification Specialist",
+      "balanced",
+      "Build ethical qualification criteria and relevant outreach drafts."
+    ],
+    [
+      "privacy_qa",
+      "Privacy & Outreach Compliance Reviewer",
+      "reasoning",
+      "Minimize personal data and prevent spam, unlawful profiling, or unsupported contact claims."
+    ],
+    [
+      "customer_success",
+      "Customer Success Specialist",
+      "balanced",
+      "Handle service explanations, expectations, complaints, and next-step drafts."
+    ],
+    [
+      "policy_checker",
+      "Service Policy Reviewer",
+      "balanced",
+      "Check offer terms, scope, refund boundaries, and customer promises."
+    ],
+    [
+      "career_strategist",
+      "Career Strategist",
+      "reasoning",
+      "Translate client-provided career facts into a role-specific CV strategy without inventing credentials."
+    ],
+    [
+      "cv_writer",
+      "ATS CV Writer",
+      "balanced",
+      "Draft evidence-based Arabic or English CV content from supplied facts."
+    ],
+    [
+      "ats_specialist",
+      "ATS Compatibility Specialist",
+      "balanced",
+      "Review structure, headings, parsing, keywords, and role alignment; never promise ATS scores as guarantees."
+    ],
+    [
+      "fact_checker",
+      "CV Fact & Evidence Auditor",
+      "reasoning",
+      "Flag unsupported dates, employers, metrics, degrees, certifications, and achievements."
+    ],
+    [
+      "cv_qa",
+      "CV Final Quality Reviewer",
+      "balanced",
+      "Check completeness, consistency, readability, privacy, and export readiness."
+    ],
+    [
+      "finance_ops",
+      "Finance Operations Analyst",
+      "balanced",
+      "Reconcile expected versus reported amounts and identify discrepancies; never move funds."
+    ],
+    [
+      "payment_verifier",
+      "Payment Evidence Reviewer",
+      "reasoning",
+      "Interpret verified payment-provider events; do not treat screenshots or SMS alone as proof of settlement."
+    ],
+    [
+      "compliance_reviewer",
+      "Risk & Compliance Reviewer",
+      "reasoning",
+      "Identify authorization, privacy, fraud, and audit requirements."
+    ],
+    [
+      "product_manager",
+      "Product Manager",
+      "balanced",
+      "Prioritize customer problems, scope, acceptance criteria, and service readiness."
+    ],
+    [
+      "software_engineer",
+      "Automation & Integration Engineer",
+      "reasoning",
+      "Design and implement APIs, webhooks, workers, and safe integrations."
+    ],
+    [
+      "reliability_engineer",
+      "Reliability & Incident Engineer",
+      "reasoning",
+      "Investigate failed jobs, retries, observability, recovery, and service-level indicators."
+    ],
+    [
+      "qa_engineer",
+      "Test & Release Engineer",
+      "balanced",
+      "Create automated test plans, regression cases, and release gates."
+    ],
+    [
+      "data_analyst",
+      "Business Data Analyst",
+      "balanced",
+      "Analyze funnel, quality, cost, throughput, and revenue metrics without fabricating measurements."
+    ],
+    [
+      "strategy_council",
+      "Long-horizon Strategy Council",
+      "reasoning",
+      "Compare strategic options, downside scenarios, operating constraints, and investment priorities."
+    ]
+  ],
+  "teams": {
+    "research": [
+      "research_analyst",
+      "evidence_checker"
+    ],
+    "social_post_draft": [
+      "brand_strategist",
+      "copywriter",
+      "brand_quality"
+    ],
+    "video_script": [
+      "video_producer",
+      "localization_specialist",
+      "creative_qa"
+    ],
+    "translation": [
+      "localization_specialist",
+      "language_qa"
+    ],
+    "seo_plan": [
+      "seo_strategist",
+      "technical_seo",
+      "evidence_checker"
+    ],
+    "lead_research": [
+      "market_research",
+      "sales_qualifier",
+      "privacy_qa"
+    ],
+    "cvpen_cv_creation": [
+      "career_strategist",
+      "cv_writer",
+      "ats_specialist",
+      "fact_checker",
+      "cv_qa"
+    ],
+    "cvpen_ats_audit": [
+      "ats_specialist",
+      "fact_checker",
+      "cv_qa"
+    ],
+    "customer_support_reply": [
+      "customer_success",
+      "policy_checker",
+      "brand_quality"
+    ],
+    "payment_reconciliation": [
+      "finance_ops",
+      "payment_verifier",
+      "compliance_reviewer"
+    ],
+    "product_review": [
+      "product_manager",
+      "data_analyst",
+      "qa_engineer"
+    ],
+    "engineering_review": [
+      "software_engineer",
+      "reliability_engineer",
+      "qa_engineer"
+    ],
+    "strategy_review": [
+      "strategy_council",
+      "data_analyst",
+      "evidence_checker"
+    ]
+  }
+}

@@ -45,7 +45,7 @@
       "id": "daily-operations-review",
       "every_minutes": 1440,
       "role": "COO & Reliability Reviewer",
-      "task_type": "research",
+      "task_type": "engineering_review",
       "title": "Daily operations review and error-prevention plan",
       "prompt": "Produce a daily operational review framework for QudSystem's active workstreams. Prioritize identifying blockers, quality risks, missed handoffs, duplicated effort, and errors that should be fixed today. Clearly distinguish observed evidence from unknowns: this worker may not have access to live execution logs or external app statuses, so never claim a real task was completed or failed unless evidence is supplied. Deliver a same-day action queue with severity, owner role, validation test, and rollback note."
     },
@@ -61,7 +61,7 @@
       "id": "weekly-deep-strategy",
       "every_minutes": 10080,
       "role": "Chief Strategy & Research Council",
-      "task_type": "research",
+      "task_type": "strategy_review",
       "title": "Weekly deep strategic reasoning and portfolio review",
       "prompt": "Conduct a deep weekly strategy review for QudSystem across CVPen, custom software and AI automation services, mini-apps, QudSchool/Qudemy, and Vision Guard Systems. Prioritize revenue potential, customer segment precision, competitor positioning, differentiation, delivery economics, brand trust, and execution capacity. For CVPen, build a realistic path toward EGP 100,000-200,000 monthly revenue using explicit price x volume x conversion assumptions, funnel math, channel experiments, and capacity constraints; do not promise results or fabricate competitor intelligence. Include long-horizon strategic options, short-horizon next-week actions, downside scenarios, and a decision log of assumptions to validate."
     },
@@ -125,7 +125,7 @@
       "id": "weekly-risk-privacy-review",
       "every_minutes": 10080,
       "role": "Privacy, Compliance & Reliability Council",
-      "task_type": "engineering_review",
+      "task_type": "risk_review",
       "title": "Weekly QudSystem privacy, payment, and reliability review",
       "prompt": "Review the design risks for a multi-service AI business: customer data minimization, tenant isolation, retention, audit logging, model provider data handling, webhook verification, duplicate payment callbacks, secrets management, backup/restore, and incident response. Provide specific controls and test cases. This is a design review, not a compliance certification."
     }

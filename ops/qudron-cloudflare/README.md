@@ -32,9 +32,9 @@ References:
 ## Bootstrap and deployment
 1. Install Node.js 20+ and run npm install in this folder.
 2. Create a Cloudflare API token scoped to the account with Workers Scripts:Edit, Workflows:Edit, Durable Objects:Edit and Workers AI:Read. Store it as GitHub Actions secret CLOUDFLARE_API_TOKEN; store the account ID as CLOUDFLARE_ACCOUNT_ID.
-3. Set Worker secrets in Cloudflare: QUDRON_API_TOKEN (random 32+ characters), TELEGRAM_BOT_TOKEN (optional), TELEGRAM_WEBHOOK_SECRET (optional random 32+ characters), and TELEGRAM_OWNER_CHAT_IDS (owner numeric Telegram chat ID).
-4. Run npm run typecheck, npm test and npm run build.
-5. Deploy with npx wrangler deploy after account secrets and token are configured.
+3. Add GitHub Actions secret QUDRON_API_TOKEN (generate a random 32+ character value; never send it in chat). The deployment workflow installs it into the Worker as a secret.
+4. Optional Telegram secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET (random 32+ characters), and TELEGRAM_OWNER_CHAT_IDS (owner numeric Telegram chat ID). If a bot token is present, the other two are required and the workflow installs all three as Worker secrets.
+5. Run the GitHub Actions workflow named Deploy Qudron Cloudflare pilot, or push a change to the candidate branch after the secrets are configured. It runs typecheck, tests, Wrangler dry-run, deployment and runtime secret provisioning.
 6. Configure Telegram webhook with official setWebhook method, deployed /telegram/webhook URL and the same secret_token.
 7. Test /health, unauthenticated 401, authenticated task intake, task status, Telegram allowlist and actual Workers AI inference.
 

@@ -993,6 +993,59 @@ def model_usage_snapshot(recent_limit: int = 20) -> dict[str, Any]:
     }
 
 
+PUBLIC_KEYLESS_TASK_TYPES = {
+    "research", "social_post_draft", "video_script", "translation", "seo_plan"
+}
+KEYLESS_PROVIDER_KEYS = (
+    "GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY",
+    "CLOUDFLARE_API_TOKEN", "MISTRAL_API_KEY", "NVIDIA_API_KEY",
+    "CEREBRAS_API_KEY", "ZAI_API_KEY", "KILO_API_KEY", "COHERE_API_KEY",
+)
+
+
+def _read_secret_file(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def is_anonymous_freellm_route(base_url: str) -> bool:
+    if "freellm" not in base_url.lower():
+        return False
+    mode = os.getenv("FREELM_KEYLESS", "auto").strip().lower()
+    if mode in {"0", "false", "no", "off"}:
+        return False
+    if mode in {"1", "true", "yes", "on"}:
+        return True
+    if mode == "auto":
+        # FreeLLM's documented auto mode uses anonymous endpoints only when no
+        # upstream provider key is configured.
+        return not any(os.getenv(name, "").strip() for name in KEYLESS_PROVIDER_KEYS)
+    return False
+
+
+def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) -> None:
+    if not is_anonymous_freellm_route(base_url):
+        return
+    task_type = str(job["task_type"])
+    if task_type not in PUBLIC_KEYLESS_TASK_TYPES:
+        raise RuntimeError(
+            "Anonymous free-model routing is limited to public research and content drafts. "
+            "Configure an approved authenticated/private provider for customer data, private code, "
+            "support, finance, CVs, security incidents or confidential work."
+        )
+    # Existing redaction rules cover common contact/identity/payment/token patterns.
+    # If any sensitive-looking value would be redacted, fail closed rather than ship it.
+    if redact_sensitive_text(user_text) != user_text:
+        raise RuntimeError(
+            "The prompt contains a value flagged by Qudron's sensitive-data redactor; "
+            "anonymous free-model routing is blocked."
+        )
+
+
 def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
              prior_context: str, memory_context: str) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
@@ -1000,6 +1053,8 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
               "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
     api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
+    if not api_key:
+        api_key = _read_secret_file(os.getenv("LLM_API_KEY_FILE", ""))
     model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
     if not base_url or not model:
         raise RuntimeError(
@@ -1024,6 +1079,7 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
         "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
+    validate_keyless_payload(job, user, base_url)
     payload = json.dumps({
         "model": model,
         "temperature": 0.3 if profile == "reasoning" else 0.4,

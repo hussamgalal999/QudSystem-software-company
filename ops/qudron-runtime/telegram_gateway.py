@@ -74,7 +74,6 @@ class TelegramGateway:
         self.offset = 0
         self.notification_db_path = Path(os.getenv('QUDRON_TELEGRAM_STATE_DB', '/app/data/telegram_gateway.sqlite3'))
         self.last_completion_poll = 0.0
-        self._init_notification_db()
 
     def _request(self, url: str, payload: dict[str, Any] | None = None,
                  headers: dict[str, str] | None = None, timeout: int | None = None) -> Any:
@@ -130,6 +129,7 @@ class TelegramGateway:
             db.execute("CREATE TABLE IF NOT EXISTS notified_jobs (job_id TEXT PRIMARY KEY, notified_at TEXT NOT NULL)")
 
     def _already_notified(self, job_id: str) -> bool:
+        self._init_notification_db()
         with sqlite3.connect(self.notification_db_path) as db:
             return db.execute("SELECT 1 FROM notified_jobs WHERE job_id=?", (job_id,)).fetchone() is not None
 
@@ -150,6 +150,7 @@ class TelegramGateway:
     def poll_completion_notifications(self) -> int:
         if not self.owner_ids:
             return 0
+        self._init_notification_db()
         payload = self.qudron("/status")
         jobs = payload.get("latest_jobs", []) if isinstance(payload, dict) else []
         sent = 0

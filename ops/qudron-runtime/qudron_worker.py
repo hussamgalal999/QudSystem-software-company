@@ -45,6 +45,8 @@ LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_TIMEOUT = max(10, int(os.getenv("LLM_TIMEOUT_SECONDS", "180")))
 API_TOKEN = os.getenv("QUDRON_API_TOKEN", "")
 MAX_API_BODY_BYTES = 65536
+MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS", "1200"))))
+MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
 AGENT_REGISTRY: dict[str, Any] = {}
@@ -122,6 +124,21 @@ def init_db() -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_memory_lookup
           ON memory_entries(project, scope, created_at DESC);
+        CREATE TABLE IF NOT EXISTS llm_usage (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+          profile TEXT NOT NULL, model TEXT NOT NULL, prompt_tokens INTEGER,
+          completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_usage_created ON llm_usage(created_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_usage_job ON llm_usage(job_id);
+        CREATE TABLE IF NOT EXISTS llm_usage_reservations (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+          profile TEXT NOT NULL, reserved_cost_usd REAL NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_reservations_created
+          ON llm_usage_reservations(created_at);
         """)
 
 def load_schedules() -> list[dict[str, Any]]:
@@ -376,6 +393,188 @@ def any_model_profile_configured() -> bool:
     return False
 
 
+def profile_cost_rates(profile: str) -> tuple[float | None, float | None]:
+    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
+              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    def read_rate(name: str) -> float | None:
+        raw = os.getenv(f"{prefix}_{name}") or os.getenv(name)
+        if raw is None or not raw.strip():
+            return None
+        value = float(raw)
+        if value < 0:
+            raise ValueError(f"{name} must be >= 0")
+        return value
+    return read_rate("LLM_INPUT_USD_PER_1M"), read_rate("LLM_OUTPUT_USD_PER_1M")
+
+
+def configured_budget(name: str) -> float | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    value = float(raw)
+    if value <= 0:
+        raise ValueError(f"{name} must be > 0 when configured")
+    return value
+
+
+def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
+                         payload_bytes: int) -> str | None:
+    daily_budget = configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD")
+    monthly_budget = configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD")
+    if daily_budget is None and monthly_budget is None:
+        return None
+    input_rate, output_rate = profile_cost_rates(profile)
+    if input_rate is None or output_rate is None:
+        raise RuntimeError(
+            "Qudron model budget is enabled, but exact input/output price rates are missing "
+            f"for profile '{profile}'. Configure {profile.upper()} profile rates or default LLM_INPUT_USD_PER_1M / "
+            "LLM_OUTPUT_USD_PER_1M before making billable requests."
+        )
+    # Reserve conservatively before the API call: half-byte-per-token input estimate
+    # plus the full configured output cap. Actual provider usage replaces this reserve.
+    estimated_input_tokens = (max(0, payload_bytes) + 1) // 2 + 64
+    estimated_cost = (
+        estimated_input_tokens * input_rate + MAX_OUTPUT_TOKENS * output_rate
+    ) / 1_000_000
+    now = utc_now()
+    stamp = now.isoformat(timespec="seconds")
+    reservation_id = uuid.uuid4().hex
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if daily_budget is not None:
+            day = now.date().isoformat() + "%"
+            spent = db.execute(
+                "SELECT COALESCE(SUM(cost_usd),0) FROM llm_usage WHERE created_at LIKE ?",
+                (day,),
+            ).fetchone()[0]
+            reserved = db.execute(
+                "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
+                (day,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + estimated_cost > daily_budget:
+                db.rollback()
+                raise RuntimeError(
+                    f"Qudron daily model budget reached; estimated call cost {estimated_cost:.6f} USD "
+                    f"would exceed configured cap {daily_budget:.2f} USD."
+                )
+        if monthly_budget is not None:
+            month = now.strftime("%Y-%m") + "%"
+            spent = db.execute(
+                "SELECT COALESCE(SUM(cost_usd),0) FROM llm_usage WHERE created_at LIKE ?",
+                (month,),
+            ).fetchone()[0]
+            reserved = db.execute(
+                "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
+                (month,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + estimated_cost > monthly_budget:
+                db.rollback()
+                raise RuntimeError(
+                    f"Qudron monthly model budget reached; estimated call cost {estimated_cost:.6f} USD "
+                    f"would exceed configured cap {monthly_budget:.2f} USD."
+                )
+        db.execute(
+            """INSERT INTO llm_usage_reservations
+            (id,job_id,agent_id,profile,reserved_cost_usd,created_at)
+            VALUES(?,?,?,?,?,?)""",
+            (reservation_id, job_id, agent_id, profile, estimated_cost, stamp),
+        )
+        db.commit()
+    return reservation_id
+
+
+def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
+                       response_data: dict[str, Any], reservation_id: str | None) -> None:
+    usage = response_data.get("usage") or {}
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens")
+    def safe_count(value: Any) -> int | None:
+        try:
+            number = int(value)
+            return number if number >= 0 else None
+        except (TypeError, ValueError):
+            return None
+    prompt_tokens = safe_count(prompt_tokens)
+    completion_tokens = safe_count(completion_tokens)
+    total_tokens = safe_count(total_tokens)
+    input_rate, output_rate = profile_cost_rates(profile)
+    provider_cost = usage.get("cost", usage.get("total_cost"))
+    cost_usd: float | None = None
+    try:
+        candidate = float(provider_cost)
+        if candidate >= 0:
+            cost_usd = candidate
+    except (TypeError, ValueError):
+        if prompt_tokens is not None and completion_tokens is not None and input_rate is not None and output_rate is not None:
+            cost_usd = (
+                prompt_tokens * input_rate + completion_tokens * output_rate
+            ) / 1_000_000
+    stamp = iso_now()
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(
+            """INSERT INTO llm_usage
+            (id,job_id,agent_id,profile,model,prompt_tokens,completion_tokens,total_tokens,cost_usd,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (uuid.uuid4().hex, job_id, agent_id, profile, model, prompt_tokens,
+             completion_tokens, total_tokens, cost_usd, stamp),
+        )
+        if reservation_id:
+            db.execute("DELETE FROM llm_usage_reservations WHERE id=?", (reservation_id,))
+        db.commit()
+
+
+def release_model_budget_reservation(reservation_id: str | None) -> None:
+    if not reservation_id:
+        return
+    with connect_db() as db:
+        db.execute("DELETE FROM llm_usage_reservations WHERE id=?", (reservation_id,))
+
+
+def model_usage_snapshot(recent_limit: int = 20) -> dict[str, Any]:
+    now = utc_now()
+    day = now.date().isoformat() + "%"
+    month = now.strftime("%Y-%m") + "%"
+    with connect_db() as db:
+        totals = db.execute(
+            """SELECT COUNT(*) calls,
+               COALESCE(SUM(prompt_tokens),0) prompt_tokens,
+               COALESCE(SUM(completion_tokens),0) completion_tokens,
+               COALESCE(SUM(total_tokens),0) total_tokens,
+               SUM(cost_usd) cost_usd
+            FROM llm_usage WHERE created_at LIKE ?""", (day,)
+        ).fetchone()
+        month_totals = db.execute(
+            """SELECT COUNT(*) calls,
+               COALESCE(SUM(prompt_tokens),0) prompt_tokens,
+               COALESCE(SUM(completion_tokens),0) completion_tokens,
+               COALESCE(SUM(total_tokens),0) total_tokens,
+               SUM(cost_usd) cost_usd
+            FROM llm_usage WHERE created_at LIKE ?""", (month,)
+        ).fetchone()
+        pending_reserved = db.execute(
+            "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations"
+        ).fetchone()[0]
+        recent = db.execute(
+            """SELECT job_id,agent_id,profile,model,prompt_tokens,completion_tokens,
+               total_tokens,cost_usd,created_at FROM llm_usage
+               ORDER BY created_at DESC LIMIT ?""",
+            (max(1, min(100, recent_limit)),),
+        ).fetchall()
+    return {
+        "day_utc": now.date().isoformat(),
+        "month_utc": now.strftime("%Y-%m"),
+        "daily": dict(totals),
+        "monthly": dict(month_totals),
+        "reserved_in_flight_usd": float(pending_reserved or 0),
+        "daily_budget_usd": configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD"),
+        "monthly_budget_usd": configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD"),
+        "cost_note": "Costs are provider-reported or calculated from configured per-million-token rates; null means the provider usage or rate was unavailable.",
+        "recent": [dict(row) for row in recent],
+    }
+
+
 def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
              prior_context: str, memory_context: str) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
@@ -400,17 +599,22 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
     )
     user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
-        f"Original task and instructions:\n{job['prompt']}\n\n"
+        f"Original task and instructions:\n{str(job['prompt'])[:MAX_INPUT_CHARS]}\n\n"
         f"Current stage instructions:\n{instruction}\n\n"
-        f"Prior stage context:\n{prior_context or '[none]'}\n\n"
-        f"Relevant memory:\n{memory_context or '[none]'}\n\n"
+        f"Prior stage context:\n{str(prior_context or '[none]')[-MAX_INPUT_CHARS // 2:]}\n\n"
+        f"Relevant memory:\n{str(memory_context or '[none]')[-4000:]}\n\n"
         "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
         "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
     payload = json.dumps({
-        "model": model, "temperature": 0.3 if profile == "reasoning" else 0.4,
+        "model": model,
+        "temperature": 0.3 if profile == "reasoning" else 0.4,
+        "max_tokens": MAX_OUTPUT_TOKENS,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }).encode("utf-8")
+    reservation_id = reserve_model_budget(
+        str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload)
+    )
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -420,9 +624,15 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
     try:
         with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
             data = json.loads(response.read().decode("utf-8"))
+        record_model_usage(
+            str(job["id"]), str(agent.get("id", "unknown")), profile, model, data, reservation_id
+        )
+        reservation_id = None
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:1500]
         raise RuntimeError(f"LLM HTTP {exc.code}: {detail}") from exc
+    finally:
+        release_model_budget_reservation(reservation_id)
     choices = data.get("choices") or []
     answer = choices[0].get("message", {}).get("content") if choices else None
     if not isinstance(answer, str) or not answer.strip():
@@ -601,6 +811,12 @@ class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path in ("/health", "/status"):
             self._send_json(200, status_snapshot())
+            return
+        if self.path == "/usage":
+            if not is_api_authorized(self.headers.get("Authorization", "")):
+                self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+                return
+            self._send_json(200, model_usage_snapshot())
             return
         if self.path.startswith("/jobs/"):
             if not is_api_authorized(self.headers.get("Authorization", "")):

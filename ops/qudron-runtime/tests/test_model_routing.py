@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import qudron_worker as worker
@@ -10,9 +12,22 @@ class FakeResponse:
     def __exit__(self, exc_type, exc, tb):
         return False
     def read(self):
-        return json.dumps({"choices":[{"message":{"content":"routed response"}}]}).encode()
+        return json.dumps({
+            "choices":[{"message":{"content":"routed response"}}],
+            "usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}
+        }).encode()
 
 class ModelRoutingTests(unittest.TestCase):
+    def setUp(self):
+        self.original_db_path = worker.DB_PATH
+        self.temp = tempfile.TemporaryDirectory()
+        worker.DB_PATH = Path(self.temp.name) / "usage.sqlite3"
+        worker.init_db()
+
+    def tearDown(self):
+        worker.DB_PATH = self.original_db_path
+        self.temp.cleanup()
+
     def test_agent_profile_routes_to_external_model_endpoint(self):
         captured = {}
         def fake_urlopen(request, timeout):
@@ -24,7 +39,9 @@ class ModelRoutingTests(unittest.TestCase):
         with patch.dict("os.environ", {
             "LLM_FAST_BASE_URL":"https://fast.example/v1",
             "LLM_FAST_API_KEY":"test-secret",
-            "LLM_FAST_MODEL":"fast-instruct"
+            "LLM_FAST_MODEL":"fast-instruct",
+            "LLM_FAST_INPUT_USD_PER_1M":"1",
+            "LLM_FAST_OUTPUT_USD_PER_1M":"1"
         }, clear=True):
             with patch("qudron_worker.urllib.request.urlopen", side_effect=fake_urlopen):
                 response = worker.call_llm(
@@ -36,8 +53,50 @@ class ModelRoutingTests(unittest.TestCase):
         self.assertEqual(response, "routed response")
         self.assertEqual(captured["url"], "https://fast.example/v1/chat/completions")
         self.assertEqual(captured["payload"]["model"], "fast-instruct")
+        self.assertEqual(captured["payload"]["max_tokens"], worker.MAX_OUTPUT_TOKENS)
         self.assertEqual(captured["authorization"], "Bearer test-secret")
+        usage = worker.model_usage_snapshot()
+        self.assertEqual(usage["daily"]["calls"], 1)
+        self.assertEqual(usage["daily"]["total_tokens"], 150)
+        self.assertAlmostEqual(usage["daily"]["cost_usd"], 0.00015, places=8)
 
+
+
+    def test_budget_fails_closed_when_profile_pricing_is_missing(self):
+        with patch.dict("os.environ", {
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD":"5"
+        }, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "price rates are missing"):
+                worker.reserve_model_budget("job-1","research_analyst","balanced","model-x",1000)
+
+    def test_model_budget_reservations_prevent_concurrent_overspend(self):
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M":"1",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M":"1",
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD":"0.0025"
+        }, clear=True):
+            first = worker.reserve_model_budget("job-1","writer","balanced","model-x",1000)
+            self.assertIsNotNone(first)
+            with self.assertRaisesRegex(RuntimeError, "monthly model budget reached"):
+                worker.reserve_model_budget("job-2","reviewer","balanced","model-x",1000)
+            worker.release_model_budget_reservation(first)
+            with worker.connect_db() as db:
+                count = db.execute("SELECT COUNT(*) FROM llm_usage_reservations").fetchone()[0]
+            self.assertEqual(count, 0)
+
+    def test_usage_cost_is_calculated_from_configured_per_million_rates(self):
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M":"2",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M":"4"
+        }, clear=True):
+            worker.record_model_usage(
+                "job-usage","cv_writer","balanced","balanced-model",
+                {"usage":{"prompt_tokens":1000,"completion_tokens":500,"total_tokens":1500}},
+                None
+            )
+            snapshot = worker.model_usage_snapshot()
+            self.assertEqual(snapshot["daily"]["calls"], 1)
+            self.assertAlmostEqual(snapshot["daily"]["cost_usd"], 0.004, places=8)
 
     def test_profile_only_configuration_counts_as_model_ready(self):
         with patch.dict("os.environ", {

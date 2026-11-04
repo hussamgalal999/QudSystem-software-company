@@ -63,8 +63,13 @@ def summarize_posts(posts:Any)->dict[str,Any]:
  for item in rows:
   if not isinstance(item,dict):continue
   metrics=item.get("metrics") if isinstance(item.get("metrics"),dict) else item
-  row={k:metrics.get(k) for k in ("reach","impressions","likes","comments","shares","engagement")}
-  for key,value in row.items():
-   if isinstance(value,(int,float)):totals[key]+=value
+  normalized_metrics={str(k).lower():v for k,v in metrics.items()}
+  row={}
+  for key in ("reach","impressions","likes","comments","shares","engagement"):
+   value=normalized_metrics.get(key)
+   try:value=float(str(value).replace(",","")) if value not in (None,"") else None
+   except (TypeError,ValueError):value=None
+   row[key]=value
+   if value is not None:totals[key]+=value
   normalized.append({"text":str(item.get("text") or item.get("content") or "")[:240],"url":item.get("url") or item.get("link"),"publicationDate":item.get("publicationDate") or item.get("created"),"metrics":row})
  return {"totals":totals,"posts":normalized}

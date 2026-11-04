@@ -102,7 +102,7 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
                   max_agents: int = 3, max_context_chars: int = 12000) -> str:
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
     draft_output = ""
-    review_output = ""
+    review_outputs: list[str] = []
     final_output = ""
     for agent in plan:
         stage = agent["execution_stage"]
@@ -115,30 +115,44 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
         elif stage == "review":
             instruction = (
                 "Independently audit the draft. Identify factual gaps, missing requirements, risks, "
-                "privacy issues, contradictions, and concrete corrections. Do not invent evidence."
+                "privacy issues, contradictions, and concrete corrections. Do not invent evidence. "
+                "Avoid repeating earlier review notes; add distinct findings."
             )
-            context = (memory_context + "\\n\\nDRAFT TO REVIEW:\\n" + draft_output)[-max_context_chars:]
+            earlier_reviews = "\n\n".join(
+                f"REVIEW {index + 1}:\n{note}" for index, note in enumerate(review_outputs)
+            )
+            context = (
+                memory_context + "\n\nDRAFT TO REVIEW:\n" + draft_output
+                + ("\n\nEARLIER REVIEW NOTES:\n" + earlier_reviews if earlier_reviews else "")
+            )[-max_context_chars:]
         else:
             instruction = (
-                "Create the final corrected deliverable using the original task, draft, and review. "
-                "Resolve only issues supported by the supplied information; list unresolved checks. "
-                "Do not include hidden reasoning or claim tests/actions were performed unless evidenced."
+                "Create the final corrected deliverable using the original task, draft, and ALL "
+                "independent review notes. Resolve only issues supported by supplied information; "
+                "list unresolved checks. Do not expose hidden reasoning or claim tests/actions unless evidenced."
             )
-            combined = "DRAFT:\\n" + draft_output + "\\n\\nREVIEW:\\n" + review_output
-            context = (memory_context + "\\n\\n" + combined)[-max_context_chars:]
+            all_reviews = "\n\n".join(
+                f"REVIEW {index + 1}:\n{note}" for index, note in enumerate(review_outputs)
+            )
+            combined = (
+                "DRAFT:\n" + draft_output + "\n\nALL REVIEWS:\n"
+                + (all_reviews or "[no separate review stage]")
+            )
+            context = (memory_context + "\n\n" + combined)[-max_context_chars:]
         response = call_agent(agent, instruction, context)
         if not isinstance(response, str) or not response.strip():
             raise RuntimeError(f"Agent returned empty output: {agent['id']}")
+        response = response.strip()[-max_context_chars:]
         if stage == "produce":
-            draft_output = response.strip()[-max_context_chars:]
+            draft_output = response
         elif stage == "review":
-            review_output = response.strip()[-max_context_chars:]
+            review_outputs.append(response)
         else:
-            final_output = response.strip()[-max_context_chars:]
+            final_output = response
     if not final_output:
-        final_output = review_output or draft_output
+        final_output = "\n\n".join(review_outputs) or draft_output
     team_names = " → ".join(agent["name"] for agent in plan)
-    return f"## Qudron swarm\\nTeam: {team_names}\\nAgents invoked: {len(plan)}\\n\\n{final_output}"
+    return f"## Qudron swarm\nTeam: {team_names}\nAgents invoked: {len(plan)}\n\n{final_output}"
 
 def redact_sensitive_text(value: str) -> str:
     """Best-effort redaction before operational text is persisted in shared memory."""

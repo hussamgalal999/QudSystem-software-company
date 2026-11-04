@@ -1,0 +1,37 @@
+name: Deploy Qudron Cloudflare pilot
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/qudron-cvpen-swarm-release-candidate]
+    paths:
+      - "ops/qudron-cloudflare/**"
+      - ".github/workflows/qudron-cloudflare-deploy.yml"
+permissions:
+  contents: read
+concurrency:
+  group: qudron-cloudflare-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ops/qudron-cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify before deployment
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Deploy to Cloudflare Workers Free account
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

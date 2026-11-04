@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
 from deepseek_web import search_web, WebResearchError
 from capability_miner import mine_from_environment
+from capability_registry import search_capabilities as search_capability_registry
 from mcp_gateway import handle_mcp_request, MCPGatewayError
 
 APP_DIR = Path(__file__).resolve().parent
@@ -444,6 +445,117 @@ def mcp_get_job_result(job_id: str) -> str | None:
     except OSError:
         return None
 
+
+def mcp_get_agents() -> dict[str, Any]:
+    agents = AGENT_REGISTRY.get("agents", []) if isinstance(AGENT_REGISTRY, dict) else []
+    teams = AGENT_REGISTRY.get("teams", {}) if isinstance(AGENT_REGISTRY, dict) else {}
+    return {
+        "registered_agent_roles": len(agents),
+        "registered_teams": len(teams),
+        "agents": [
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "profile": item.get("profile"),
+                "responsibilities": item.get("responsibilities"),
+            }
+            for item in agents if isinstance(item, dict)
+        ],
+        "teams": teams,
+        "note": "These are registered role definitions, not always-running processes or proof of live concurrent capacity.",
+    }
+
+
+def mcp_get_models() -> dict[str, Any]:
+    catalog_path = Path(os.getenv("QUDRON_MODEL_CATALOG_PATH", str(APP_DIR / "model_provider_catalog.json")))
+    catalog: dict[str, Any] = {}
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        catalog = {}
+    providers = []
+    for provider in catalog.get("providers", []) if isinstance(catalog, dict) else []:
+        if not isinstance(provider, dict):
+            continue
+        auth_env = str(provider.get("auth_env", ""))
+        models = provider.get("models", [])
+        providers.append({
+            "provider": provider.get("provider"),
+            "auth_configured": bool(auth_env and os.getenv(auth_env, "").strip()),
+            "candidate_models": [
+                {
+                    "id": model.get("id"),
+                    "display_name": model.get("display_name"),
+                    "enabled_in_catalog": bool(model.get("enabled", False)),
+                    "source": model.get("source"),
+                }
+                for model in models if isinstance(model, dict)
+            ],
+        })
+
+    base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    model_url = base_url + ("/models" if base_url.endswith("/v1") else "/v1/models") if base_url else ""
+    gateway = {
+        "configured": bool(base_url),
+        "base_url": base_url,
+        "catalogue_reachable": False,
+        "advertised_model_ids": [],
+        "inference_test_performed": False,
+        "status": "not_configured" if not base_url else "not_checked",
+    }
+    if model_url:
+        key = os.getenv("LLM_API_KEY", "") or _read_secret_file(os.getenv("LLM_API_KEY_FILE", ""))
+        headers = {"Accept": "application/json"}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        try:
+            request = urllib.request.Request(model_url, headers=headers, method="GET")
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = json.loads(response.read(1_000_001).decode("utf-8"))
+            gateway["catalogue_reachable"] = True
+            gateway["status"] = "catalogue_reachable_inference_unverified"
+            gateway["advertised_model_ids"] = [
+                str(item.get("id"))[:160]
+                for item in data.get("data", [])[:100]
+                if isinstance(item, dict) and item.get("id")
+            ] if isinstance(data, dict) else []
+        except Exception:
+            gateway["status"] = "unreachable_or_unauthorized"
+
+    return {
+        "catalogue_as_of": catalog.get("as_of") if isinstance(catalog, dict) else None,
+        "policy": catalog.get("policy") if isinstance(catalog, dict) else "No catalogue policy available.",
+        "gateway": gateway,
+        "providers": providers,
+        "note": "A provider key being configured or a model appearing in a catalogue is not proof of live inference. No paid inference request was made by this read-only tool.",
+    }
+
+
+def mcp_search_capabilities(query: str, kind: str | None, limit: int) -> list[dict[str, Any]]:
+    path = Path(os.getenv("QUDRON_CAPABILITY_DB", str(DATA_DIR / "capabilities.sqlite3")))
+    records = search_capability_registry(
+        path,
+        query=query,
+        kind=kind,
+        statuses=("discovered", "candidate", "verified", "active", "limited"),
+        limit=limit,
+    )
+    return [
+        {
+            "id": item.get("id"),
+            "kind": item.get("kind"),
+            "name": item.get("name"),
+            "description": item.get("description"),
+            "version": item.get("version"),
+            "source_url": item.get("source_url"),
+            "license": item.get("license"),
+            "status": item.get("status"),
+            "trust_score": item.get("trust_score"),
+            "verified_at": item.get("verified_at"),
+            "tags": item.get("tags", []),
+        }
+        for item in records
+    ]
 
 def mcp_get_status() -> dict[str, Any]:
     snapshot = status_snapshot()
@@ -1465,6 +1577,9 @@ class HealthHandler(BaseHTTPRequestHandler):
                 get_job_result=mcp_get_job_result,
                 get_status=mcp_get_status,
                 get_usage=model_usage_snapshot,
+                get_agents=mcp_get_agents,
+                get_models=mcp_get_models,
+                search_capabilities=mcp_search_capabilities,
             )
         except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
             self._send_json(400, {"error": "invalid_mcp_request"})

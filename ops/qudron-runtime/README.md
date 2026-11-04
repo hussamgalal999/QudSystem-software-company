@@ -4,9 +4,9 @@ Qudron is a self-hosted operating layer for QudSystem. It separates ChatGPT's in
 
 ## Specialist swarm registry
 
-The registry contains 31 specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
+The registry contains 36 specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
 
-These are **role-specialized AI workers**, not 30 separately hosted models or human employees. A job selects a team and runs a bounded sequential swarm. Configure QUDRON_MAX_SWARM_AGENTS (default 3, maximum 5) to cap calls, cost, and latency. Each specialist can be routed to a different OpenAI-compatible model profile.
+These are **role-specialized AI workers**, not separately hosted models or human employees. A job selects a team; the producer runs first, independent reviewers execute concurrently within a bounded fan-out, then a finalizer receives the accumulated review notes. Routine jobs remain capped at five stages by default. CVPen paid-CV creation has a dedicated ten-agent team: one writer, eight independent reviews, and a final QA agent. Configure QUDRON_MAX_SWARM_AGENTS (default 5, maximum 5) to cap routine calls. CVPen uses QUDRON_MAX_CVPEN_AGENTS (default 10, maximum 10) and QUDRON_MAX_PARALLEL_REVIEWS (default 8). This increases per-order model cost, so CVPen creation fails closed until QUDRON_CVPEN_JOB_BUDGET_USD and exact input/output model prices are configured. Each specialist can be routed to a different OpenAI-compatible model profile.
 
 ## Model routing and cost control
 
@@ -23,7 +23,7 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 - Task input, prior-stage context and memory are bounded before being sent to providers.
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
 - Configure exact input/output rates per million tokens for each profile. When rates are absent, token counts can still be recorded, but cost is reported as unknown.
-- Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
+- Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. CVPen creation additionally requires a per-order USD cap; the sum of provider usage and outstanding reservations for that order cannot exceed it.  Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
 - Fast/Balanced/Reasoning routing and a maximum of five specialist stages per job keep routine work from automatically using the most expensive profile.
 
 ## Start with Docker

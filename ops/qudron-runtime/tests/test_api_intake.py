@@ -54,6 +54,31 @@ class AuthenticatedIntakeApiTests(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertIn("unauthorized", body["error"])
 
+    def test_public_health_probe_does_not_disclose_runtime_details(self):
+        request = urllib.request.Request(self.base + "/health")
+        with urllib.request.urlopen(request, timeout=3) as response:
+            body = json.loads(response.read().decode())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(body, {"ok": True, "service": "qudron-runtime"})
+        self.assertNotIn("latest_jobs", body)
+        self.assertNotIn("counts", body)
+
+    def test_runtime_status_requires_authentication(self):
+        unauthenticated = urllib.request.Request(self.base + "/status")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(unauthenticated, timeout=3)
+        self.assertEqual(ctx.exception.code, 401)
+
+        authenticated = urllib.request.Request(
+            self.base + "/status",
+            headers={"Authorization": "Bearer unit-test-token"}
+        )
+        with urllib.request.urlopen(authenticated, timeout=3) as response:
+            body = json.loads(response.read().decode())
+        self.assertEqual(response.status, 200)
+        self.assertIn("registered_agents", body)
+        self.assertIn("latest_jobs", body)
+
     def test_authenticated_job_is_created_and_idempotent(self):
         status1, body1 = self.post(self.payload(), "unit-test-token")
         status2, body2 = self.post(self.payload(title="Different duplicate"), "unit-test-token")

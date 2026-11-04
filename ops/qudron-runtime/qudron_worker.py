@@ -469,7 +469,10 @@ def ensure_api_token() -> str:
     configured = os.getenv("QUDRON_API_TOKEN", "").strip()
     API_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.chmod(API_TOKEN_FILE.parent, 0o700)
+        # The OpenDots app joins this one group to read only the dedicated
+        # auth volume; it does not receive Qudron's operational data volume.
+        os.chown(API_TOKEN_FILE.parent, 0, 10001)
+        os.chmod(API_TOKEN_FILE.parent, 0o750)
     except OSError:
         pass
     if configured:
@@ -495,7 +498,8 @@ def ensure_api_token() -> str:
     if len(token) < 32:
         raise RuntimeError("Persisted Qudron API token is too short; rotate it safely.")
     try:
-        os.chmod(API_TOKEN_FILE, 0o600)
+        os.chown(API_TOKEN_FILE, 0, 10001)
+        os.chmod(API_TOKEN_FILE, 0o640)
     except OSError:
         pass
     return token

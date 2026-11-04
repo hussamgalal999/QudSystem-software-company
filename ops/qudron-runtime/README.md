@@ -117,7 +117,7 @@ Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-co
 
 1. Copy `.env.example` to `.env`.
 2. Generate a unique random `FREELM_SERVER_KEY` (at least 32 random bytes). Do not reuse `QUDRON_API_TOKEN`.
-3. Keep `FREELM_KEYLESS=0` initially. Add only official provider keys you own and are authorized to use (for example Google AI Studio, Groq, OpenRouter, Cloudflare, Mistral, NVIDIA NIM, Z.ai or Kilo).
+3. The sample `.env` sets `FREELM_KEYLESS=auto`: if no provider keys are present, FreeLLM uses its documented anonymous endpoints as a last resort. This is intended only for public, non-sensitive test prompts. For provider-key-only operation, set `FREELM_KEYLESS=0` and add official provider keys you own and are authorized to use (for example Google AI Studio, Groq, OpenRouter, Cloudflare, Mistral, NVIDIA NIM, Z.ai or Kilo).
 4. In `.env`, explicitly route only the FAST profile to the sidecar:
    ```dotenv
    LLM_FAST_BASE_URL=http://freellm:4000/v1
@@ -137,7 +137,7 @@ Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-co
 
 ### Keyless mode and privacy
 
-- To test anonymous public endpoints without provider keys, explicitly set `FREELM_KEYLESS=auto` and restart the sidecar. FreeLLM documents Kilo Gateway free routes and OVHcloud anonymous endpoints as low-quota keyless fallbacks. Availability and limits can change at any time.
+- With `FREELM_KEYLESS=auto`, FreeLLM uses anonymous public endpoints only when no keyed providers are configured. It documents Kilo Gateway free routes and OVHcloud anonymous endpoints as low-quota keyless fallbacks. Availability and limits can change at any time.
 - Anonymous endpoints may log prompts and are not approved for CVs, personal data, customer records, payment evidence, secrets, or confidential QudSystem material. Use keyless mode only for public, non-sensitive test prompts.
 - Free tiers are not unlimited, guaranteed, or necessarily suitable for commercial workloads. The provider's own terms, account quotas, region restrictions and data handling apply.
 - Do not add multiple keys to evade a provider's quota or terms. Only use separately authorized keys within each provider's published rules.

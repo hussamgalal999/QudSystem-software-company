@@ -84,6 +84,29 @@ class ModelRoutingTests(unittest.TestCase):
                 count = db.execute("SELECT COUNT(*) FROM llm_usage_reservations").fetchone()[0]
             self.assertEqual(count, 0)
 
+
+    def test_stale_model_budget_reservations_are_reclaimed(self):
+        stale_time = (worker.utc_now() - worker.dt.timedelta(hours=2)).isoformat(timespec="seconds")
+        with worker.connect_db() as db:
+            db.execute(
+                """INSERT INTO llm_usage_reservations
+                (id,job_id,agent_id,profile,reserved_cost_usd,created_at)
+                VALUES(?,?,?,?,?,?)""",
+                ("stale-reservation","old-job","writer","balanced",0.5,stale_time)
+            )
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M":"1",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M":"1",
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD":"1"
+        }, clear=True):
+            new_id = worker.reserve_model_budget("new-job","reviewer","balanced","model-x",1000)
+        self.assertIsNotNone(new_id)
+        with worker.connect_db() as db:
+            rows = db.execute(
+                "SELECT id FROM llm_usage_reservations ORDER BY created_at"
+            ).fetchall()
+        self.assertEqual([row["id"] for row in rows], [new_id])
+
     def test_usage_cost_is_calculated_from_configured_per_million_rates(self):
         with patch.dict("os.environ", {
             "LLM_BALANCED_INPUT_USD_PER_1M":"2",

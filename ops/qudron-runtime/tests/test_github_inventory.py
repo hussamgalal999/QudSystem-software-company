@@ -1,4 +1,5 @@
-import json, tempfile, unittest\nfrom urllib.parse import parse_qs, urlsplit
+import json, tempfile, unittest
+from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 from unittest.mock import patch
 import github_inventory as gi

@@ -38,6 +38,20 @@ class ModelRoutingTests(unittest.TestCase):
         self.assertEqual(captured["payload"]["model"], "fast-instruct")
         self.assertEqual(captured["authorization"], "Bearer test-secret")
 
+
+    def test_profile_only_configuration_counts_as_model_ready(self):
+        with patch.dict("os.environ", {
+            "LLM_REASONING_BASE_URL":"https://reasoning.example/v1",
+            "LLM_REASONING_MODEL":"deep-review"
+        }, clear=True):
+            with patch.object(worker, "LLM_BASE_URL", ""), patch.object(worker, "LLM_MODEL", ""):
+                self.assertTrue(worker.any_model_profile_configured())
+
+    def test_no_default_or_specialized_profile_is_not_ready(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch.object(worker, "LLM_BASE_URL", ""), patch.object(worker, "LLM_MODEL", ""):
+                self.assertFalse(worker.any_model_profile_configured())
+
     def test_unconfigured_model_fails_closed(self):
         with patch.dict("os.environ", {}, clear=True):
             with patch.object(worker, "LLM_BASE_URL", ""), patch.object(worker, "LLM_MODEL", ""):

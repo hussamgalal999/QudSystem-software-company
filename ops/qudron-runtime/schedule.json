@@ -1,0 +1,45 @@
+{
+  "timezone": "Africa/Cairo",
+  "schedules": [
+    {
+      "id": "cvpen-growth",
+      "every_minutes": 1440,
+      "role": "Growth & Product Manager",
+      "task_type": "research",
+      "title": "CVPen daily growth opportunities",
+      "prompt": "Prepare a practical daily growth brief for CVPen, an ATS-focused CV improvement service in Egypt. Include 3 offer/content experiments, one low-cost acquisition channel, a draft CTA, and measurable KPIs. Do not invent demand or conversion data. Separate hypotheses from verified facts."
+    },
+    {
+      "id": "qudsystem-content",
+      "every_minutes": 1440,
+      "role": "Marketing & Social Media",
+      "task_type": "social_post_draft",
+      "title": "QudSystem social content draft",
+      "prompt": "Create one useful Arabic Egyptian social post for QudSystem about custom software, AI automation, websites, dashboards, or business process improvement. Avoid hype and fear. Include a clear business problem, concrete solution, proof requirements, CTA, and 3 hashtags. Draft only; do not publish."
+    },
+    {
+      "id": "video-production-ideas",
+      "every_minutes": 2880,
+      "role": "Video Producer & Localization",
+      "task_type": "video_script",
+      "title": "Short-form video concept and script",
+      "prompt": "Create one 30-45 second vertical video concept for QudSystem or CVPen. Deliver hook, storyboard, Egyptian Arabic voiceover, on-screen text, B-roll/editing notes, English subtitle translation, and CTA. Keep production possible with a phone and free tools. Do not claim a video was rendered."
+    },
+    {
+      "id": "sales-pipeline",
+      "every_minutes": 1440,
+      "role": "Sales & Business Development",
+      "task_type": "lead_research",
+      "title": "Target customer segments and outreach drafts",
+      "prompt": "Identify best-fit customer segments for QudSystem web/software/AI automation services and CVPen in Egypt. Produce an ICP, qualification questions, ethical public-source research plan, and personalized outreach templates. Never fabricate named leads, contact details, or claim anyone was contacted."
+    },
+    {
+      "id": "seo-improvement",
+      "every_minutes": 10080,
+      "role": "SEO & Website Strategy",
+      "task_type": "seo_plan",
+      "title": "QudSystem SEO improvement plan",
+      "prompt": "Create a prioritized SEO plan for a small Egyptian software and AI company targeting Egypt and English-speaking international customers. Include service-page structure, search-intent clusters, technical SEO checks, internal linking, and a 4-week content roadmap. Flag anything requiring live website inspection."
+    }
+  ]
+}

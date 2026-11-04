@@ -59,6 +59,7 @@ ALLOWED_TASK_TYPES = {
     "translation", "seo_plan", "lead_research", "cvpen_cv_creation",
     "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
     "product_review", "engineering_review", "strategy_review", "risk_review",
+    "incident_triage",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -78,9 +79,20 @@ def setup_logging() -> None:
     root.addHandler(handler)
     root.addHandler(logging.StreamHandler())
 
+class ClosingConnection(sqlite3.Connection):
+    """Connection context manager that also closes the file handle on exit."""
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> Any:
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 def connect_db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
+    db = sqlite3.connect(
+        DB_PATH, timeout=30, isolation_level=None, factory=ClosingConnection
+    )
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=30000")
@@ -117,11 +129,37 @@ def load_schedules() -> list[dict[str, Any]]:
         logging.warning("No schedule file found: %s", SCHEDULE_PATH)
         return []
     try:
-        schedules = json.loads(SCHEDULE_PATH.read_text(encoding="utf-8")).get("schedules", [])
-        return [
-            item for item in schedules
-            if item.get("task_type") in ALLOWED_TASK_TYPES and int(item.get("every_minutes", 0)) >= 1
-        ]
+        root = json.loads(SCHEDULE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(root, dict) or not isinstance(root.get("schedules", []), list):
+            raise ValueError("Schedule file must contain a schedules[] list")
+        valid: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for index, item in enumerate(root.get("schedules", [])):
+            if not isinstance(item, dict):
+                logging.error("Skipping malformed schedule at index %s: expected an object", index)
+                continue
+            sid = str(item.get("id", "")).strip()
+            title = item.get("title")
+            prompt = item.get("prompt")
+            role = item.get("role", "Operations")
+            task_type = item.get("task_type")
+            try:
+                interval = int(item.get("every_minutes", 0))
+            except (TypeError, ValueError):
+                interval = 0
+            if (not sid or sid in seen or not isinstance(title, str) or not title.strip()
+                    or not isinstance(prompt, str) or not prompt.strip()
+                    or not isinstance(role, str) or not role.strip()
+                    or task_type not in ALLOWED_TASK_TYPES or interval < 1):
+                logging.error("Skipping invalid or unsupported schedule at index %s (id=%r, task_type=%r)",
+                              index, sid, task_type)
+                continue
+            item["id"] = sid
+            item["every_minutes"] = interval
+            item["role"] = role.strip()
+            seen.add(sid)
+            valid.append(item)
+        return valid
     except Exception:
         logging.exception("Could not parse schedule file")
         return []
@@ -397,7 +435,7 @@ def finish_job(job_id: str, result_path: str) -> None:
         )
 
 def fail_job(job: sqlite3.Row, exc: Exception) -> None:
-    message = f"{type(exc).__name__}: {exc}"[:3000]
+    message = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:3000]
     terminal = int(job["attempts"]) >= MAX_ATTEMPTS
     delay = min(3600, 15 * (2 ** max(0, int(job["attempts"]) - 1)))
     run_after = (utc_now() + dt.timedelta(seconds=delay)).isoformat(timespec="seconds")
@@ -412,6 +450,39 @@ def fail_job(job: sqlite3.Row, exc: Exception) -> None:
                        f"Task {job['title']} failed on attempt {job['attempts']}/{MAX_ATTEMPTS}: {message}")
     except Exception:
         logging.exception("Could not save failure event to memory")
+
+    # Create exactly one internal same-day triage task after a terminal failure.
+    # Triage failures never recursively create more triage tasks.
+    if terminal and str(job["task_type"]) != "incident_triage":
+        incident_key = f"incident-triage:{job['id']}"
+        incident_prompt = (
+            "A Qudron task exhausted its configured retry attempts. Perform same-day, read-only "
+            "incident triage. Identify likely root causes from the supplied error, distinguish "
+            "evidence from hypotheses, propose a safe correction, a regression test, and a rollback "
+            "plan. Do not change production systems, credentials, payment state, customer records, "
+            "or external accounts. Do not contact users or publish content.\n\n"
+            f"Failed task title: {str(job['title'])[:160]}\n"
+            f"Original role: {str(job['role'])[:100]}\n"
+            f"Task type: {str(job['task_type'])[:80]}\n"
+            f"Attempts: {job['attempts']}/{MAX_ATTEMPTS}\n"
+            f"Error: {message}"
+        )[:8000]
+        try:
+            with connect_db() as db:
+                db.execute(
+                    """INSERT OR IGNORE INTO jobs
+                    (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+                    (uuid.uuid4().hex, incident_key,
+                     f"Same-day incident triage: {str(job['title'])[:100]}",
+                     "Reliability, QA & Evidence Review Team", "incident_triage",
+                     incident_prompt, iso_now(), iso_now(), iso_now()),
+                )
+            remember_event(infer_project(job), "short", "incident_queued",
+                           f"Terminal failure queued for same-day incident triage: {job['title']}")
+        except Exception:
+            logging.exception("Could not enqueue incident triage for job %s", job["id"])
+
     logging.error("Job %s failed on attempt %s/%s: %s",
                   job["id"], job["attempts"], MAX_ATTEMPTS, message)
 

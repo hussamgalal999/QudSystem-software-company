@@ -21,7 +21,7 @@ fi
 if [ "${OPENDOTS_ENABLE_KEYLESS_MODEL:-false}" = "true" ]; then
   # A configured provider key always wins. Otherwise use the private FreeLLM
   # gateway only when no custom OpenAI-compatible endpoint was supplied.
-  if [ -z "${OPENAI_API_KEY:-}" ] && [ -z "${OPENDOTS_OPENAI_BASE_URL:-}" ]; then
+  if [ -z "${OPENAI_API_KEY:-}" ] && [ "${OPENAI_BASE_URL:-http://freellm:4000/v1}" = "http://freellm:4000/v1" ]; then
     KEY_FILE="${OPENDOTS_MODEL_KEY_FILE:-/run/freellm/server.key}"
     if [ ! -s "$KEY_FILE" ]; then
       echo "Keyless model routing was requested, but the FreeLLM gateway key is unavailable." >&2

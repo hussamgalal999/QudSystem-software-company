@@ -190,8 +190,10 @@ def handle_mcp_request(
     enqueue_batch: Callable[[dict[str, Any]], Any] | None = None,
 ) -> dict[str, Any] | None:
     """Process one stateless JSON-RPC request. None means a notification."""
-    if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
+    if not isinstance(payload, dict):
         raise MCPGatewayError("A JSON-RPC 2.0 object is required")
+    if payload.get("jsonrpc") != "2.0":
+        return _rpc_error(payload.get("id"), -32600, "Invalid JSON-RPC version")
     method = payload.get("method")
     request_id = payload.get("id")
     is_notification = "id" not in payload

@@ -1037,7 +1037,9 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
     base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
     api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
     if not api_key:
-        api_key = _read_secret_file(os.getenv("LLM_API_KEY_FILE", ""))
+        api_key = _read_secret_file(
+            os.getenv(f"{prefix}_API_KEY_FILE") or os.getenv("LLM_API_KEY_FILE", "")
+        )
     model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
     if not base_url or not model:
         raise RuntimeError(

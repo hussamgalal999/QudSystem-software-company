@@ -1,0 +1,3028 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-04",
+  "source": "GitHub repository search through connected account",
+  "owner": "hussamgalal999",
+  "snapshot_count": 503,
+  "scope": "Repositories discoverable by the connected GitHub integration at snapshot time; dynamic authenticated sync remains authoritative.",
+  "repositories": [
+    {
+      "full_name": "hussamgalal999/warpdotdev",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mimo-cli-max",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Article-Generator",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/groq-appgen",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ChatGLM2-6B",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pydantic-ai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Portfolio-Website",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hussa",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Warp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GLM-4.5",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Tic-Tac-Toe",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/awesome-ai-dev-tools",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/rig",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/stack_overflow_nextjs14",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AccountManagement",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Gemini-Max",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Online-Profile",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ashutosh1919",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hussamgalal999",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/web-ui",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Portfolio-Demo",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SuperCoder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DeepCode",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AgentGPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/About-Me",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/codexUI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/claude-code",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/portfolio-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/BillionMail",
+      "default_branch": "dev",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/capsule-render",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/gpt-pilot",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Cyber-AutoAgent",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/srcbook",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/threads",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/guilyx",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/moatless-tools",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-in-bolt-diy",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Kenzy-AI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudschool-v2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Active-Portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/openclaw",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-app-builder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/autoblog",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Hacx-GPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/LeoLTS-PW.Genrator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/sidecar",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/deepseek-engineer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Carol42",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hussamgalal-999",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DragonR1",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-portfolio",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/onyx",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/saas-landing-page-generator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/gemini-cli",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/tiktik_clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/zoom-clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-native-movie-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/chat_application",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/focus.ai",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/gpt-engineer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/midscene",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Resumes-Builder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/codex-chatgpt-web",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ComfyUI",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-LMS",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudpro-connectivity-v003",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/treequest",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/suna",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/a0",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Strawberry-AI",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/deepseek-free-api",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CodeGeeX",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Inference-Free-LLM-API",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/agent-studio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/event_platform",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_music_player",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Kiro",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/deepseek-webui",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/QudSystem.v10.0.2-11.11.2024-",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/geminiCoder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/the-algorithm",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lazy-dev",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-15-ai-resume-builder",
+      "default_branch": "Final-project",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/agenticSeek",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lovable-boilerplate",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_google_clone",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_cryptoverse",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Cirq",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/headshots-starter-clone",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/Mini-Agent",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nebula",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/HackerLLMBench",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mcp-server-deepsite",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Dolphin-llamacpp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/desktop",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/fullstack-chat-app",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-course",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-native-recipe-app",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_youtube_clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DreamO",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-pdf-ppt-generator-openai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/rushed-ai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-code-review",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/claude-code-workflows",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/beautiful-react-tailwind-portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/travel-planner-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-firebase-chat-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/awesome-ai-agents",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/autogen",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SubMonsif",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/awesome-llm-free-apis",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-chat",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/frappe-lms_2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/winget-pkgs",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mem0",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/PentestGPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CoPaw",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/LMS",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/spec-kit",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/langchain",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/sing-box",
+      "default_branch": "testing",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ChatGPT_DAN",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nanobot",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/KittenTTS",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-OPS",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/kimi-free-api",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/dyad",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lovable-clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/aora",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/3d-portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/graphql-code-generator",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-devtools",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/friday_jarvis",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/digital-marketing-pro",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cuckoo-code",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/claw-code",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Nextjs-QudChat",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/project_ai_summarizer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/udemy-clone-frontend",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/generative_agents",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Qudy",
+      "default_branch": "feature/qudy-logo",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_medical_pager_chat",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/postiz-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/threejs-portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/yc_directory",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/zeroclaw",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AlexNet-Source-Code",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/minimax-free-api",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ditto.site",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/yachiyo-claw",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OmniRoute",
+      "default_branch": "release/v3.8.51",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/QudSystem-software-company",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Chat-Gpt-3-Clone-",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Udemy-Clone-ReactJS",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/huhu",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/Qudemy",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/sourcegraph-public-snapshot",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pern-crash-course",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CodeGeeX2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/v0-gamma-x-implementation-roadmap",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/december",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/LlM-Api-Open",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CloudBot",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Scientist",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/n8n-mcp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_dribble_clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/threads_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_next13_car_showcase",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai_mock_interviews",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/screen_recording_sharing_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_3D_developer_portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/job-posting-website",
+      "default_branch": "starter",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/BrowserSkill",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/rahuldkjain",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Arabic-COT-prompt-Framework-",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DeepSeek-V2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/award-winning-website",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/saas-template",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Jailbreaks-GPT-Gemini-deepseek-",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Scientist-v2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Deepseek-nano-vllm",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/x-clone-rn",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/chatgpt-vscode",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cc-switch",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lala",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/teable",
+      "default_branch": "develop",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/XReplyGPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/presentation-ai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/deepagents",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/enhancv-builder",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/furniture-design-app-react-threejs",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/trello-clone-fullstack",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/protect-x",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mihomo",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CodingIT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qwen-code",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/code-catalyst",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ShowUI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cursor-vip",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/continue",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/goose",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Mern-School-Management-System",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/trae-agent",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pentagi",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/html-css-js-projects",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_hot_or_cold_game",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Mimo-Autonomous-Agent-3.5",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qud",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/qudmindv2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/strapi-lms-course-managment",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/storybench",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/agno",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/context-engineering-intro",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/developer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/vocode-core",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/encore",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/personaplex",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/disco",
+      "default_branch": "develop",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mistral-vibe",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/openvino",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/glm-free-api",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/appsmith",
+      "default_branch": "release",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CogAgent",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OpenHands",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/university-library-jsm",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/iphone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Headshot-Pro",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/acu",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pixshop",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/browser-use",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/x-ui",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Ultimate-RAT-Collection",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/semaphore",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AboutMe",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/todo",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/lele",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ana-lms",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/saas-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ATS-Resume-Buider-v1",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/uber",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-image-editor-saas-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/opencode",
+      "default_branch": "dev",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/eliza",
+      "default_branch": "develop",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/redamon",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nuxtjs",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ATS-CV-Resume-Builder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/flamboyant-night-rrz5gl",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/quder-ai-studio-build",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/shotgun_code",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Devon",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GammaX",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/vibe-kanban",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mocha",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/portfolio_website",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-native-course-habit-tracker",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Eng.Hossam-Galal",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/gpt-computer-assistant",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-tailwindcss-blog",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/Enhance-CV",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/android-voice-assistant",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Powered-Video-Tutorial-Generator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/academi-table-hub",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ultraframe",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/codeflex-ai",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/xora",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Story-Challenge-",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/PageLM",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/PentestAI-ML",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AutoPentest-DRL",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pawwork",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CodeWebChat",
+      "default_branch": "dev",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/-Qudemy-",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/Qudemy-",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/codeium-react-code-editor",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Todo-react-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/codex",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/HG-Portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/coderide-mcp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/brainwave",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/dify",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/crush",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/edgetunnel",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/v2ray-configs",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-powered-job-prep",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Studio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/dsh-our-free-model",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/composio",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/PRPs-agentic-eng",
+      "default_branch": "development",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/refact",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_metaverse",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_syncfusion_dashboard",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/storage_management_solution",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/pricewise",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/banking",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/codefuse-ide",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/public-apis",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/crewAI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nanochat",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/vscodium",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/komi-store",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ShopMe",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hossamgalal",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/medgemma",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/jsmasterypro_devflow",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_hoobank",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudemy-lms",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/advaced-todoapp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-lovable",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-personal-portfolio-website",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/machadop1407",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-webui",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ChatGLM-6B",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/free-llm-api",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DeepTutor",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nearu_web_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/500-AI-Agents-Projects",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MiniMax-M2.1",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/WindsurfAPI",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-blog",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/edx-platformv2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/cursor",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/awesome-creative-coding",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/aider",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SuperClaude",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/libra",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Adorable",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SWE-agent",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MetaGPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qwen-free-api",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SeeraCV",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/dashbeam",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/giselle",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AI-Infra-from-Zero-to-Hero",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AutoGPT",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/stylex",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/todolist2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/todolist",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/free-llm-api-resources",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/bolt.diy",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudsystem-v12.5",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/bitchat-android",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/antigravity-awesome-skills",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/meeting-bot69",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_openai_codex",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_next_14_ai_prompt_sharing",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/RAG-Anything",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/machine_learning_security",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/numasec",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudschool",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/canvas-lms-2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/qudsystemV12",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/NvChad",
+      "default_branch": "v2.5",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/claude-task-master",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/calculator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Stride-AI-Agents",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/remote-interview-platform",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/jsm_gta_vi_landing",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/fullstack-dating-app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OpenPhone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MIMO",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cursor-free-vip",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CodeGeeX4",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/autodistill-distilbert",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MiroThinker",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/-learning-management-system",
+      "default_branch": "develop",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai_saas_appv2",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/qudautomation-hub",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/BlackFriday-GPTs-Prompts",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/commanddash",
+      "default_branch": "develop",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/wallet-app-expo",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/streamify-video-calls",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/n8n",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/3D_portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/langflow",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OpenManus",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GLM-Edge",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AutoWebGLM",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/L1B3RT45",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/IMSI-catcher",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Auto-Pentest-GPT-AI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/agent-browser",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MicYou",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/todoapp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hussamgalal999.github.io",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/qudchat",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/llama.cpp",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/StoreIt_Storage_Platform",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/claude-conductor",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OmniAvatar",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/SuperAGI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lobster",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/IQuest-Coder-V1",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/coucou",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lama-lms",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ai-agile-team",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/zenagents-library",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Qualtran",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/AutoPPT-generator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/v2ray-core",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/mushaf-imad-flutter",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nanoGPT",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-pageflip",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Qwen3-Coder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/modern-xo-challenge",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ai-newsletter-saas",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nike_landing_page",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/convex-backend",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/social_media_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_professional_portfolio",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ecommerce",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/oh-my-cv",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GLM-V",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DEGENI-CLAUDE-ANTIGRAVITY-GEMINI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Canvas-LMS",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ai-mock-interview-react-vite-typescript-january-2025",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/remix-project-starter",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DeepSeek-Coder-V2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-interpreter",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/repo-health-check",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/openmuse",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/A-simple-tool-for-checking-password-security",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/DeepSeek-Coder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/chatbox",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ProtectX",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Ai-Image-Generator",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Archon",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/prompts",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/tgpt",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/best-saas-kit",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_corona_tracker",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Deepsite-V3-OpenAi-Compatiible",
+      "default_branch": "Deepseek-openai-compatible",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/accomplish",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_crowdfunding",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_fitness_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/collaborative-editor",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/figma_clone",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nft-marketplace-showcase",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/loop-engineering",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/PokeClaw",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_video_chat",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_shareme_social_media",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react-movies",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/copilot-cli",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/llama_index",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/QudMind",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Quder.new",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/modern-port",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/awesome-code-ai",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MiniMax-MCP",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MiniMax-M2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/offline-tarteel",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/aide",
+      "default_branch": "cs-main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cody",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/canvas-lms-",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/laravel",
+      "default_branch": "12.x",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/athas",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Open-AutoGLM",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/CogView2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/PyRIT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai_saas_app",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/coder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/quivr",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/next-platform-starter",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/code-craft",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/open-computer-use",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hackingBuddyGPT",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/travel-agency-dashboard",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/food_ordering",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/animation-personal-portfolio",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/LocalAI",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nanobrowser",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Voro-CLI",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Observer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Auto-Gmail-Creator",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/T-MAC",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Reactive-Resume",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/hussamgalal999-",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/nextjs-chat12",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ATS_CV-Resume-Builder",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/semantic-kernel",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/ai-resume-analyzer",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/OpenManus-2",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/BMAD-METHOD",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GLM-130B",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/cua",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/droidclaw",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/perplex",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/phantom-mcp",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/webcodex",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/lms-new",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/README.md",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/colebemis.com",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/MERN-LMS-2024",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/react_native-restate",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/project_modern_ui_ux_restaurant",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/v0-mimo-cli-max",
+      "default_branch": "main",
+      "visibility": "private",
+      "private": true
+    },
+    {
+      "full_name": "hussamgalal999/ai-presentation-generator",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/Resume-Matcher",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/TinyRecursiveModels",
+      "default_branch": "main",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/GyoiThon",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    },
+    {
+      "full_name": "hussamgalal999/TrafficMonitor",
+      "default_branch": "master",
+      "visibility": "public",
+      "private": false
+    }
+  ]
+}

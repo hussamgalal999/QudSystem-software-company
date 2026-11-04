@@ -58,7 +58,7 @@ ALLOWED_TASK_TYPES = {
     "research", "social_post_draft", "video_script",
     "translation", "seo_plan", "lead_research", "cvpen_cv_creation",
     "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
-    "product_review", "engineering_review", "strategy_review",
+    "product_review", "engineering_review", "strategy_review", "risk_review",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"

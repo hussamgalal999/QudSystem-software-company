@@ -1417,7 +1417,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             result = handle_mcp_request(
                 payload,
                 is_authorized=lambda: True,
-                enqueue_job=enqueue_api_job,
+                enqueue_job=lambda payload: enqueue_api_job(payload)[0],
                 get_job=mcp_get_job,
                 get_job_result=mcp_get_job_result,
                 get_status=mcp_get_status,

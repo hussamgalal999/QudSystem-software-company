@@ -100,9 +100,10 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
                   registry: dict[str, Any] | None = None, memory_context: str = "",
                   max_agents: int = 3, max_context_chars: int = 12000) -> str:
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
-    prior = ""
+    draft_output = ""
+    review_output = ""
     final_output = ""
-    for index, agent in enumerate(plan):
+    for agent in plan:
         stage = agent["execution_stage"]
         if stage == "produce":
             instruction = (
@@ -115,21 +116,28 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
                 "Independently audit the draft. Identify factual gaps, missing requirements, risks, "
                 "privacy issues, contradictions, and concrete corrections. Do not invent evidence."
             )
-            context = (memory_context + "\n\nDRAFT TO REVIEW:\n" + prior)[-max_context_chars:]
+            context = (memory_context + "\\n\\nDRAFT TO REVIEW:\\n" + draft_output)[-max_context_chars:]
         else:
             instruction = (
                 "Create the final corrected deliverable using the original task, draft, and review. "
                 "Resolve only issues supported by the supplied information; list unresolved checks. "
                 "Do not include hidden reasoning or claim tests/actions were performed unless evidenced."
             )
-            context = (memory_context + "\n\nDRAFT AND REVIEW:\n" + prior)[-max_context_chars:]
+            combined = "DRAFT:\\n" + draft_output + "\\n\\nREVIEW:\\n" + review_output
+            context = (memory_context + "\\n\\n" + combined)[-max_context_chars:]
         response = call_agent(agent, instruction, context)
         if not isinstance(response, str) or not response.strip():
             raise RuntimeError(f"Agent returned empty output: {agent['id']}")
-        prior = response.strip()[-max_context_chars:]
-        final_output = prior
+        if stage == "produce":
+            draft_output = response.strip()[-max_context_chars:]
+        elif stage == "review":
+            review_output = response.strip()[-max_context_chars:]
+        else:
+            final_output = response.strip()[-max_context_chars:]
+    if not final_output:
+        final_output = review_output or draft_output
     team_names = " → ".join(agent["name"] for agent in plan)
-    return f"## Qudron swarm\nTeam: {team_names}\nAgents invoked: {len(plan)}\n\n{final_output}"
+    return f"## Qudron swarm\\nTeam: {team_names}\\nAgents invoked: {len(plan)}\\n\\n{final_output}"
 
 def redact_sensitive_text(value: str) -> str:
     """Best-effort redaction before operational text is persisted in shared memory."""

@@ -56,7 +56,8 @@ DEFAULT_AGENT_REGISTRY = {
         "payment_reconciliation":["finance_ops","payment_verifier","compliance_reviewer"],
         "product_review":["product_manager","data_analyst","qa_engineer"],
         "engineering_review":["software_engineer","reliability_engineer","qa_engineer"],
-        "strategy_review":["strategy_council","data_analyst","evidence_checker"]
+        "strategy_review":["strategy_council","data_analyst","evidence_checker"],
+        "risk_review":["compliance_reviewer","privacy_qa","reliability_engineer"]
     }
 }
 

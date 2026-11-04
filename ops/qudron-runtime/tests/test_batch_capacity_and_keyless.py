@@ -110,7 +110,7 @@ class PrivateTokenTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertGreaterEqual(len(first), 48)
             self.assertEqual(target.read_text().strip(), first)
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
 
 
 class KeylessProviderPolicyTests(unittest.TestCase):

@@ -566,6 +566,14 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_text(self, status: int, content: str, content_type: str = "text/markdown; charset=utf-8") -> None:
+        body = content.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         if self.path in ("/health", "/status"):
             self._send_json(200, status_snapshot())
@@ -574,9 +582,14 @@ class HealthHandler(BaseHTTPRequestHandler):
             if not is_api_authorized(self.headers.get("Authorization", "")):
                 self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
                 return
-            job_id = self.path.removeprefix("/jobs/").strip()
-            if not job_id or "/" in job_id:
-                self._send_json(400, {"error": "invalid_job_id"})
+            parts = self.path.strip("/").split("/")
+            if len(parts) not in {2, 3} or parts[0] != "jobs" or not parts[1]:
+                self._send_json(400, {"error": "invalid_job_route"})
+                return
+            job_id = parts[1]
+            wants_result = len(parts) == 3 and parts[2] == "result"
+            if len(parts) == 3 and not wants_result:
+                self._send_json(404, {"error": "route_not_found"})
                 return
             with connect_db() as db:
                 row = db.execute(
@@ -585,8 +598,34 @@ class HealthHandler(BaseHTTPRequestHandler):
                 ).fetchone()
             if row is None:
                 self._send_json(404, {"error": "job_not_found"})
-            else:
-                self._send_json(200, dict(row))
+                return
+            if wants_result:
+                if row["status"] != "completed" or not row["result_path"]:
+                    self._send_json(409, {"error": "job_result_not_ready", "status": row["status"]})
+                    return
+                try:
+                    root = REPORTS_DIR.resolve()
+                    report_path = Path(row["result_path"]).resolve()
+                    if not report_path.is_relative_to(root) or not report_path.is_file():
+                        self._send_json(404, {"error": "job_result_not_found"})
+                        return
+                    if report_path.stat().st_size > 1_000_000:
+                        self._send_json(413, {"error": "job_result_too_large"})
+                        return
+                    result = report_path.read_text(encoding="utf-8")
+                except OSError:
+                    self._send_json(404, {"error": "job_result_not_found"})
+                    return
+                self._send_text(200, result)
+                return
+            status_payload = {
+                "id": row["id"], "title": row["title"], "status": row["status"],
+                "attempts": row["attempts"], "run_after": row["run_after"],
+                "error": row["error"], "updated_at": row["updated_at"],
+                "result_available": bool(row["status"] == "completed" and row["result_path"]),
+                "result_endpoint": f"/jobs/{job_id}/result" if row["status"] == "completed" and row["result_path"] else None,
+            }
+            self._send_json(200, status_payload)
             return
         self.send_error(404)
 

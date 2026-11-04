@@ -7,8 +7,8 @@ This is the first recorded operational baseline run in this workflow. It uses co
 
 ### Today’s publishing state at 11:59 Cairo
 
-- One Facebook post is scheduled for **12:15 Cairo** (Metricool ID `416253036`, autoPublish=true, draft=false), and was still `PENDING` at the last planner read.
-- No published Facebook post was returned for 4 November in the queried date range; the scheduled 12:15 item is not yet published.
+- One Facebook post scheduled for **12:15 Cairo** (Metricool ID `416253036`, autoPublish=true, draft=false) was subsequently confirmed by Metricool as **PUBLISHED**. Provider status: `PUBLISHED`; post URL: `https://facebook.com/122226986522579446/posts/122227555256579446`.
+- The 4 November analytics query returned no rows at the time of the post-publication check, so reach and engagement for this new post are not yet available; recheck after the platform analytics refresh.
 - Eight additional organic Facebook posts are scheduled from 6–20 November. All were `PENDING` at the planner read.
 - There are no Instagram or YouTube posts scheduled in this batch because no completed visual/video assets are attached. No post was published to LinkedIn or TikTok by this run.
 - No paid ads, boosts, DMs, comments, or paid services were used.
@@ -29,7 +29,7 @@ Instagram’s returned values were very small and YouTube’s history had no pub
 
 | Date/time Cairo | Network | Campaign / topic | Metricool post ID | Last observed state |
 |---|---|---|---:|---|
-| 4 Nov, 12:15 | Facebook | CVPen: show real experience clearly | 416253036 | PENDING |
+| 4 Nov, 12:15 | Facebook | CVPen: show real experience clearly | 416253036 | PUBLISHED (provider-confirmed) |
 | 6 Nov, 10:00 | Facebook | CVPen: evidence-based achievement bullets | 416260479 | PENDING |
 | 8 Nov, 12:00 | Facebook | QudSystem: identify one process to automate | 416260500 | PENDING |
 | 10 Nov, 10:00 | Facebook | CVPen: tailor a CV to a target role | 416260524 | PENDING |

@@ -83,6 +83,33 @@ TOOLS: list[dict[str, Any]] = [
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
     },
+    {
+        "name": "qudron_get_agents",
+        "description": "List Qudron's registered specialist agents and teams. This reports configured roles, not how many processes are currently running.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    },
+    {
+        "name": "qudron_get_models",
+        "description": "Read Qudron's model-provider candidate catalogue and probe the configured OpenAI-compatible gateway's model-list endpoint. A reachable catalogue is not proof of successful inference.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    },
+    {
+        "name": "qudron_search_capabilities",
+        "description": "Search Qudron's registry of tools, MCP servers, models, workflows, agents, repositories and research sources. Discovery status never grants execution permission.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "maxLength": 160},
+                "kind": {"type": "string", "enum": ["agent", "tool", "mcp_server", "model", "workflow", "repository", "paper", "source"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50}
+            },
+            "required": ["query"],
+            "additionalProperties": False
+        },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    },
 ]
 
 
@@ -112,6 +139,9 @@ def handle_mcp_request(
     get_job_result: Callable[[str], Any],
     get_status: Callable[[], Any],
     get_usage: Callable[[], Any],
+    get_agents: Callable[[], Any] | None = None,
+    get_models: Callable[[], Any] | None = None,
+    search_capabilities: Callable[[str, str | None, int], Any] | None = None,
 ) -> dict[str, Any] | None:
     """Process one stateless JSON-RPC request. None means a notification."""
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
@@ -184,6 +214,21 @@ def handle_mcp_request(
             result = get_status()
         elif name == "qudron_get_usage":
             result = get_usage()
+        elif name == "qudron_get_agents":
+            result = get_agents() if get_agents else None
+        elif name == "qudron_get_models":
+            result = get_models() if get_models else None
+        elif name == "qudron_search_capabilities":
+            query = arguments.get("query")
+            kind = arguments.get("kind")
+            limit = arguments.get("limit", 20)
+            if not isinstance(query, str) or len(query) > 160:
+                raise MCPGatewayError("query must be a string up to 160 characters")
+            if kind is not None and not isinstance(kind, str):
+                raise MCPGatewayError("kind must be a string")
+            if type(limit) is not int or not 1 <= limit <= 50:
+                raise MCPGatewayError("limit must be an integer from 1 to 50")
+            result = search_capabilities(query, kind, limit) if search_capabilities else None
         else:
             return _rpc_error(request_id, -32602, "Unknown Qudron tool")
         if result is None:

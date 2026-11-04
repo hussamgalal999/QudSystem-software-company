@@ -186,3 +186,22 @@ Stop the optional sidecar with:
 docker compose --profile free-ai stop freellm
 ```
 Remove `LLM_FAST_BASE_URL` and `LLM_FAST_MODEL` from `.env` to return FAST tasks to the default configured endpoint. The queue and existing jobs remain independent of the optional sidecar.
+
+
+## Optional connected-service adapters
+
+- github_inventory.py provides paginated, read-only repository metadata discovery and optional recursive tree indexing. Configure GITHUB_OWNER and a read-only GITHUB_TOKEN in the host secret manager. This indexes repo metadata and paths, not every source file. Never enable write scopes for the inventory worker.
+- metricool_client.py reads the scheduled-post calendar and Facebook/Instagram published-post analytics. It can create review drafts only; it hard-sets draft=true and autoPublish=false. Configure METRICOOL_API_TOKEN, METRICOOL_USER_ID and METRICOOL_BLOG_ID. Metricool API access requires an eligible Advanced or Custom plan. The ChatGPT connector session does not transfer to this service.
+- vision_adapter.py accepts local images only under QUDRON_IMAGE_ROOT and calls a configured multimodal OpenAI-compatible model. It reuses the runtime spend reservation and concurrency controls. It is a callable adapter, not a public upload route. Use only a provider whose data handling is approved for the image content.
+
+These modules are optional and do not run until called by an authenticated orchestration workflow. No external post is published by this release.
+
+
+## Owner completion reports
+
+When the optional Telegram gateway is configured, it checks the latest 20 task records every 60 seconds. Completed tasks send their bounded Markdown report to the allowlisted owner private chat; failed tasks send a short status notice without exposing internal provider errors. A SQLite ledger in the shared persistent data volume deduplicates notifications across gateway restarts. This requires the runtime and Telegram gateway to remain running on an always-on host.
+
+
+## Optional automatic live web research
+
+Research jobs can automatically retrieve up to five live web sources from DeepSeek Search & Fetch before the swarm starts. This is disabled by default. To enable it, configure DEEPSEEK_API_KEY, set QUDRON_WEB_SEARCH_MAX_DAILY_CALLS to a small positive integer, and set QUDRON_WEB_SEARCH_ENABLED=true. Each successful Search or Fetch call is currently listed at $0.75 per 1,000 calls; the local daily call cap is a conservative guard, not a billing guarantee. Results are marked as untrusted evidence and are passed to the swarm with title, URL, date, authority tier, summary and a bounded content excerpt. Only research jobs trigger this integration; drafts and customer-data workflows do not. The system never scrapes logged-in ChatGPT pages or bypasses website access controls.

@@ -9,7 +9,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import time
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -70,6 +72,8 @@ class TelegramGateway:
         self.qudron_url = os.getenv("QUDRON_INTERNAL_URL", DEFAULT_QUDRON_URL).rstrip("/")
         self.timeout = max(5, min(30, int(os.getenv("TELEGRAM_HTTP_TIMEOUT", "15"))))
         self.offset = 0
+        self.notification_db_path = Path(os.getenv('QUDRON_TELEGRAM_STATE_DB', '/app/data/telegram_gateway.sqlite3'))
+        self.last_completion_poll = 0.0
 
     def _request(self, url: str, payload: dict[str, Any] | None = None,
                  headers: dict[str, str] | None = None, timeout: int | None = None) -> Any:
@@ -117,6 +121,61 @@ class TelegramGateway:
             "text": text[:MAX_MESSAGE],
             "disable_web_page_preview": True,
         })
+
+
+    def _init_notification_db(self) -> None:
+        self.notification_db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.notification_db_path) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS notified_jobs (job_id TEXT PRIMARY KEY, notified_at TEXT NOT NULL)")
+
+    def _already_notified(self, job_id: str) -> bool:
+        self._init_notification_db()
+        with sqlite3.connect(self.notification_db_path) as db:
+            return db.execute("SELECT 1 FROM notified_jobs WHERE job_id=?", (job_id,)).fetchone() is not None
+
+    def _mark_notified(self, job_id: str) -> None:
+        with sqlite3.connect(self.notification_db_path) as db:
+            db.execute("INSERT OR IGNORE INTO notified_jobs(job_id,notified_at) VALUES(?,?)", (job_id, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
+
+    def qudron_result_text(self, job_id: str) -> str:
+        if not job_id or len(job_id) > 100 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-" for ch in job_id):
+            raise ValueError("invalid_job_id")
+        request = urllib.request.Request(
+            f"{self.qudron_url}/jobs/{urllib.parse.quote(job_id, safe='')}/result",
+            headers={"Authorization": f"Bearer {self.api_token}"},
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            return response.read().decode("utf-8", errors="replace")
+
+    def poll_completion_notifications(self) -> int:
+        if not self.owner_ids:
+            return 0
+        self._init_notification_db()
+        payload = self.qudron("/status")
+        jobs = payload.get("latest_jobs", []) if isinstance(payload, dict) else []
+        sent = 0
+        for job in jobs if isinstance(jobs, list) else []:
+            if not isinstance(job, dict):
+                continue
+            job_id = str(job.get("id", ""))
+            status = job.get("status")
+            if not job_id or status not in {"completed", "failed"} or self._already_notified(job_id):
+                continue
+            title = str(job.get("title", "Qudron task"))[:100]
+            if status == "completed" and job.get("result_available"):
+                try:
+                    result = self.qudron_result_text(job_id).strip()
+                except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError):
+                    logging.warning("Could not retrieve completed report for notification; job_id=%s", job_id)
+                    continue
+                message = f"Qudron task completed: {title}\nID: {job_id}\n\n{result[:2500]}"
+            else:
+                message = f"Qudron task failed: {title}\nID: {job_id}\nCheck /status for the queue summary."
+            for owner_id in self.owner_ids:
+                self.send(owner_id, message)
+            self._mark_notified(job_id)
+            sent += 1
+        return sent
 
     def handle_update(self, update: dict[str, Any]) -> None:
         message = update.get("message")
@@ -180,6 +239,12 @@ class TelegramGateway:
                     "timeout": 50,
                     "allowed_updates": ["message"],
                 })
+                if time.monotonic() - self.last_completion_poll >= 60:
+                    try:
+                        self.poll_completion_notifications()
+                    except Exception:
+                        logging.warning("Completion notification poll failed; will retry")
+                    self.last_completion_poll = time.monotonic()
                 for update in result.get("result", []):
                     if not isinstance(update, dict):
                         continue

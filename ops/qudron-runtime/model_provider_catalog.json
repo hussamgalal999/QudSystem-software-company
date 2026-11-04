@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-11-04",
+  "currency": "USD per 1M tokens",
+  "policy": "Candidates only; all disabled until owner installs provider keys, sets spend caps, validates data terms and runs probes.",
+  "providers": [
+    {
+      "provider": "DeepSeek",
+      "base_url": "https://api.deepseek.com",
+      "auth_env": "DEEPSEEK_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-flash",
+          "display_name": "DeepSeek V4.1 Flash 1017",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text",
+            "image"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "api_protocols": [
+            "OpenAI Chat Completions",
+            "OpenAI Responses",
+            "Anthropic Messages"
+          ],
+          "conservative_input_usd_per_1m": 0.3,
+          "output_usd_per_1m": 1.2,
+          "price_note": "Peak input/output rates used for conservative budget estimation; off-peak rates are half, cache-hit rates are lower.",
+          "enabled": false,
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "display_name": "DeepSeek V4 Pro",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "api_protocols": [
+            "OpenAI Chat Completions",
+            "OpenAI Responses",
+            "Anthropic Messages"
+          ],
+          "conservative_input_usd_per_1m": 1.32,
+          "output_usd_per_1m": 3.96,
+          "price_note": "Peak rates; does not accept image input.",
+          "enabled": false,
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        }
+      ]
+    },
+    {
+      "provider": "Xiaomi MiMo",
+      "base_url": "https://api.xiaomimimo.com/v1",
+      "auth_env": "MIMO_API_KEY",
+      "models": [
+        {
+          "id": "mimo-v2.6-pro",
+          "display_name": "MiMo V2.6 Pro",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "conservative_input_usd_per_1m": 0.435,
+          "output_usd_per_1m": 0.87,
+          "enabled": false,
+          "source": "https://mimo.mi.com/models/en-US/mimo-v2.6-pro"
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "display_name": "MiMo V2.6 Flash",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "conservative_input_usd_per_1m": 0.14,
+          "output_usd_per_1m": 0.28,
+          "enabled": false,
+          "source": "https://mimo.mi.com/docs/en-US/pricing"
+        }
+      ]
+    },
+    {
+      "provider": "OpenRouter / Meta",
+      "base_url": "https://openrouter.ai/api/v1",
+      "auth_env": "OPENROUTER_API_KEY",
+      "models": [
+        {
+          "id": "meta/muse-wonder",
+          "display_name": "Meta Muse Wonder",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "conservative_input_usd_per_1m": 4,
+          "output_usd_per_1m": 20,
+          "enabled": false,
+          "source": "https://openrouter.ai/meta/muse-wonder/"
+        },
+        {
+          "id": "meta/muse-spark-open",
+          "display_name": "Meta Muse Spark Open",
+          "context_tokens": 1048576,
+          "input_modalities": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tool_calls": true,
+          "conservative_input_usd_per_1m": 1.25,
+          "output_usd_per_1m": 4.25,
+          "enabled": false,
+          "source": "https://openrouter.ai/meta/muse-spark-open/"
+        }
+      ]
+    }
+  ]
+}

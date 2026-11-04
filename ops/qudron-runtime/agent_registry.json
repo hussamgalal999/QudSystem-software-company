@@ -258,6 +258,11 @@
       "compliance_reviewer",
       "privacy_qa",
       "reliability_engineer"
+    ],
+    "incident_triage": [
+      "reliability_engineer",
+      "qa_engineer",
+      "evidence_checker"
     ]
   }
 }

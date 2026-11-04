@@ -1,4 +1,5 @@
 import unittest
+import threading
 
 from swarm_engine import (
     DEFAULT_AGENT_REGISTRY, build_swarm_plan, execute_swarm, load_agent_registry,
@@ -69,6 +70,52 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertIn("review finding 1", contexts[4])
         self.assertIn("review finding 2", contexts[4])
         self.assertIn("review finding 3", contexts[4])
+
+
+    def test_cvpen_ten_agent_team_has_one_writer_eight_reviewers_and_final_qa(self):
+        registry = load_agent_registry("agent_registry.json")
+        team = registry["teams"]["cvpen_cv_creation"]
+        plan = build_swarm_plan("cvpen_cv_creation", registry=registry, max_agents=10)
+        self.assertEqual(len(team), 10)
+        self.assertEqual(len(plan), 10)
+        self.assertEqual(plan[0]["id"], "cv_writer")
+        self.assertEqual(plan[0]["execution_stage"], "produce")
+        self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+        self.assertEqual(plan[-1]["id"], "cv_qa")
+        self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_cvpen_reviews_run_concurrently_and_final_qa_receives_all_eight_notes(self):
+        registry = load_agent_registry("agent_registry.json")
+        review_barrier = threading.Barrier(8)
+        lock = threading.Lock()
+        reviewer_ids = []
+        final_context = {"value":""}
+
+        def fake_call(agent, instruction, context):
+            stage = agent["execution_stage"]
+            if stage == "produce":
+                return "CV draft built only from user-confirmed source facts."
+            if stage == "review":
+                with lock:
+                    reviewer_ids.append(agent["id"])
+                review_barrier.wait(timeout=4)
+                return f"verified review note from {agent['id']}"
+            final_context["value"] = context
+            return "final CV passed the bounded review gates"
+
+        result = execute_swarm(
+            {"task_type":"cvpen_cv_creation"},
+            fake_call,
+            registry=registry,
+            max_agents=10,
+            max_parallel_reviews=8
+        )
+        self.assertEqual(len(reviewer_ids), 8)
+        self.assertIn("Agents invoked: 10", result)
+        self.assertIn("Independent reviews: 8", result)
+        self.assertTrue(result.endswith("final CV passed the bounded review gates"))
+        for reviewer_id in reviewer_ids:
+            self.assertIn(f"verified review note from {reviewer_id}", final_context["value"])
 
     def test_empty_agent_output_fails_closed(self):
         def fake_call(agent, instruction, context):

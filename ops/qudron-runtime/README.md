@@ -107,3 +107,47 @@ docker compose build
 ```
 
 A passing CI run proves the tested code/configuration passed those checks. It does not prove the runtime is deployed, external model keys work, connected channels receive real customer orders, or payments are settled. A production readiness gate must also include provider sandbox tests, end-to-end customer journeys, load tests, failure injection, restore tests, and live observability.
+
+
+## Optional FreeLLM multi-provider sidecar
+
+Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-compatible endpoint on the private Compose network and can fail over among supported free-tier providers. It is pinned in `Dockerfile.freellm`; the service has no published host port and requires `FREELM_SERVER_KEY`. It is not started by default.
+
+### Enable the private sidecar
+
+1. Copy `.env.example` to `.env`.
+2. Generate a unique random `FREELM_SERVER_KEY` (at least 32 random bytes). Do not reuse `QUDRON_API_TOKEN`.
+3. Keep `FREELM_KEYLESS=0` initially. Add only official provider keys you own and are authorized to use (for example Google AI Studio, Groq, OpenRouter, Cloudflare, Mistral, NVIDIA NIM, Z.ai or Kilo).
+4. In `.env`, explicitly route only the FAST profile to the sidecar:
+   ```dotenv
+   LLM_FAST_BASE_URL=http://freellm:4000/v1
+   LLM_FAST_MODEL=auto
+   ```
+   Compose injects `FREELM_SERVER_KEY` as the FAST profile's bearer key. Balanced and Reasoning profiles remain on their separately configured endpoints.
+5. From this directory, run:
+   ```bash
+   docker compose --profile free-ai up -d --build
+   docker compose ps
+   docker compose logs --tail=100 freellm
+   ```
+6. Check the private sidecar from the Qudron container:
+   ```bash
+   docker compose exec qudron python -c "import urllib.request; print(urllib.request.urlopen('http://freellm:4000/health').status)"
+   ```
+
+### Keyless mode and privacy
+
+- To test anonymous public endpoints without provider keys, explicitly set `FREELM_KEYLESS=auto` and restart the sidecar. FreeLLM documents Kilo Gateway free routes and OVHcloud anonymous endpoints as low-quota keyless fallbacks. Availability and limits can change at any time.
+- Anonymous endpoints may log prompts and are not approved for CVs, personal data, customer records, payment evidence, secrets, or confidential QudSystem material. Use keyless mode only for public, non-sensitive test prompts.
+- Free tiers are not unlimited, guaranteed, or necessarily suitable for commercial workloads. The provider's own terms, account quotas, region restrictions and data handling apply.
+- Do not add multiple keys to evade a provider's quota or terms. Only use separately authorized keys within each provider's published rules.
+- This sidecar is an optional provider adapter, not proof that any provider is currently reachable. Run the provider's live `freelm doctor` checks and a harmless end-to-end Qudron test before relying on it.
+- Keep CVPen and other personal-data workflows on a provider approved for that data. Anonymous/keyless routing is not allowed for customer-data jobs.
+
+### Roll back / disable
+
+Stop the optional sidecar with:
+```bash
+docker compose --profile free-ai stop freellm
+```
+Remove `LLM_FAST_BASE_URL` and `LLM_FAST_MODEL` from `.env` to return FAST tasks to the default configured endpoint. The queue and existing jobs remain independent of the optional sidecar.

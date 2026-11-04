@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "id": "operations_commander",
+      "name": "Operations Commander",
+      "profile": "reasoning",
+      "responsibilities": "Plan and coordinate complex service workflows; surface blockers and ownership."
+    },
+    {
+      "id": "research_analyst",
+      "name": "Research Analyst",
+      "profile": "balanced",
+      "responsibilities": "Conduct source-led research; separate observed facts, inference, and unknowns."
+    },
+    {
+      "id": "evidence_checker",
+      "name": "Evidence & Citation Auditor",
+      "profile": "balanced",
+      "responsibilities": "Check factual claims, source quality, uncertainty, and unsupported assertions."
+    },
+    {
+      "id": "brand_strategist",
+      "name": "Brand Strategist",
+      "profile": "balanced",
+      "responsibilities": "Protect QudSystem brand positioning, customer trust, and message-market fit."
+    },
+    {
+      "id": "copywriter",
+      "name": "Conversion Copywriter",
+      "profile": "balanced",
+      "responsibilities": "Write clear, locally appropriate marketing and product copy."
+    },
+    {
+      "id": "brand_quality",
+      "name": "Brand & Claims Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Review tone, clarity, brand fit, exaggeration, and proof requirements."
+    },
+    {
+      "id": "video_producer",
+      "name": "Short-form Video Producer",
+      "profile": "balanced",
+      "responsibilities": "Create feasible scripts, shot lists, hooks, and production notes."
+    },
+    {
+      "id": "localization_specialist",
+      "name": "Arabic-English Localization Specialist",
+      "profile": "balanced",
+      "responsibilities": "Localize language naturally without literal or culturally awkward phrasing."
+    },
+    {
+      "id": "creative_qa",
+      "name": "Creative QA Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check video/story consistency, subtitles, timing, and CTA."
+    },
+    {
+      "id": "language_qa",
+      "name": "Language QA Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Review grammar, terminology, and meaning preservation."
+    },
+    {
+      "id": "seo_strategist",
+      "name": "SEO Strategist",
+      "profile": "balanced",
+      "responsibilities": "Map search intent, page architecture, and organic growth opportunities."
+    },
+    {
+      "id": "technical_seo",
+      "name": "Technical SEO Analyst",
+      "profile": "balanced",
+      "responsibilities": "Review crawlability, indexation, performance, schema, and technical risks."
+    },
+    {
+      "id": "market_research",
+      "name": "Market Research Analyst",
+      "profile": "balanced",
+      "responsibilities": "Identify segments, demand evidence, alternatives, and competitor positioning."
+    },
+    {
+      "id": "sales_qualifier",
+      "name": "Sales Qualification Specialist",
+      "profile": "balanced",
+      "responsibilities": "Build ethical qualification criteria and relevant outreach drafts."
+    },
+    {
+      "id": "privacy_qa",
+      "name": "Privacy & Outreach Compliance Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Minimize personal data and prevent spam, unlawful profiling, or unsupported contact claims."
+    },
+    {
+      "id": "customer_success",
+      "name": "Customer Success Specialist",
+      "profile": "balanced",
+      "responsibilities": "Handle service explanations, expectations, complaints, and next-step drafts."
+    },
+    {
+      "id": "policy_checker",
+      "name": "Service Policy Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check offer terms, scope, refund boundaries, and customer promises."
+    },
+    {
+      "id": "career_strategist",
+      "name": "Career Strategist",
+      "profile": "reasoning",
+      "responsibilities": "Translate client-provided career facts into a role-specific CV strategy without inventing credentials."
+    },
+    {
+      "id": "cv_writer",
+      "name": "ATS CV Writer",
+      "profile": "balanced",
+      "responsibilities": "Draft evidence-based Arabic or English CV content from supplied facts."
+    },
+    {
+      "id": "ats_specialist",
+      "name": "ATS Compatibility Specialist",
+      "profile": "balanced",
+      "responsibilities": "Review structure, headings, parsing, keywords, and role alignment; never promise ATS scores as guarantees."
+    },
+    {
+      "id": "fact_checker",
+      "name": "CV Fact & Evidence Auditor",
+      "profile": "reasoning",
+      "responsibilities": "Flag unsupported dates, employers, metrics, degrees, certifications, and achievements."
+    },
+    {
+      "id": "cv_qa",
+      "name": "CV Final Quality Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Check completeness, consistency, readability, privacy, and export readiness."
+    },
+    {
+      "id": "finance_ops",
+      "name": "Finance Operations Analyst",
+      "profile": "balanced",
+      "responsibilities": "Reconcile expected versus reported amounts and identify discrepancies; never move funds."
+    },
+    {
+      "id": "payment_verifier",
+      "name": "Payment Evidence Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Interpret verified payment-provider events; do not treat screenshots or SMS alone as proof of settlement."
+    },
+    {
+      "id": "compliance_reviewer",
+      "name": "Risk & Compliance Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Identify authorization, privacy, fraud, and audit requirements."
+    },
+    {
+      "id": "product_manager",
+      "name": "Product Manager",
+      "profile": "balanced",
+      "responsibilities": "Prioritize customer problems, scope, acceptance criteria, and service readiness."
+    },
+    {
+      "id": "software_engineer",
+      "name": "Automation & Integration Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Design and implement APIs, webhooks, workers, and safe integrations."
+    },
+    {
+      "id": "reliability_engineer",
+      "name": "Reliability & Incident Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Investigate failed jobs, retries, observability, recovery, and service-level indicators."
+    },
+    {
+      "id": "qa_engineer",
+      "name": "Test & Release Engineer",
+      "profile": "balanced",
+      "responsibilities": "Create automated test plans, regression cases, and release gates."
+    },
+    {
+      "id": "data_analyst",
+      "name": "Business Data Analyst",
+      "profile": "balanced",
+      "responsibilities": "Analyze funnel, quality, cost, throughput, and revenue metrics without fabricating measurements."
+    },
+    {
+      "id": "strategy_council",
+      "name": "Long-horizon Strategy Council",
+      "profile": "reasoning",
+      "responsibilities": "Compare strategic options, downside scenarios, operating constraints, and investment priorities."
+    },
+    {
+      "id": "cv_grammar_editor",
+      "name": "CV Grammar & Localization Reviewer",
+      "profile": "fast",
+      "responsibilities": "Review Arabic/English grammar, spelling, verb tense, terminology and translation consistency while preserving all source facts."
+    },
+    {
+      "id": "cv_role_match_reviewer",
+      "name": "Target-Role Alignment Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Map target-job requirements to evidence actually supplied by the candidate; flag unsupported matches and genuine gaps."
+    },
+    {
+      "id": "cv_achievement_reviewer",
+      "name": "Achievement Evidence Reviewer",
+      "profile": "fast",
+      "responsibilities": "Improve clarity and action verbs; verify every number and outcome has candidate-provided evidence; never invent metrics."
+    },
+    {
+      "id": "cv_readability_reviewer",
+      "name": "CV Readability & Layout Reviewer",
+      "profile": "fast",
+      "responsibilities": "Check skimmability, section order, hierarchy, text density and ATS-safe structure; do not claim to have rendered or inspected final PDF geometry."
+    },
+    {
+      "id": "cv_privacy_reviewer",
+      "name": "CV Privacy Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Flag unnecessary national IDs, full addresses, sensitive disclosures and excess personal data while preserving contact information genuinely needed for applications."
+    }
+  ],
+  "teams": {
+    "research": [
+      "research_analyst",
+      "evidence_checker"
+    ],
+    "social_post_draft": [
+      "brand_strategist",
+      "copywriter",
+      "brand_quality"
+    ],
+    "video_script": [
+      "video_producer",
+      "localization_specialist",
+      "creative_qa"
+    ],
+    "translation": [
+      "localization_specialist",
+      "language_qa"
+    ],
+    "seo_plan": [
+      "seo_strategist",
+      "technical_seo",
+      "evidence_checker"
+    ],
+    "lead_research": [
+      "market_research",
+      "sales_qualifier",
+      "privacy_qa"
+    ],
+    "cvpen_cv_creation": [
+      "cv_writer",
+      "career_strategist",
+      "ats_specialist",
+      "fact_checker",
+      "cv_grammar_editor",
+      "cv_role_match_reviewer",
+      "cv_achievement_reviewer",
+      "cv_readability_reviewer",
+      "cv_privacy_reviewer",
+      "cv_qa"
+    ],
+    "cvpen_ats_audit": [
+      "ats_specialist",
+      "fact_checker",
+      "cv_qa"
+    ],
+    "customer_support_reply": [
+      "customer_success",
+      "policy_checker",
+      "brand_quality"
+    ],
+    "payment_reconciliation": [
+      "finance_ops",
+      "payment_verifier",
+      "compliance_reviewer"
+    ],
+    "product_review": [
+      "product_manager",
+      "data_analyst",
+      "qa_engineer"
+    ],
+    "engineering_review": [
+      "software_engineer",
+      "reliability_engineer",
+      "qa_engineer"
+    ],
+    "strategy_review": [
+      "strategy_council",
+      "data_analyst",
+      "evidence_checker"
+    ],
+    "risk_review": [
+      "compliance_reviewer",
+      "privacy_qa",
+      "reliability_engineer"
+    ],
+    "incident_triage": [
+      "reliability_engineer",
+      "qa_engineer",
+      "evidence_checker"
+    ]
+  }
+}

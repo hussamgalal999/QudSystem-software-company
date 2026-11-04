@@ -157,6 +157,16 @@
       "weekdays": [
         4
       ]
+    },
+    {
+      "id": "github-capability-mining",
+      "role": "Open-Source Intelligence Miner",
+      "task_type": "capability_mining",
+      "title": "Weekly authorized GitHub capability mining",
+      "prompt": "Run the bounded, read-only GitHub capability miner. Discover authorized repositories, inspect tree metadata and paths, score repository candidates, and register them. Never clone, download source, execute code, modify repositories, infer a license from a filename, or promote candidates to verified/active. Report discovered, selected, registered, indexed paths and sanitized failures.",
+      "at_local": "03:30",
+      "every_days": 7,
+      "anchor_date": "2026-11-04"
     }
   ]
 }

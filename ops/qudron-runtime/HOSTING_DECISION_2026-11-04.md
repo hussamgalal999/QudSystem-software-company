@@ -92,3 +92,31 @@ Do not mark Qudron pilot-live until all of the following are evidenced:
 - Oracle Free Tier FAQ and card verification: https://www.oracle.com/cloud/free/faq/
 - GitHub Actions limits: https://docs.github.com/en/actions/reference/limits
 - Cloudflare Containers pricing: https://developers.cloudflare.com/workers/platform/pricing/
+
+
+## Best current route for AI inference without a separate model API key
+
+The Cloudflare edge option can use the native **Workers AI binding** (`env.AI.run()`), so the Worker can call Cloudflare-hosted models without a separate Gemini/Groq/OpenRouter model key. The owner still needs a Cloudflare account and must configure the AI binding, but no model-provider secret is required for this route.
+
+As of 4 November 2026, Workers AI Free includes **10,000 Neurons per day** at no charge. The Free plan blocks further inference when the free allowance is exceeded; moving beyond the allowance requires Workers Paid (starting at $5/month, plus usage above the free allowance). We must not upgrade billing automatically.
+
+A current model candidate explicitly listed as available on the Free plan is `@cf/zai-org/glm-4.7-flash`; the pricing page lists 5,500 Neurons per million input tokens and 36,400 Neurons per million output tokens. This is a finite daily allowance, not unlimited usage. Resource-intensive models including Kimi K2.6, Kimi K2.7 Code and GLM 5.2 require a paid plan according to the official changelog. Prefer GLM-4.7-Flash for the first internal test, then compare quality and quota consumption before routing more workloads.
+
+Cloudflare's Workers AI data-usage documentation updated 16 October 2026 states standard inference inputs/outputs are processed only as needed, are not retained after processing absent stateful features, and are not used to train AI models. If Qudron stores reports/prompts in D1, R2 or logs, those stored copies follow the configured storage/log retention settings. Each third-party model's license still applies.
+
+This is a better first no-key model path than using anonymous third-party gateways: it offers a documented daily free allocation and current privacy commitments. It still requires the separate Worker-based edge runtime; it cannot run the current Python/Docker worker directly.
+
+Other routes:
+- Gemini API Free has selected free models and free input/output tokens, but Google states Free-tier content may be used to improve products; public/non-sensitive work only.
+- Groq Free has API-key access subject to model-specific RPM/RPD/TPM/TPD limits, which vary by organization.
+- Cerebras lists a $0 Free tier with lower rate limits, but its public pricing details are stale; verify account quotas before relying on it.
+
+Sources checked 4 November 2026:
+- Workers AI pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Workers AI direct binding: https://developers.cloudflare.com/workers-ai/configuration/bindings/
+- Workers AI Free-plan model eligibility: https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/
+- Workers AI data use: https://developers.cloudflare.com/workers-ai/platform/data-usage/
+- Gemini Free vs Paid data treatment: https://ai.google.dev/gemini-api/docs/pricing
+- Gemini project rate limits: https://ai.google.dev/gemini-api/docs/rate-limits
+- Groq rate limits: https://console.groq.com/docs/rate-limits
+- Cerebras pricing: https://inference-docs.cerebras.ai/support/pricing

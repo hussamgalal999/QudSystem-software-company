@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
 from deepseek_web import search_web, WebResearchError
+from capability_miner import mine_from_environment
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -68,7 +69,7 @@ ALLOWED_TASK_TYPES = {
     "translation", "seo_plan", "lead_research", "cvpen_cv_creation",
     "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
     "product_review", "engineering_review", "strategy_review", "risk_review",
-    "incident_triage",
+    "incident_triage", "capability_mining",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -862,6 +863,15 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
 
 
 def execute_job_swarm(job: sqlite3.Row) -> str:
+    if str(job["task_type"]) == "capability_mining":
+        if not os.getenv("GITHUB_OWNER", "").strip() or not os.getenv("GITHUB_TOKEN", "").strip():
+            return ("# GitHub capability mining skipped\n\n"
+                    "The read-only GitHub miner is installed, but GITHUB_OWNER or GITHUB_TOKEN "
+                    "is not configured in the host secret manager. No repository was accessed. "
+                    "Configure a read-only token scoped to the intended repositories to enable the scan.")
+        max_repositories = int(os.getenv("QUDRON_GITHUB_MINE_MAX_REPOSITORIES", "50"))
+        summary = mine_from_environment(max_repositories=max_repositories)
+        return "# GitHub capability mining run\n\n```json\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n```"
     project = infer_project(job)
     memory_context = retrieve_memory_context(project)
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:

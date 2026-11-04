@@ -69,3 +69,28 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 - No provider API keys, OAuth sessions, or customer credentials have been installed. The CI test validates sidecar startup/authentication, not successful live inference from each upstream provider.
 - OmniRoute remains an evaluated candidate, not yet integrated. Its current README advertises 231 providers, 50+ free tiers and OAuth/web-cookie routes; those are upstream claims and each route still needs provider-terms, privacy and security review. The repository is MIT licensed, but some OAuth/web-cookie/CLI subscription integrations may be subject to separate upstream provider terms. Never enable web-cookie adapters for customer data or bypass a provider's terms.
 - Qudron is still not merged or deployed. The release candidate still needs a host, owner-approved provider configuration, exact prices/budgets and an approved release.
+
+
+## Zero-key inference option for the Cloudflare edge runtime (4 November 2026)
+
+**Preferred no-separate-model-key option:** Cloudflare Workers AI through the native Worker AI binding (`env.AI.run()`). The binding can invoke Workers AI models directly without a separate model-provider API key. This is only available inside a deployed Cloudflare Worker; it does not make the existing Python/Docker container keyless by itself.
+
+- Workers AI Free currently includes 10,000 Neurons per day at no charge. On the Free plan, exceeding the free allowance causes requests to fail; moving beyond it requires the Workers Paid plan, which starts at $5/month and charges overage. Do not enable the Paid plan without explicit approval.
+- A documented Free-plan candidate is `@cf/zai-org/glm-4.7-flash`. The current pricing page lists 5,500 Neurons per million input tokens and 36,400 Neurons per million output tokens; the daily allowance is finite and shared across use, not an unlimited free model.
+- Other models may be blocked behind paid billing. The current official changelog identifies Kimi K2.6, Kimi K2.7 Code and GLM 5.2 as requiring Workers Paid. Re-check model eligibility before changing the model ID.
+- Cloudflare's Workers AI data-usage documentation (updated 16 October 2026) states that standard inference content is processed only as needed, is not retained after processing absent stateful storage features, and is not used to train AI models. If prompts or reports are written to R2/D1/logs, those storage systems have their own retention configuration. Review each model's third-party license.
+- This route is the best initial candidate for internal non-sensitive Qudron tasks where a Cloudflare Worker is the execution runtime. It is not yet integrated or deployed. Existing Docker Qudron still needs a configured provider adapter or API endpoint.
+
+Official references:
+- Workers AI pricing and Neuron allowance: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Direct AI binding: https://developers.cloudflare.com/workers-ai/configuration/bindings/
+- Free-plan model eligibility changelog: https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/
+- Workers AI data usage/privacy: https://developers.cloudflare.com/workers-ai/platform/data-usage/
+
+## Other currently free provider routes and privacy cautions
+
+- **Gemini API Free:** Google documents free input/output token access for selected models, but explicitly labels free-tier content as used to improve its products. Keep it to public/non-sensitive prompts; do not send CVs, customer records, IDs, payment evidence, secrets or confidential business material on that tier. Exact quotas are visible per project in AI Studio and are not guaranteed.
+- **Groq Free:** a usable API-key route with model-specific request/token limits. The current exact limits vary by organization and model, are visible in the account console, and requests may return HTTP 429. It is not unlimited capacity.
+- **Cerebras Free:** an official free API tier is listed, but the public pricing page is old and its free-tier rate limits are described only as lower limits. Treat it as an experimental fallback until a current account quota is checked.
+
+Never use a free route as a reason to send confidential customer data to an endpoint without checking provider-specific terms.

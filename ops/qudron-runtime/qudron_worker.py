@@ -51,6 +51,8 @@ MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS",
 MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
+MAX_CVPEN_AGENTS = max(1, min(10, int(os.getenv("QUDRON_MAX_CVPEN_AGENTS", "10"))))
+MAX_PARALLEL_REVIEWS = max(1, min(8, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "8"))))
 AGENT_REGISTRY: dict[str, Any] = {}
 EXTERNAL_API_TASK_TYPES = {
     "research", "social_post_draft", "video_script", "translation",
@@ -530,10 +532,19 @@ def configured_budget(name: str) -> float | None:
 
 
 def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
-                         payload_bytes: int) -> str | None:
+                         payload_bytes: int, task_type: str | None = None) -> str | None:
     daily_budget = configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD")
     monthly_budget = configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD")
-    if daily_budget is None and monthly_budget is None:
+    cvpen_job_budget = (
+        configured_budget("QUDRON_CVPEN_JOB_BUDGET_USD")
+        if task_type == "cvpen_cv_creation" else None
+    )
+    if task_type == "cvpen_cv_creation" and cvpen_job_budget is None:
+        raise RuntimeError(
+            "CVPen creation is fail-closed until QUDRON_CVPEN_JOB_BUDGET_USD is configured. "
+            "Set the per-order USD cap and exact model input/output rates before enabling 10-agent CV fulfilment."
+        )
+    if daily_budget is None and monthly_budget is None and cvpen_job_budget is None:
         return None
     input_rate, output_rate = profile_cost_rates(profile)
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
@@ -565,6 +576,21 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
             "DELETE FROM llm_usage_reservations WHERE created_at<?",
             (reservation_cutoff,),
         )
+        if cvpen_job_budget is not None:
+            job_spent = db.execute(
+                "SELECT COALESCE(SUM(cost_usd),0) FROM llm_usage WHERE job_id=?",
+                (job_id,),
+            ).fetchone()[0]
+            job_reserved = db.execute(
+                "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE job_id=?",
+                (job_id,),
+            ).fetchone()[0]
+            if float(job_spent or 0) + float(job_reserved or 0) + estimated_cost > cvpen_job_budget:
+                db.rollback()
+                raise RuntimeError(
+                    f"CVPen per-order model budget reached for job {job_id}; "
+                    f"the next estimated call would exceed {cvpen_job_budget:.2f} USD."
+                )
         if daily_budget is not None:
             day = now.date().isoformat() + "%"
             spent = db.execute(
@@ -746,7 +772,8 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }).encode("utf-8")
     reservation_id = reserve_model_budget(
-        str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload)
+        str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload),
+        str(job["task_type"])
     )
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -777,7 +804,10 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     project = infer_project(job)
     memory_context = retrieve_memory_context(project)
     registry = AGENT_REGISTRY or load_agent_registry(AGENT_REGISTRY_PATH)
-    max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
+    if SWARM_ENABLED and str(job["task_type"]) == "cvpen_cv_creation":
+        max_agents = MAX_CVPEN_AGENTS
+    else:
+        max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
 
     def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
         return call_llm(job, agent, instruction, prior, memory_context)
@@ -785,6 +815,7 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     return execute_swarm(
         {"task_type": job["task_type"], "title": job["title"], "prompt": job["prompt"]},
         invoke, registry=registry, memory_context=memory_context, max_agents=max_agents,
+        max_parallel_reviews=MAX_PARALLEL_REVIEWS if SWARM_ENABLED else 1,
     )
 
 

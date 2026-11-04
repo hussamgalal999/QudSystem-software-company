@@ -135,6 +135,16 @@ Qudron now includes an **opt-in** FreeLLM 0.5.2 sidecar. It exposes an OpenAI-co
    docker compose exec qudron python -c "import urllib.request; print(urllib.request.urlopen('http://freellm:4000/health').status)"
    ```
 
+### Verify configured providers
+
+After the sidecar is running, inspect provider readiness from inside its container:
+```bash
+docker compose exec freellm freelm health
+docker compose exec freellm freelm doctor --json
+docker compose exec freellm freelm models
+```
+`freelm doctor` sends a tiny live test request to each configured provider/key (and keyless fallback when enabled), so it consumes a small amount of quota and should be run only with harmless test prompts. The health endpoint alone proves the router process is alive; it does not prove upstream inference is available.
+
 ### Keyless mode and privacy
 
 - With `FREELM_KEYLESS=auto`, FreeLLM uses anonymous public endpoints only when no keyed providers are configured. It documents Kilo Gateway free routes and OVHcloud anonymous endpoints as low-quota keyless fallbacks. Availability and limits can change at any time.

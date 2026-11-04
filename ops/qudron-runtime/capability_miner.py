@@ -21,7 +21,7 @@ MANIFEST_NAMES = {
     "pyproject.toml", "requirements.txt", "package.json", "pnpm-lock.yaml",
     "go.mod", "cargo.toml", "pom.xml", "build.gradle", "dockerfile",
 }
-CI_PREFIXES = {".github/workflows/", ".gitlab-ci", ".circleci/"}
+CI_PREFIXES = (".github/workflows/", ".gitlab-ci", ".circleci/")
 
 
 def _parse_updated(value: Any) -> datetime | None:

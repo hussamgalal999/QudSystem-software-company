@@ -157,6 +157,15 @@
       "weekdays": [
         4
       ]
+    },
+    {
+      "id": "daily-metricool-social-review",
+      "role": "Social Media Analyst & Growth Strategist",
+      "task_type": "research",
+      "title": "Daily social media calendar and performance analysis",
+      "prompt": "Analyze QudSystem's social media performance and content calendar using connected Metricool data. Review the last 30 days of Facebook, Instagram and YouTube posts, compare reach and engagement, identify the strongest and weakest content themes, inspect the next 30 days of scheduled posts for gaps and collisions, and recommend 3 evidence-based improvements. If connected analytics are unavailable, state that clearly and provide a measurement plan. Do not invent metrics or publish, edit or delete posts.",
+      "at_local": "19:30",
+      "every_days": 1
     }
   ]
 }

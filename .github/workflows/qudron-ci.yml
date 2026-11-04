@@ -50,6 +50,7 @@ jobs:
           cp .env.example .env
           docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots --profile telegram config --quiet
           docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots build --no-cache opendots
+          docker compose -f docker-compose.yml -f docker-compose.opendots.yml -f docker-compose.opendots-computers.yml --profile opendots --profile opendots-computers config --quiet
           rm -f .env
       - name: Smoke-test FreeLLM sidecar authentication and health
         run: |

@@ -6,16 +6,18 @@ Serverless pilot adapter, separate from the Docker/Python runtime. It does not r
 - Workers: authenticated task intake and health endpoint.
 - Workflows: durable execution, checkpointed steps, retries and status retrieval.
 - Workers AI binding: initial generation plus a separate QA inference.
+- SQLite-backed Durable Object: idempotent admission ledger and strict five-task/day internal pilot cap.
 - Telegram webhook: owner-only task submission and status checks.
 - No VPS, Docker daemon or always-on process is required for this pilot.
 
 ## Free-plan envelope
-Published limits include 100,000 Worker requests/day and 10 ms CPU per Worker invocation. Workflows Free includes 100,000 executions/day shared with Worker requests, 3,000 steps/day, 100 concurrent instances and 1 GB-month persisted state. Workers AI has a 10,000 Neurons/day free allocation. These are quotas, not guaranteed throughput. Inference may fail after the daily neuron allowance is exhausted.
+Published limits include 100,000 Worker requests/day and 10 ms CPU per Worker invocation. Workflows Free includes 100,000 executions/day shared with Worker requests, 3,000 steps/day, 100 concurrent instances and 1 GB-month persisted state. Workers AI has a 10,000 Neurons/day free allocation. SQLite Durable Objects have a 5 GB account storage allowance and daily request limits. The pilot caps task intake at five per UTC day. These are quotas, not guaranteed throughput; inference can fail when the free AI allowance is exhausted.
 
 References:
 - https://developers.cloudflare.com/workers/platform/limits/
 - https://developers.cloudflare.com/workflows/reference/limits/
 - https://developers.cloudflare.com/workflows/reference/pricing/
+- https://developers.cloudflare.com/durable-objects/platform/limits/
 - https://developers.cloudflare.com/workers-ai/platform/pricing/
 
 ## Security boundaries
@@ -28,8 +30,8 @@ References:
 - Workflow inputs and outputs are persisted by Cloudflare Workflows; do not submit sensitive content.
 
 ## Bootstrap and deployment
-1. Install Node.js 20+ and run npm ci in this folder.
-2. Create a Cloudflare API token scoped to the account with Workers Scripts:Edit, Workflows:Edit and Workers AI:Read. Store as GitHub Actions secret CLOUDFLARE_API_TOKEN; store account ID as CLOUDFLARE_ACCOUNT_ID.
+1. Install Node.js 20+ and run npm install in this folder.
+2. Create a Cloudflare API token scoped to the account with Workers Scripts:Edit, Workflows:Edit, Durable Objects:Edit and Workers AI:Read. Store it as GitHub Actions secret CLOUDFLARE_API_TOKEN; store the account ID as CLOUDFLARE_ACCOUNT_ID.
 3. Set Worker secrets in Cloudflare: QUDRON_API_TOKEN (random 32+ characters), TELEGRAM_BOT_TOKEN (optional), TELEGRAM_WEBHOOK_SECRET (optional random 32+ characters), and TELEGRAM_OWNER_CHAT_IDS (owner numeric Telegram chat ID).
 4. Run npm run typecheck, npm test and npm run build.
 5. Deploy with npx wrangler deploy after account secrets and token are configured.

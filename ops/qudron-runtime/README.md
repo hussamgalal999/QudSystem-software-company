@@ -4,7 +4,7 @@ Qudron is a self-hosted operating layer for QudSystem. It separates ChatGPT's in
 
 ## Specialist swarm registry
 
-The registry contains 30+ specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
+The registry contains 31 specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
 
 These are **role-specialized AI workers**, not 30 separately hosted models or human employees. A job selects a team and runs a bounded sequential swarm. Configure QUDRON_MAX_SWARM_AGENTS (default 3, maximum 5) to cap calls, cost, and latency. Each specialist can be routed to a different OpenAI-compatible model profile.
 
@@ -46,6 +46,13 @@ After deployment, external orchestrators can enqueue approved internal draft/res
 - Requests require a caller-supplied idempotency key; duplicate submissions return the existing job instead of creating duplicate work.
 - Intake is allowlisted to internal research/draft/review task types. CV customer-data tasks, payment reconciliation, customer support with customer records, and financial actions are intentionally blocked from this generic endpoint.
 - The default Docker mapping binds the port to localhost. Remote integrations must use HTTPS, a private network or authenticated reverse proxy, request logging, and secret rotation. Never expose this endpoint directly to the public internet.
+
+## Failure triage and queue validation
+
+- Malformed schedules, duplicate schedule IDs, unsupported task types, missing titles/prompts, and invalid intervals are skipped safely and logged rather than crashing the scheduler.
+- SQLite connections are closed when their context exits.
+- After a job reaches its terminal retry limit, Qudron creates one idempotent `incident_triage` task for the reliability/QA/evidence swarm. The triage job is read-only: it produces a root-cause hypothesis, a proposed correction, a regression test, and a rollback note. It does not repair production systems automatically.
+- Incident-triage failures do not create recursive incident jobs.
 
 ## CVPen workflow design and payment safety
 

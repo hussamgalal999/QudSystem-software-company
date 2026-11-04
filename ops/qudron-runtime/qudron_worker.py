@@ -10,6 +10,7 @@ import concurrent.futures
 import datetime as dt
 import json
 import logging
+import hmac
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
@@ -42,9 +43,16 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "").rstrip("/")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_TIMEOUT = max(10, int(os.getenv("LLM_TIMEOUT_SECONDS", "180")))
+API_TOKEN = os.getenv("QUDRON_API_TOKEN", "")
+MAX_API_BODY_BYTES = 65536
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
 AGENT_REGISTRY: dict[str, Any] = {}
+EXTERNAL_API_TASK_TYPES = {
+    "research", "social_post_draft", "video_script", "translation",
+    "seo_plan", "lead_research", "product_review", "engineering_review",
+    "strategy_review", "risk_review",
+}
 
 ALLOWED_TASK_TYPES = {
     "research", "social_post_draft", "video_script",
@@ -187,6 +195,52 @@ def claim_job() -> sqlite3.Row | None:
         if not changed:
             return None
         return db.execute("SELECT * FROM jobs WHERE id=?", (row["id"],)).fetchone()
+
+def is_api_authorized(authorization: str, token: str | None = None) -> bool:
+    expected = API_TOKEN if token is None else token
+    if not expected:
+        return False
+    return hmac.compare_digest(str(authorization), f"Bearer {expected}")
+
+
+def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    if not isinstance(payload, dict):
+        raise ValueError("JSON body must be an object")
+    task_type = str(payload.get("task_type", "")).strip()
+    if task_type not in EXTERNAL_API_TASK_TYPES:
+        raise ValueError("task_type is not enabled for external intake")
+    title = str(payload.get("title", "")).strip()
+    prompt = str(payload.get("prompt", "")).strip()
+    role = str(payload.get("role", "Qudron Task Agent")).strip()
+    key = str(payload.get("idempotency_key", "")).strip()
+    if not title or len(title) > 160:
+        raise ValueError("title is required and must be <= 160 characters")
+    if not prompt or len(prompt) > 8000:
+        raise ValueError("prompt is required and must be <= 8000 characters")
+    if not role or len(role) > 100:
+        raise ValueError("role is required and must be <= 100 characters")
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,120}", key):
+        raise ValueError("idempotency_key must be 8-120 safe ASCII characters")
+    job_key = f"api:{key}"
+    now = iso_now()
+    job_id = uuid.uuid4().hex
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        existing = db.execute(
+            "SELECT id,status,title FROM jobs WHERE job_key=?", (job_key,)
+        ).fetchone()
+        if existing:
+            db.commit()
+            return dict(existing), False
+        db.execute(
+            """INSERT INTO jobs
+            (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+            (job_id, job_key, title, role, task_type, prompt, now, now, now),
+        )
+        db.commit()
+    return {"id": job_id, "status": "pending", "title": title}, True
+
 
 def infer_project(job: sqlite3.Row) -> str:
     haystack = f"{job['title']} {job['role']} {job['prompt']}".lower()
@@ -399,19 +453,70 @@ def status_snapshot() -> dict[str, Any]:
     }
 
 class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
-        if self.path not in ("/health", "/status"):
-            self.send_error(404)
-            return
-        body = json.dumps(status_snapshot(), ensure_ascii=False, indent=2).encode("utf-8")
-        self.send_response(200)
+    def _send_json(self, status: int, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self) -> None:
+        if self.path in ("/health", "/status"):
+            self._send_json(200, status_snapshot())
+            return
+        if self.path.startswith("/jobs/"):
+            if not is_api_authorized(self.headers.get("Authorization", "")):
+                self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+                return
+            job_id = self.path.removeprefix("/jobs/").strip()
+            if not job_id or "/" in job_id:
+                self._send_json(400, {"error": "invalid_job_id"})
+                return
+            with connect_db() as db:
+                row = db.execute(
+                    """SELECT id,title,status,attempts,run_after,result_path,error,updated_at
+                    FROM jobs WHERE id=?""", (job_id,)
+                ).fetchone()
+            if row is None:
+                self._send_json(404, {"error": "job_not_found"})
+            else:
+                self._send_json(200, dict(row))
+            return
+        self.send_error(404)
+
+    def do_POST(self) -> None:
+        if self.path != "/jobs":
+            self.send_error(404)
+            return
+        if not is_api_authorized(self.headers.get("Authorization", "")):
+            self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(400, {"error": "invalid_content_length"})
+            return
+        if length < 1 or length > MAX_API_BODY_BYTES:
+            self._send_json(413, {"error": "invalid_or_oversized_body"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            item, created = enqueue_api_job(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(400, {"error": "invalid_json"})
+            return
+        except ValueError as exc:
+            self._send_json(422, {"error": str(exc)})
+            return
+        self._send_json(202 if created else 200, {
+            "created": created, "job": item,
+            "note": "External intake is for internal drafts/research only; CV customer data and payment events are not enabled."
+        })
+
     def log_message(self, *_: Any) -> None:
         return
+
 
 def run() -> None:
     setup_logging()

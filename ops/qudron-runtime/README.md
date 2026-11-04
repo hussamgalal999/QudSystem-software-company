@@ -88,6 +88,17 @@ This runtime currently creates research, drafts, operational memory notes, and h
 - Health/status endpoint, logs, durable artifact paths.
 - Unit tests for concurrent claims, stale recovery, recurring idempotency, memory scoping/redaction, swarm planning, and payment callback verification.
 
+### CVPen swarm test coverage
+
+The CVPen creation team is deliberately separate from the routine swarm cap:
+- One producer creates the evidence-based draft.
+- Eight independent reviewer calls run concurrently (bounded by `QUDRON_MAX_PARALLEL_REVIEWS`).
+- One final QA agent receives all eight review notes before producing the final result.
+- The test suite checks the exact ten-agent team composition, verifies reviewers reach a synchronization barrier concurrently, and verifies all eight notes reach the finalizer.
+- Per-order model reservations are tested to fail closed if the cap is absent and to stop concurrent agents when the order budget would be exceeded.
+
+These checks validate orchestration logic only. They do not validate resume quality for every real customer, render a DOCX/PDF, connect a live checkout, or prove the service is deployed.
+
 Run tests locally:
 ```bash
 python -m py_compile *.py

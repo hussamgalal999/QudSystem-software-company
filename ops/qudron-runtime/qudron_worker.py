@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
 from deepseek_web import search_web, WebResearchError
 from capability_miner import mine_from_environment
+from mcp_gateway import handle_mcp_request, MCPGatewayError
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -403,6 +404,55 @@ def claim_job() -> sqlite3.Row | None:
         if not changed:
             return None
         return db.execute("SELECT * FROM jobs WHERE id=?", (row["id"],)).fetchone()
+
+
+def mcp_get_job(job_id: str) -> dict[str, Any] | None:
+    with connect_db() as db:
+        row = db.execute(
+            """SELECT id,title,status,attempts,run_after,error,result_path,updated_at
+            FROM jobs WHERE id=?""", (job_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"], "title": row["title"], "status": row["status"],
+        "attempts": row["attempts"], "run_after": row["run_after"],
+        "error": row["error"], "updated_at": row["updated_at"],
+        "result_available": bool(row["status"] == "completed" and row["result_path"]),
+    }
+
+
+def mcp_get_job_result(job_id: str) -> str | None:
+    with connect_db() as db:
+        row = db.execute(
+            "SELECT status,result_path FROM jobs WHERE id=?", (job_id,)
+        ).fetchone()
+    if row is None or row["status"] != "completed" or not row["result_path"]:
+        return None
+    try:
+        root = REPORTS_DIR.resolve()
+        report_path = Path(row["result_path"]).resolve()
+        if not report_path.is_relative_to(root) or not report_path.is_file():
+            return None
+        if report_path.stat().st_size > 100_000:
+            return report_path.read_text(encoding="utf-8")[:100_000] + "\\n\\n[Report truncated by MCP gateway.]"
+        return report_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def mcp_get_status() -> dict[str, Any]:
+    snapshot = status_snapshot()
+    return {
+        "service": snapshot.get("service"),
+        "time_utc": snapshot.get("time_utc"),
+        "counts": snapshot.get("counts", {}),
+        "registered_agents": snapshot.get("registered_agents", 0),
+        "registered_teams": snapshot.get("registered_teams", 0),
+        "max_agents_per_task": snapshot.get("max_agents_per_task", 1),
+        "max_concurrent_model_calls": snapshot.get("max_concurrent_model_calls", 1),
+        "llm_configured": snapshot.get("llm_configured", False),
+    }
 
 def is_api_authorized(authorization: str, token: str | None = None) -> bool:
     expected = API_TOKEN if token is None else token
@@ -1140,7 +1190,55 @@ class HealthHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def _send_mcp_response(self, status: int, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("MCP-Protocol-Version", "2025-06-18")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_mcp_post(self) -> None:
+        if not is_api_authorized(self.headers.get("Authorization", "")):
+            self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(400, {"error": "invalid_content_length"})
+            return
+        if length < 1 or length > MAX_API_BODY_BYTES:
+            self._send_json(413, {"error": "invalid_or_oversized_body"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            result = handle_mcp_request(
+                payload,
+                is_authorized=lambda: True,
+                enqueue_job=enqueue_api_job,
+                get_job=mcp_get_job,
+                get_job_result=mcp_get_job_result,
+                get_status=mcp_get_status,
+                get_usage=model_usage_snapshot,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
+            self._send_json(400, {"error": "invalid_mcp_request"})
+            return
+        if result is None:
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        self._send_mcp_response(200, result)
+
     def do_POST(self) -> None:
+        if self.path == "/mcp":
+            self._handle_mcp_post()
+            return
         if self.path != "/jobs":
             self.send_error(404)
             return

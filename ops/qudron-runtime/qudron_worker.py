@@ -1322,6 +1322,13 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if self.path == "/mcp":
+            self.send_response(405)
+            self.send_header("Allow", "POST")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path == "/health":
             # Keep the unauthenticated container probe deliberately non-sensitive.
             self._send_json(200, {"ok": True, "service": "qudron-runtime"})
@@ -1401,6 +1408,10 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _handle_mcp_post(self) -> None:
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            self._send_json(415, {"error": "mcp_requires_application_json"})
+            return
         if not is_api_authorized(self.headers.get("Authorization", "")):
             self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
             return

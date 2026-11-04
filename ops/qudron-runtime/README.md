@@ -51,3 +51,12 @@ Never commit API keys. Keep .env private, restrict health endpoint network acces
 5. Add a managed queue/database and secret manager before scaling beyond this starter.
 
 If the host, power, network, or model endpoint fails, tasks pause. The process resumes pending work after it restarts; this is restart-safe, not literally uninterrupted.
+## Review cadence now configured
+- Daily: CVPen growth opportunities, QudSystem content draft, target-customer research, and an operations/error-prevention review.
+- Every 3 days: process optimization and QA review.
+- Weekly: deep portfolio strategy review, including CVPen revenue funnel assumptions and prioritization.
+
+These are recurring queued prompts, not proof that live project logs or external platform activity are automatically visible to the model. The current starter does not yet implement a true long-term/short-term memory retrieval layer or automatic remediation against production systems. Those require an explicit memory store, verified data connectors, and policy-controlled action tools. Until then, review outputs are recommendations/drafts only.
+
+## Reasoning quality
+The runtime can route different roles and task prompts to an OpenAI-compatible model, but it cannot force a model to have ChatGPT's highest reasoning tier or guarantee deep reasoning. Use a capable hosted reasoning endpoint for weekly strategy and a smaller local model for routine drafting, with separate budgets and evaluations, if the provider supports those options.

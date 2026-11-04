@@ -30,6 +30,8 @@ services:
     restart: unless-stopped
     env_file: [.env]
     command: ["python", "-u", "telegram_gateway.py"]
+    volumes:
+      - ./data:/app/data
     environment:
       QUDRON_INTERNAL_URL: http://qudron:8765
     depends_on:

@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -111,6 +112,76 @@ class OpenDotsBootstrapTests(unittest.TestCase):
                 calls,
             )
             self.assertFalse(any(method == "DELETE" for _, method in calls))
+
+    def test_rotated_qudron_token_replaces_only_unauthorized_connection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            owner_file = Path(directory) / "owner-token"
+            qudron_file = Path(directory) / "qudron-token"
+            owner_file.write_text("o" * 48)
+            qudron_file.write_text("n" * 48)
+            workspace = {
+                "spaces": [{"id": "space-1", "name": "Qudron Command Room"}],
+                "dots": [{"id": "dot-1", "name": "Qudron Commander"}],
+            }
+            calls = []
+
+            def fake_request(url, token, method="GET", payload=None):
+                calls.append((url, token, method, payload))
+                if url.endswith("/api/workspace"):
+                    return workspace
+                if url.endswith("/api/dots/dot-1/connections"):
+                    if method == "GET":
+                        return [{"id": "old-connection", "name": "Qudron"}]
+                    return {"id": "new-connection", "name": "Qudron"}
+                if url.endswith("/api/connections/old-connection/refresh"):
+                    raise urllib.error.HTTPError(url, 401, "Unauthorized", None, None)
+                if url.endswith("/api/connections/old-connection"):
+                    self.assertEqual(method, "DELETE")
+                    return {}
+                raise AssertionError(f"Unexpected request: {url}")
+
+            with patch.object(bootstrap, "OWNER_TOKEN_FILE", owner_file), \\
+                 patch.object(bootstrap, "QUDRON_TOKEN_FILE", qudron_file), \\
+                 patch.object(bootstrap, "request_json", side_effect=fake_request):
+                self.assertEqual(bootstrap.main(), 0)
+
+            deleted = next(call for call in calls if call[2] == "DELETE")
+            created = next(call for call in calls if call[0].endswith("/api/dots/dot-1/connections") and call[2] == "POST")
+            self.assertEqual(deleted[0], "http://opendots:4310/api/connections/old-connection")
+            self.assertEqual(created[3]["token"], "n" * 48)
+            self.assertEqual(created[3]["name"], "Qudron")
+
+    def test_bootstrap_retries_until_private_tokens_are_created(self):
+        values = {
+            "OPENDOTS_OWNER_TOKEN": ["", "o" * 48],
+            "QUDRON_API_TOKEN": ["", "q" * 48],
+        }
+
+        def read_secret(name, _path):
+            return values[name].pop(0)
+
+        workspace = {
+            "spaces": [{"id": "space-1", "name": "Qudron Command Room"}],
+            "dots": [{"id": "dot-1", "name": "Qudron Commander"}],
+        }
+        calls = []
+
+        def fake_request(url, token, method="GET", payload=None):
+            calls.append((url, method, payload))
+            if url.endswith("/api/workspace"):
+                return workspace
+            if url.endswith("/api/dots/dot-1/connections"):
+                if method == "GET":
+                    return []
+                return {"id": "connection-1", "name": "Qudron"}
+            raise AssertionError(f"Unexpected request: {url}")
+
+        with patch.object(bootstrap, "read_secret", side_effect=read_secret), \\
+             patch.object(bootstrap, "time.sleep"), \\
+             patch.object(bootstrap, "request_json", side_effect=fake_request):
+            self.assertEqual(bootstrap.main(), 0)
+
+        self.assertTrue(any(url.endswith("/api/workspace") for url, _, _ in calls))
 
     def test_invalid_owner_token_fails_without_network(self):
         with tempfile.TemporaryDirectory() as directory:

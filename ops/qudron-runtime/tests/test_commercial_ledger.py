@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,11 +10,17 @@ class CommercialLedgerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.old_path = ledger.DB_PATH
+        self.old_key = os.environ.get("QUDRON_CONTACT_HMAC_KEY")
+        os.environ["QUDRON_CONTACT_HMAC_KEY"] = "test-key-that-is-at-least-32-characters-long"
         ledger.DB_PATH = Path(self.temp.name) / "commercial.sqlite3"
         ledger.init_db()
 
     def tearDown(self):
         ledger.DB_PATH = self.old_path
+        if self.old_key is None:
+            os.environ.pop("QUDRON_CONTACT_HMAC_KEY", None)
+        else:
+            os.environ["QUDRON_CONTACT_HMAC_KEY"] = self.old_key
         self.temp.cleanup()
 
     def lead(self, **kwargs):
@@ -31,14 +38,32 @@ class CommercialLedgerTests(unittest.TestCase):
         self.assertNotIn("Customer@example.com", str(lead))
         self.assertEqual(len(lead["contact_fingerprint"]), 64)
 
+    def test_contact_fingerprint_requires_keyed_hmac(self):
+        os.environ.pop("QUDRON_CONTACT_HMAC_KEY", None)
+        with self.assertRaisesRegex(RuntimeError, "HMAC_KEY"):
+            ledger.fingerprint_contact("someone@example.com")
+
+    def test_raw_free_text_notes_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "free-text notes"):
+            self.lead(notes="Candidate CV details")
+
     def test_unapproved_service_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "approved"):
             self.lead(service="autonomous_whatsapp_bot")
 
+    def test_order_scope_is_fixed_and_service_must_match_lead(self):
+        lead = self.lead()
+        with self.assertRaisesRegex(ValueError, "approved service label"):
+            ledger.create_order(lead_id=lead["id"], service="cvpen_review",
+                                scope="Candidate email is private", amount_minor=1000)
+        with self.assertRaisesRegex(ValueError, "must match"):
+            ledger.create_order(lead_id=lead["id"], service="content_pack",
+                                scope="Content pack", amount_minor=1000)
+
     def test_payment_requires_signature_and_settlement(self):
         lead = self.lead()
         order = ledger.create_order(lead_id=lead["id"], service="cvpen_review",
-                                    scope="Review a redacted CV excerpt", amount_minor=24900)
+                                    scope="CV review", amount_minor=24900)
         with self.assertRaisesRegex(ValueError, "signature and settlement"):
             ledger.verify_payment(order["id"], provider="PSP", provider_reference="txn-1",
                                   verified_amount_minor=24900, verified_currency="EGP",
@@ -75,9 +100,9 @@ class CommercialLedgerTests(unittest.TestCase):
     def test_duplicate_provider_reference_is_rejected(self):
         lead = self.lead()
         one = ledger.create_order(lead_id=lead["id"], service="cvpen_review",
-                                  scope="Review one", amount_minor=1000)
+                                  scope="CV review", amount_minor=1000)
         two = ledger.create_order(lead_id=lead["id"], service="cvpen_review",
-                                  scope="Review two", amount_minor=1000)
+                                  scope="CV review", amount_minor=1000)
         for order in (one, two):
             if order is one:
                 ledger.verify_payment(order["id"], provider="sandbox", provider_reference="same-ref",

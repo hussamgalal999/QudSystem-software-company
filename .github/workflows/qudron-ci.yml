@@ -43,6 +43,10 @@ jobs:
         run: docker build -t qudron-runtime:ci ops/qudron-runtime
       - name: Build pinned FreeLLM sidecar image
         run: docker build -f ops/qudron-runtime/Dockerfile.freellm -t qudron-freellm:ci ops/qudron-runtime
+      - name: Build pinned OpenDots Qudron control UI
+        run: |
+          test -f integrations/OpenDots/package-lock.json
+          docker build -f ops/qudron-runtime/Dockerfile.opendots --target app -t qudron-opendots:ci .
       - name: Validate optional Compose profile
         working-directory: ops/qudron-runtime
         run: |

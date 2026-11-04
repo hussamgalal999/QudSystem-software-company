@@ -145,6 +145,15 @@ class KeylessProviderPolicyTests(unittest.TestCase):
                     "http://freellm:4000/v1",
                 )
 
+    def test_explicit_confidential_markers_block_anonymous_models(self):
+        with patch.dict(os.environ, {"FREELM_KEYLESS": "auto"}, clear=False):
+            for name in worker.KEYLESS_PROVIDER_KEYS:
+                os.environ.pop(name, None)
+            for prompt in ("This is confidential.", "Internal-only pricing.", "Customer record attached."):
+                with self.subTest(prompt=prompt):
+                    with self.assertRaisesRegex(RuntimeError, "explicit confidential"):
+                        worker.validate_keyless_payload({"task_type": "research"}, prompt, "http://freellm:4000/v1")
+
     def test_provider_key_or_keyless_disabled_disables_anonymous_route(self):
         with patch.dict(os.environ, {"FREELM_KEYLESS": "auto", "GROQ_API_KEY": "configured"}):
             self.assertFalse(worker.is_anonymous_freellm_route("http://freellm:4000/v1"))

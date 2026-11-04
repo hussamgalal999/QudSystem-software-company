@@ -17,6 +17,15 @@ Set the default LLM_BASE_URL / LLM_MODEL. Optional profiles:
 
 If a profile is blank it falls back to the default endpoint. Configure price limits, request limits, provider keys, and usage alerts at the gateway/provider as well. Qudron does not assume external model calls are free and does not claim to force any model's maximum reasoning setting.
 
+## Token and model-spend controls
+
+- Every model call sets a configurable output token ceiling (`QUDRON_MAX_OUTPUT_TOKENS`, default 1,200; hard range 128–4,000).
+- Task input, prior-stage context and memory are bounded before being sent to providers.
+- Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
+- Configure exact input/output rates per million tokens for each profile. When rates are absent, token counts can still be recorded, but cost is reported as unknown.
+- Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
+- Fast/Balanced/Reasoning routing and a maximum of five specialist stages per job keep routine work from automatically using the most expensive profile.
+
 ## Start with Docker
 
 1. Copy this folder to an always-on server or computer.

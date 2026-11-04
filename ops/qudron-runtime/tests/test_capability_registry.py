@@ -35,7 +35,7 @@ class CapabilityRegistryTests(unittest.TestCase):
         register_capability(self.db, self.item("browser.one", name="Browser One"))
         register_capability(self.db, self.item("model.one", kind="model", name="Model One"))
         self.assertEqual(len(search_capabilities(self.db, "browser", kind="tool")), 1)
-        self.assertEqual(search_capabilities(self.db, kind="model"), [])
+        self.assertEqual([x["id"] for x in search_capabilities(self.db, kind="model")], ["model.one"])
 
     def test_unverified_discovery_not_returned_by_default(self):
         register_capability(self.db, self.item("tool.new", status="discovered"))

@@ -589,7 +589,16 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
             "CVPen creation is fail-closed until QUDRON_CVPEN_JOB_BUDGET_USD is configured. "
             "Set the per-order USD cap and exact model input/output rates before enabling 10-agent CV fulfilment."
         )
+    require_model_budget = os.getenv("QUDRON_REQUIRE_MODEL_BUDGET", "true").strip().lower() not in {
+        "0", "false", "no", "off"
+    }
     if daily_budget is None and monthly_budget is None and cvpen_job_budget is None:
+        if require_model_budget:
+            raise RuntimeError(
+                "Model calls are fail-closed until QUDRON_DAILY_MODEL_BUDGET_USD or "
+                "QUDRON_MONTHLY_MODEL_BUDGET_USD is configured with exact input/output model prices. "
+                "Set QUDRON_REQUIRE_MODEL_BUDGET=false only for isolated development."
+            )
         return None
     input_rate, output_rate = profile_cost_rates(profile)
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
@@ -601,9 +610,9 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
             f"{profile_prefix}_OUTPUT_USD_PER_1M or default LLM_INPUT_USD_PER_1M / "
             "LLM_OUTPUT_USD_PER_1M before making billable requests."
         )
-    # Reserve conservatively before the API call: half-byte-per-token input estimate
-    # plus the full configured output cap. Actual provider usage replaces this reserve.
-    estimated_input_tokens = (max(0, payload_bytes) + 1) // 2 + 64
+    # Use a deliberately conservative UTF-8 byte-based input estimate plus overhead.
+    # Provider tokenization and billing differ; provider-side hard spend limits remain mandatory.
+    estimated_input_tokens = max(0, payload_bytes) + 256
     estimated_cost = (
         estimated_input_tokens * input_rate + MAX_OUTPUT_TOKENS * output_rate
     ) / 1_000_000

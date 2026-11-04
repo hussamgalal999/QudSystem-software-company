@@ -952,6 +952,8 @@ def status_snapshot() -> dict[str, Any]:
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
+        "max_agents_per_cvpen_job": MAX_CVPEN_AGENTS if SWARM_ENABLED else 1,
+        "max_parallel_reviews": MAX_PARALLEL_REVIEWS if SWARM_ENABLED else 1,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
         "registered_teams": len(AGENT_REGISTRY.get("teams", {})),
         "teams": sorted((AGENT_REGISTRY.get("teams") or {}).keys()),

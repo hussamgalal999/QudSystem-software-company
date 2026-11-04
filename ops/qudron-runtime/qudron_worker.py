@@ -1017,6 +1017,8 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
@@ -1025,11 +1027,20 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self) -> None:
-        if self.path in ("/health", "/status"):
+        if self.path == "/health":
+            # Keep the unauthenticated container probe deliberately non-sensitive.
+            self._send_json(200, {"ok": True, "service": "qudron-runtime"})
+            return
+        if self.path == "/status":
+            if not is_api_authorized(self.headers.get("Authorization", "")):
+                self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+                return
             self._send_json(200, status_snapshot())
             return
         if self.path == "/usage":

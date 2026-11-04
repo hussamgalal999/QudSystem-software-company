@@ -45,7 +45,7 @@ class ModelRoutingTests(unittest.TestCase):
         }, clear=True):
             with patch("qudron_worker.urllib.request.urlopen", side_effect=fake_urlopen):
                 response = worker.call_llm(
-                    {"role":"Research","task_type":"research","title":"Test","prompt":"Do the work"},
+                    {"id":"job-model-test","role":"Research","task_type":"research","title":"Test","prompt":"Do the work"},
                     {"id":"research_analyst","name":"Research Analyst","profile":"fast",
                      "responsibilities":"Research."},
                     "Produce the report.", "", ""
@@ -97,6 +97,31 @@ class ModelRoutingTests(unittest.TestCase):
             snapshot = worker.model_usage_snapshot()
             self.assertEqual(snapshot["daily"]["calls"], 1)
             self.assertAlmostEqual(snapshot["daily"]["cost_usd"], 0.004, places=8)
+
+
+    def test_non_finite_prices_and_budgets_are_rejected(self):
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M":"nan",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M":"1"
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "finite number"):
+                worker.profile_cost_rates("balanced")
+        with patch.dict("os.environ", {
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD":"inf"
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "finite number"):
+                worker.configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD")
+
+    def test_malformed_usage_metadata_is_stored_without_crashing(self):
+        worker.record_model_usage(
+            "job-bad-usage","reviewer","balanced","test-model",
+            {"usage":"provider returned a malformed usage object"},
+            None
+        )
+        snapshot = worker.model_usage_snapshot()
+        self.assertEqual(snapshot["daily"]["calls"], 1)
+        self.assertIsNone(snapshot["recent"][0]["prompt_tokens"])
+        self.assertIsNone(snapshot["recent"][0]["cost_usd"])
 
     def test_profile_only_configuration_counts_as_model_ready(self):
         with patch.dict("os.environ", {

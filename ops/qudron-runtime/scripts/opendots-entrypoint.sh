@@ -19,15 +19,19 @@ else
 fi
 
 if [ "${OPENDOTS_ENABLE_KEYLESS_MODEL:-false}" = "true" ]; then
-  KEY_FILE="${OPENDOTS_MODEL_KEY_FILE:-/run/freellm/server.key}"
-  if [ ! -s "$KEY_FILE" ]; then
-    echo "Keyless model routing was requested, but the FreeLLM gateway key is unavailable." >&2
-    exit 1
+  # A configured provider key always wins. Otherwise use the private FreeLLM
+  # gateway only when no custom OpenAI-compatible endpoint was supplied.
+  if [ -z "${OPENAI_API_KEY:-}" ] && [ -z "${OPENDOTS_OPENAI_BASE_URL:-}" ]; then
+    KEY_FILE="${OPENDOTS_MODEL_KEY_FILE:-/run/freellm/server.key}"
+    if [ ! -s "$KEY_FILE" ]; then
+      echo "Keyless model routing was requested, but the FreeLLM gateway key is unavailable." >&2
+      exit 1
+    fi
+    OPENAI_API_KEY="$(cat "$KEY_FILE")"
+    OPENAI_BASE_URL="http://freellm:4000/v1"
+    OPENAI_MODEL="${OPENAI_MODEL:-auto}"
+    export OPENAI_API_KEY OPENAI_BASE_URL OPENAI_MODEL
   fi
-  OPENAI_API_KEY="$(cat "$KEY_FILE")"
-  OPENAI_BASE_URL="${OPENAI_BASE_URL:-http://qudron-freellm:4000/v1}"
-  OPENAI_MODEL="${OPENAI_MODEL:-auto}"
-  export OPENAI_API_KEY OPENAI_BASE_URL OPENAI_MODEL
 fi
 
 export OWNER_TOKEN

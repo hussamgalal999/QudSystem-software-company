@@ -29,6 +29,7 @@ jobs:
         run: |
           python -m py_compile ops/qudron-runtime/*.py ops/qudron-runtime/scripts/*.py
           sh -n ops/qudron-runtime/scripts/opendots-entrypoint.sh
+          sh -n ops/qudron-runtime/start_freellm.sh
       - name: Validate runtime JSON configuration
         run: |
           python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
@@ -50,8 +51,6 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots --profile telegram config --quiet
           docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots build --no-cache opendots
           rm -f .env
-      - name: Build pinned OpenDots application
-        run: docker build -f integrations/OpenDots/Dockerfile --target app -t qudron-opendots:ci integrations/OpenDots
       - name: Smoke-test FreeLLM sidecar authentication and health
         run: |
           docker run -d --name qudron-freellm-ci \

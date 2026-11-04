@@ -49,14 +49,17 @@ class SwarmEngineTests(unittest.TestCase):
 
     def test_five_agent_cvpen_swarm_aggregates_all_independent_reviews(self):
         calls = []
-        contexts = []
+        contexts = {}
+        lock = threading.Lock()
         def fake_call(agent, instruction, context):
-            calls.append(agent["id"])
-            contexts.append(context)
-            if len(calls) == 1:
+            with lock:
+                calls.append(agent["id"])
+            if agent["execution_stage"] == "produce":
                 return "initial draft"
-            if len(calls) in (2, 3, 4):
-                return f"review finding {len(calls)-1}"
+            if agent["execution_stage"] == "review":
+                contexts[agent["id"]] = context
+                return f"review finding {agent['id']}"
+            contexts["finalizer"] = context
             return "final corrected CV"
         result = execute_swarm(
             {"task_type":"cvpen_cv_creation"},
@@ -65,12 +68,11 @@ class SwarmEngineTests(unittest.TestCase):
         )
         self.assertEqual(len(calls), 5)
         self.assertTrue(result.endswith("final corrected CV"))
-        self.assertIn("initial draft", contexts[1])
-        self.assertIn("review finding 1", contexts[2])
-        self.assertIn("review finding 1", contexts[4])
-        self.assertIn("review finding 2", contexts[4])
-        self.assertIn("review finding 3", contexts[4])
-
+        self.assertIn("initial draft", contexts["career_strategist"])
+        self.assertIn("initial draft", contexts["ats_specialist"])
+        self.assertIn("initial draft", contexts["fact_checker"])
+        for reviewer_id in ("career_strategist", "ats_specialist", "fact_checker"):
+            self.assertIn(f"review finding {reviewer_id}", contexts["finalizer"])
 
     def test_cvpen_ten_agent_team_has_one_writer_eight_reviewers_and_final_qa(self):
         registry = load_agent_registry("agent_registry.json")

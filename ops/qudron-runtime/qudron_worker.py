@@ -482,7 +482,8 @@ def ensure_api_token() -> str:
             handle.write(configured + "\n")
         os.replace(temp, API_TOKEN_FILE)
         try:
-            os.chmod(API_TOKEN_FILE, 0o600)
+            os.chown(API_TOKEN_FILE, 0, 10001)
+            os.chmod(API_TOKEN_FILE, 0o640)
         except OSError:
             pass
         return configured

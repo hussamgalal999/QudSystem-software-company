@@ -220,22 +220,30 @@ def remember_event(project: str, scope: str, category: str, content: str,
 
 def retrieve_memory_context(project: str, limit: int = 10) -> str:
     now = iso_now()
+    short_limit = max(1, min(12, limit - 3))
     with connect_db() as db:
         db.execute("DELETE FROM memory_entries WHERE expires_at IS NOT NULL AND expires_at<=?", (now,))
-        rows = db.execute(
+        long_rows = db.execute(
             """SELECT scope,category,content,created_at FROM memory_entries
-            WHERE project IN (?, 'portfolio')
+            WHERE project IN (?, 'portfolio') AND scope='long'
               AND (expires_at IS NULL OR expires_at>?)
-            ORDER BY CASE scope WHEN 'long' THEN 0 ELSE 1 END, created_at DESC
-            LIMIT ?""",
-            (project, now, max(1, min(20, limit))),
+            ORDER BY created_at DESC LIMIT 3""",
+            (project, now),
         ).fetchall()
+        short_rows = db.execute(
+            """SELECT scope,category,content,created_at FROM memory_entries
+            WHERE project IN (?, 'portfolio') AND scope='short'
+              AND (expires_at IS NULL OR expires_at>?)
+            ORDER BY created_at DESC LIMIT ?""",
+            (project, now, short_limit),
+        ).fetchall()
+    rows = list(long_rows) + list(short_rows)
     if not rows:
         return ""
     lines = ["Relevant Qudron memory (sanitized operational notes; verify before relying):"]
     for row in rows:
         lines.append(f"- [{row['scope']}/{row['category']} @ {row['created_at']}] {row['content']}")
-    return "\n".join(lines)[:8000]
+    return "\\n".join(lines)[:8000]
 
 
 def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,

@@ -397,7 +397,7 @@ def profile_cost_rates(profile: str) -> tuple[float | None, float | None]:
     prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
               "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     def read_rate(name: str) -> float | None:
-        raw = os.getenv(f"{prefix}_{name}") or os.getenv(name)
+        raw = os.getenv(f"{prefix}_{name}") or os.getenv(f"LLM_{name}")
         if raw is None or not raw.strip():
             return None
         value = float(raw)
@@ -427,7 +427,8 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     if input_rate is None or output_rate is None:
         raise RuntimeError(
             "Qudron model budget is enabled, but exact input/output price rates are missing "
-            f"for profile '{profile}'. Configure {profile.upper()} profile rates or default LLM_INPUT_USD_PER_1M / "
+            f"for profile '{profile}'. Configure {prefix}_INPUT_USD_PER_1M / "
+            f"{prefix}_OUTPUT_USD_PER_1M or default LLM_INPUT_USD_PER_1M / "
             "LLM_OUTPUT_USD_PER_1M before making billable requests."
         )
     # Reserve conservatively before the API call: half-byte-per-token input estimate

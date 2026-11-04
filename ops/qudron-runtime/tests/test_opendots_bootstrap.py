@@ -140,8 +140,8 @@ class OpenDotsBootstrapTests(unittest.TestCase):
                     return {}
                 raise AssertionError(f"Unexpected request: {url}")
 
-            with patch.object(bootstrap, "OWNER_TOKEN_FILE", owner_file), \\
-                 patch.object(bootstrap, "QUDRON_TOKEN_FILE", qudron_file), \\
+            with patch.object(bootstrap, "OWNER_TOKEN_FILE", owner_file), \
+                 patch.object(bootstrap, "QUDRON_TOKEN_FILE", qudron_file), \
                  patch.object(bootstrap, "request_json", side_effect=fake_request):
                 self.assertEqual(bootstrap.main(), 0)
 
@@ -176,8 +176,8 @@ class OpenDotsBootstrapTests(unittest.TestCase):
                 return {"id": "connection-1", "name": "Qudron"}
             raise AssertionError(f"Unexpected request: {url}")
 
-        with patch.object(bootstrap, "read_secret", side_effect=read_secret), \\
-             patch.object(bootstrap, "time.sleep"), \\
+        with patch.object(bootstrap, "read_secret", side_effect=read_secret), \
+             patch.object(bootstrap, "time.sleep"), \
              patch.object(bootstrap, "request_json", side_effect=fake_request):
             self.assertEqual(bootstrap.main(), 0)
 

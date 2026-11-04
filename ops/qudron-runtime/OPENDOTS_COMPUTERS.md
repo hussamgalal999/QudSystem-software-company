@@ -20,7 +20,7 @@ docker compose -f docker-compose.yml -f docker-compose.opendots.yml -f docker-co
 docker compose -f docker-compose.yml -f docker-compose.opendots.yml -f docker-compose.opendots-computers.yml --profile opendots --profile opendots-computers up -d --build qudron freellm opendots opendots-bootstrap computer-supervisor
 ```
 
-The preparation script generates 48-byte random supervisor/client tokens only when the .env values are blank, preserves existing tokens, writes atomically, and sets file mode 0600. It never prints token values.
+The preparation script generates 48-byte random supervisor/client tokens only when the .env values are blank, preserves existing tokens, writes atomically, and sets file mode 0600. It also creates the external `COMPUTER_NAMESPACE-computers` Docker network if it does not exist. It never prints token values.
 
 ## Capacity and resource controls
 

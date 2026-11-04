@@ -205,3 +205,10 @@ When the optional Telegram gateway is configured, it checks the latest 20 task r
 ## Optional automatic live web research
 
 Research jobs can automatically retrieve up to five live web sources from DeepSeek Search & Fetch before the swarm starts. This is disabled by default. To enable it, configure DEEPSEEK_API_KEY, set QUDRON_WEB_SEARCH_MAX_DAILY_CALLS to a small positive integer, and set QUDRON_WEB_SEARCH_ENABLED=true. Each successful Search or Fetch call is currently listed at $0.75 per 1,000 calls; the local daily call cap is a conservative guard, not a billing guarantee. Results are marked as untrusted evidence and are passed to the swarm with title, URL, date, authority tier, summary and a bounded content excerpt. Only research jobs trigger this integration; drafts and customer-data workflows do not. The system never scrapes logged-in ChatGPT pages or bypasses website access controls.
+
+
+## Weekly GitHub capability mining
+
+The `github-capability-mining` schedule runs once every seven days at 03:30 Africa/Cairo. It calls the bounded read-only miner and registers repository metadata/tree-path candidates in the SQLite capability registry. The default batch is 50 repositories; set `QUDRON_GITHUB_MINE_MAX_REPOSITORIES` to 1-200. It is internal-only and is not accepted by the generic external task intake API.
+
+If `GITHUB_OWNER` or `GITHUB_TOKEN` is absent, the scheduled job writes a clear skipped report and makes no GitHub request. Use a fine-grained read-only token scoped to the intended repositories. This pass does not download source, verify licenses, run tests, execute repository code or promote a candidate to active.

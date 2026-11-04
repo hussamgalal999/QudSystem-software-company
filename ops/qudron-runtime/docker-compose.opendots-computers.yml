@@ -67,3 +67,4 @@ networks:
     internal: true
   computers:
     name: ${COMPUTER_NAMESPACE:-qudron}-computers
+    external: true

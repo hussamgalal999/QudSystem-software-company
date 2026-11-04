@@ -25,10 +25,13 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
+
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
 REPORTS_DIR = Path(os.getenv("QUDRON_REPORTS_DIR", str(APP_DIR / "reports")))
 SCHEDULE_PATH = Path(os.getenv("QUDRON_SCHEDULE_PATH", str(APP_DIR / "schedule.json")))
+AGENT_REGISTRY_PATH = Path(os.getenv("QUDRON_AGENT_REGISTRY_PATH", str(APP_DIR / "agent_registry.json")))
 LOG_PATH = Path(os.getenv("QUDRON_LOG_PATH", str(APP_DIR / "logs" / "worker.log")))
 POLL_SECONDS = max(1, int(os.getenv("QUDRON_POLL_SECONDS", "5")))
 WORKERS = max(1, min(8, int(os.getenv("QUDRON_WORKERS", "2"))))
@@ -39,10 +42,15 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "").rstrip("/")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_TIMEOUT = max(10, int(os.getenv("LLM_TIMEOUT_SECONDS", "180")))
+SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "3"))))
+AGENT_REGISTRY: dict[str, Any] = {}
 
 ALLOWED_TASK_TYPES = {
     "research", "social_post_draft", "video_script",
-    "translation", "seo_plan", "lead_research",
+    "translation", "seo_plan", "lead_research", "cvpen_cv_creation",
+    "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
+    "product_review", "engineering_review", "strategy_review",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -87,6 +95,13 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS heartbeats (
           instance_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL, worker_count INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS memory_entries (
+          id TEXT PRIMARY KEY, project TEXT NOT NULL, scope TEXT NOT NULL,
+          category TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL,
+          expires_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_lookup
+          ON memory_entries(project, scope, created_at DESC);
         """)
 
 def load_schedules() -> list[dict[str, Any]]:
@@ -173,31 +188,96 @@ def claim_job() -> sqlite3.Row | None:
             return None
         return db.execute("SELECT * FROM jobs WHERE id=?", (row["id"],)).fetchone()
 
-def call_llm(job: sqlite3.Row) -> str:
-    if not LLM_BASE_URL or not LLM_MODEL:
-        raise RuntimeError("LLM not configured: set LLM_BASE_URL and LLM_MODEL.")
+def infer_project(job: sqlite3.Row) -> str:
+    haystack = f"{job['title']} {job['role']} {job['prompt']}".lower()
+    for token, project in (
+        ("cvpen", "cvpen"), ("vision guard", "vision_guard"),
+        ("qudschool", "qudschool"), ("qudcopy", "qudcopy"),
+        ("qudemy", "qudemy"), ("qudron", "qudron"),
+    ):
+        if token in haystack:
+            return project
+    return "qudsystem"
+
+
+def remember_event(project: str, scope: str, category: str, content: str,
+                   ttl_days: int | None = 14) -> None:
+    if scope not in {"short", "long"}:
+        raise ValueError("Memory scope must be short or long")
+    safe_content = redact_sensitive_text(content).strip()[:4000]
+    if not safe_content:
+        return
+    created = utc_now()
+    expires = (created + dt.timedelta(days=ttl_days)).isoformat(timespec="seconds") if ttl_days else None
+    with connect_db() as db:
+        db.execute(
+            """INSERT INTO memory_entries(id,project,scope,category,content,created_at,expires_at)
+            VALUES(?,?,?,?,?,?,?)""",
+            (uuid.uuid4().hex, project, scope, category, safe_content,
+             created.isoformat(timespec="seconds"), expires),
+        )
+
+
+def retrieve_memory_context(project: str, limit: int = 10) -> str:
+    now = iso_now()
+    with connect_db() as db:
+        db.execute("DELETE FROM memory_entries WHERE expires_at IS NOT NULL AND expires_at<=?", (now,))
+        rows = db.execute(
+            """SELECT scope,category,content,created_at FROM memory_entries
+            WHERE project IN (?, 'portfolio')
+              AND (expires_at IS NULL OR expires_at>?)
+            ORDER BY CASE scope WHEN 'long' THEN 0 ELSE 1 END, created_at DESC
+            LIMIT ?""",
+            (project, now, max(1, min(20, limit))),
+        ).fetchall()
+    if not rows:
+        return ""
+    lines = ["Relevant Qudron memory (sanitized operational notes; verify before relying):"]
+    for row in rows:
+        lines.append(f"- [{row['scope']}/{row['category']} @ {row['created_at']}] {row['content']}")
+    return "\n".join(lines)[:8000]
+
+
+def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
+             prior_context: str, memory_context: str) -> str:
+    profile = str(agent.get("profile", "balanced")).lower()
+    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
+              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
+    api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
+    model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
+    if not base_url or not model:
+        raise RuntimeError(
+            f"LLM profile '{profile}' is not configured: set {prefix}_BASE_URL and "
+            f"{prefix}_MODEL or the default LLM_BASE_URL and LLM_MODEL."
+        )
     system = (
-        "You are a specialist work agent for QudSystem, an Egypt-based software and AI company. "
+        "You are a specialist AI worker inside Qudron, the operating system for QudSystem. "
         "Brand values: trust, quality, speed, commitment; Made in Egypt. "
         "Never invent evidence, testimonials, prices, metrics, citations, or completed work. "
         "Mark assumptions and facts requiring verification. Create drafts and analysis only. "
-        "Never claim content was published, a prospect was contacted, or money was moved."
+        "Never claim content was published, a prospect was contacted, or money was moved. "
+        f"Your specialist identity is {agent.get('name', agent.get('id', 'Specialist'))}. "
+        f"Responsibilities: {agent.get('responsibilities', 'Complete the assigned specialist stage.')}"
     )
     user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
-        f"Context and instructions:\n{job['prompt']}\n\n"
-        "Return a practical, well-structured deliverable with next steps and verification notes. "
-        "Use Egyptian Arabic by default for Arabic social/video copy unless instructed otherwise."
+        f"Original task and instructions:\n{job['prompt']}\n\n"
+        f"Current stage instructions:\n{instruction}\n\n"
+        f"Prior stage context:\n{prior_context or '[none]'}\n\n"
+        f"Relevant memory:\n{memory_context or '[none]'}\n\n"
+        "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
+        "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
     payload = json.dumps({
-        "model": LLM_MODEL, "temperature": 0.4,
+        "model": model, "temperature": 0.3 if profile == "reasoning" else 0.4,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }).encode("utf-8")
     headers = {"Content-Type": "application/json"}
-    if LLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     request = urllib.request.Request(
-        f"{LLM_BASE_URL}/chat/completions", data=payload, headers=headers, method="POST"
+        f"{base_url}/chat/completions", data=payload, headers=headers, method="POST"
     )
     try:
         with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
@@ -210,6 +290,22 @@ def call_llm(job: sqlite3.Row) -> str:
     if not isinstance(answer, str) or not answer.strip():
         raise RuntimeError("LLM returned an empty response")
     return answer.strip()
+
+
+def execute_job_swarm(job: sqlite3.Row) -> str:
+    project = infer_project(job)
+    memory_context = retrieve_memory_context(project)
+    registry = AGENT_REGISTRY or load_agent_registry(AGENT_REGISTRY_PATH)
+    max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
+
+    def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
+        return call_llm(job, agent, instruction, prior, memory_context)
+
+    return execute_swarm(
+        {"task_type": job["task_type"], "title": job["title"], "prompt": job["prompt"]},
+        invoke, registry=registry, memory_context=memory_context, max_agents=max_agents,
+    )
+
 
 def safe_slug(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF_-]+", "-", value).strip("-_")
@@ -249,6 +345,11 @@ def fail_job(job: sqlite3.Row, exc: Exception) -> None:
             lock_until=NULL,updated_at=? WHERE id=?""",
             ("failed" if terminal else "pending", run_after, message, iso_now(), job["id"]),
         )
+    try:
+        remember_event(infer_project(job), "short", "job_failure",
+                       f"Task {job['title']} failed on attempt {job['attempts']}/{MAX_ATTEMPTS}: {message}")
+    except Exception:
+        logging.exception("Could not save failure event to memory")
     logging.error("Job %s failed on attempt %s/%s: %s",
                   job["id"], job["attempts"], MAX_ATTEMPTS, message)
 
@@ -260,8 +361,14 @@ def worker_loop() -> None:
             continue
         logging.info("Started %s | %s | %s", job["id"], job["role"], job["title"])
         try:
-            path = save_result(job, call_llm(job))
+            result = execute_job_swarm(job)
+            path = save_result(job, result)
             finish_job(job["id"], path)
+            project = infer_project(job)
+            remember_event(project, "short", "job_completed",
+                           f"Completed {job['task_type']} task: {job['title']}. Artifact stored at {path}.")
+            if "weekly-deep-strategy" in str(job["job_key"] or ""):
+                remember_event("portfolio", "long", "weekly_strategy", result[:3500], ttl_days=None)
             logging.info("Completed %s -> %s", job["id"], path)
         except Exception as exc:
             fail_job(job, exc)
@@ -278,6 +385,9 @@ def status_snapshot() -> dict[str, Any]:
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
         "counts": counts, "latest_jobs": [dict(r) for r in latest],
         "llm_configured": bool(LLM_BASE_URL and LLM_MODEL),
+        "swarm_enabled": SWARM_ENABLED,
+        "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
+        "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
     }
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -298,6 +408,10 @@ class HealthHandler(BaseHTTPRequestHandler):
 def run() -> None:
     setup_logging()
     init_db()
+    global AGENT_REGISTRY
+    AGENT_REGISTRY = load_agent_registry(AGENT_REGISTRY_PATH)
+    logging.info("Loaded %s specialist agents across %s teams.",
+                 len(AGENT_REGISTRY.get("agents", [])), len(AGENT_REGISTRY.get("teams", {})))
     logging.info("Starting Qudron runtime: %s", INSTANCE_ID)
     logging.info("DB=%s reports=%s workers=%s", DB_PATH, REPORTS_DIR, WORKERS)
     if not LLM_BASE_URL or not LLM_MODEL:

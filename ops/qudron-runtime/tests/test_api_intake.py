@@ -142,6 +142,29 @@ class AuthenticatedIntakeApiTests(unittest.TestCase):
             payload = json.loads(response.read().decode())
         self.assertNotIn("result_path", payload)
 
+
+    def test_usage_dashboard_requires_authentication_and_returns_aggregate_costs(self):
+        worker.record_model_usage(
+            "job-usage","copywriter","balanced","test-model",
+            {"usage":{"prompt_tokens":200,"completion_tokens":100,"total_tokens":300,"cost":0.0005}},
+            None
+        )
+        request = urllib.request.Request(self.base + "/usage")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(ctx.exception.code, 401)
+
+        request = urllib.request.Request(
+            self.base + "/usage", headers={"Authorization":"Bearer unit-test-token"}
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            body = json.loads(response.read().decode())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(body["daily"]["calls"], 1)
+        self.assertEqual(body["daily"]["total_tokens"], 300)
+        self.assertAlmostEqual(body["daily"]["cost_usd"], 0.0005, places=8)
+        self.assertNotIn("authorization", json.dumps(body).lower())
+
     def test_job_status_requires_authentication(self):
         status, body = self.post(self.payload(), "unit-test-token")
         job_id = body["job"]["id"]

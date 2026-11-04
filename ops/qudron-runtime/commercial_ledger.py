@@ -7,6 +7,7 @@ a screenshot, SMS, or client assertion is never sufficient evidence.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import re
 import sqlite3
@@ -99,11 +100,14 @@ def _clean(value: Any, field: str, limit: int) -> str:
 
 
 def fingerprint_contact(contact: str) -> str:
-    """Return a one-way fingerprint; raw contact values are never persisted."""
+    """Return a keyed fingerprint to prevent offline guessing of low-entropy contacts."""
     normalized = re.sub(r"\s+", "", str(contact or "")).casefold()
     if not normalized or len(normalized) > 254:
         raise ValueError("contact must be a non-empty email/phone reference")
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    key = os.getenv("QUDRON_CONTACT_HMAC_KEY", "")
+    if len(key) < 32:
+        raise RuntimeError("QUDRON_CONTACT_HMAC_KEY must be configured (32+ characters)")
+    return hmac.new(key.encode("utf-8"), normalized.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def create_lead(*, service: str, source: str, consent: bool,
@@ -114,8 +118,8 @@ def create_lead(*, service: str, source: str, consent: bool,
     if service not in ALLOWED_SERVICES:
         raise ValueError("service is not in the approved pilot catalogue")
     source = _clean(source, "source", 80)
-    if len(str(notes)) > 500:
-        raise ValueError("notes must be <= 500 characters; do not store CV or sensitive data")
+    if str(notes or "").strip():
+        raise ValueError("free-text notes are disabled; do not store customer or CV information in this ledger")
     contact_hash = fingerprint_contact(contact) if contact else None
     lead_id, stamp = uuid.uuid4().hex, now_utc()
     with connect() as db:
@@ -154,19 +158,29 @@ def create_order(*, lead_id: str, service: str, scope: str,
                  amount_minor: int, currency: str = "EGP",
                  actor: str = "owner") -> dict[str, Any]:
     service = _clean(service, "service", 60)
-    scope = _clean(scope, "scope", 1000)
     if service not in ALLOWED_SERVICES:
         raise ValueError("service is not in the approved pilot catalogue")
+    approved_scopes = {
+        "cvpen_review": "CV review", "cvpen_rewrite": "CV rewrite",
+        "content_pack": "Content pack", "workflow_assessment": "Workflow assessment",
+        "market_research": "Market research", "software_discovery": "Software discovery",
+    }
+    if scope != approved_scopes[service]:
+        raise ValueError("scope must use the approved service label; customer details belong outside this ledger")
     if isinstance(amount_minor, bool) or not isinstance(amount_minor, int) or amount_minor <= 0:
         raise ValueError("amount_minor must be a positive integer in the smallest currency unit")
+    if amount_minor > 100_000_000:
+        raise ValueError("amount_minor exceeds the configured manual-pilot ceiling")
     currency = str(currency).upper()
     if currency not in CURRENCIES:
         raise ValueError("unsupported currency")
     order_id, stamp = uuid.uuid4().hex, now_utc()
     with connect() as db:
-        lead = db.execute("SELECT id FROM leads WHERE id=?", (lead_id,)).fetchone()
+        lead = db.execute("SELECT id,service FROM leads WHERE id=?", (lead_id,)).fetchone()
         if lead is None:
             raise KeyError("lead_not_found")
+        if lead["service"] != service:
+            raise ValueError("order service must match the consented lead service")
         db.execute(
             "INSERT INTO orders VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,?,?)",
             (order_id, lead_id, service, scope, amount_minor, currency,
@@ -228,6 +242,7 @@ def transition_order(order_id: str, state: str, *, actor: str = "owner") -> dict
     if state not in ORDER_STATES:
         raise ValueError("invalid order state")
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
         row = db.execute("SELECT state FROM orders WHERE id=?", (order_id,)).fetchone()
         if row is None:
             raise KeyError("order_not_found")

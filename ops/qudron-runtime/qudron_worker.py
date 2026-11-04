@@ -864,10 +864,6 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
 def execute_job_swarm(job: sqlite3.Row) -> str:
     project = infer_project(job)
     memory_context = retrieve_memory_context(project)
-    if str(job["task_type"]) == "research" and any(term in str(job["prompt"]).lower() for term in ("social", "metricool", "facebook", "instagram", "youtube")):
-        social_context = build_social_context()
-        if social_context:
-            memory_context = (memory_context + "\\n\\n" + social_context)[-12000:]
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             web_result = search_web(str(job["prompt"])[:128], count=5, need_content=True)

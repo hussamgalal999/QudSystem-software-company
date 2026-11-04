@@ -1473,12 +1473,11 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 
 def run() -> None:
+    global AGENT_REGISTRY, API_TOKEN
     setup_logging()
     init_db()
-    global AGENT_REGISTRY, API_TOKEN
     API_TOKEN = ensure_api_token()
     logging.info("Owner API authentication is ready; token remains in the private data volume.")
-    global AGENT_REGISTRY
     AGENT_REGISTRY = load_agent_registry(AGENT_REGISTRY_PATH)
     logging.info("Loaded %s specialist agents across %s teams.",
                  len(AGENT_REGISTRY.get("agents", [])), len(AGENT_REGISTRY.get("teams", {})))

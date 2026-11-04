@@ -107,3 +107,8 @@ docker compose build
 ```
 
 A passing CI run proves the tested code/configuration passed those checks. It does not prove the runtime is deployed, external model keys work, connected channels receive real customer orders, or payments are settled. A production readiness gate must also include provider sandbox tests, end-to-end customer journeys, load tests, failure injection, restore tests, and live observability.
+
+
+### Release gate for CVPen's ten-agent swarm
+
+A CVPen creation task is intentionally blocked until `QUDRON_CVPEN_JOB_BUDGET_USD` and the exact token price rates for every model profile used by its agents are configured. The eight reviewer calls are parallel, so the shared SQLite reservation transaction accounts for all in-flight calls against the same order cap. Keep the PR in draft until the complete CI workflow passes on the latest head SHA; a prior green run does not validate later commits.

@@ -64,6 +64,29 @@ class MCPGatewayTests(unittest.TestCase):
         self.assertIn("Draft only", report["result"]["content"][0]["text"])
         self.assertIn('"calls": 3', usage["result"]["content"][0]["text"])
 
+    def test_workforce_and_model_catalogue_tools_are_read_only(self):
+        result = self.handle({"jsonrpc": "2.0", "id": 11, "method": "tools/list", "params": {}})
+        tools = {item["name"]: item for item in result["result"]["tools"]}
+        for name in ("qudron_get_agents", "qudron_get_models", "qudron_search_capabilities"):
+            self.assertTrue(tools[name]["annotations"]["readOnlyHint"])
+
+    def test_capability_search_validates_query_and_limit(self):
+        captured = []
+        result = handle_mcp_request(
+            {"jsonrpc": "2.0", "id": 12, "method": "tools/call",
+             "params": {"name": "qudron_search_capabilities",
+                        "arguments": {"query": "browser", "kind": "tool", "limit": 5}}},
+            is_authorized=lambda: True,
+            enqueue_job=lambda _: {},
+            get_job=lambda _: {},
+            get_job_result=lambda _: "",
+            get_status=lambda: {},
+            get_usage=lambda: {},
+            search_capabilities=lambda query, kind, limit: captured.append((query, kind, limit)) or [{"name": "Browser"}],
+        )
+        self.assertEqual(captured, [("browser", "tool", 5)])
+        self.assertIn("Browser", result["result"]["content"][0]["text"])
+
     def test_unknown_tool_is_rejected(self):
         result = self.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
                               "params": {"name": "unknown", "arguments": {}}})

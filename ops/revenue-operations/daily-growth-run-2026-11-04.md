@@ -27,6 +27,14 @@ Instagram’s returned values were very small and YouTube’s history had no pub
 
 ## Scheduled content ledger
 
+### 12:17 Cairo — live post status check
+### 2026-11-04, 12:15 — Facebook follow-up verification (checked 12:17 Cairo)
+- Campaign: CVPen — “الخبرة وحدها مش كفاية…”
+- Metricool post ID: `416253036`
+- Provider status: **PUBLISHED**. Metricool returned Facebook destination `437731146095517` and public post URL: https://facebook.com/122226986522579446/posts/122227555256579446
+- The same-day analytics query still returned no rows immediately after publication; this is not evidence of zero delivery or zero engagement. Recheck after analytics ingestion catches up.
+
+
 | Date/time Cairo | Network | Campaign / topic | Metricool post ID | Last observed state |
 |---|---|---|---:|---|
 | 4 Nov, 12:15 | Facebook | CVPen: show real experience clearly | 416253036 | PENDING |

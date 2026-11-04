@@ -214,15 +214,19 @@ def renew_job_lease(job_id: str) -> bool:
     return changed == 1
 
 
-def lease_heartbeat_loop(job_id: str, stop_event: threading.Event) -> None:
-    """Keep active jobs leased; stop if ownership was lost or DB updates fail."""
+def lease_heartbeat_loop(job_id: str, stop_event: threading.Event,
+                         lease_lost_event: threading.Event) -> None:
+    """Keep active jobs leased; signal if this worker no longer owns the job."""
     interval = max(5, min(60, LOCK_SECONDS // 3))
     while not stop_event.wait(interval):
         try:
             if not renew_job_lease(job_id):
                 logging.error("Lost job lease for %s; worker will not claim ownership again.", job_id)
+                lease_lost_event.set()
                 return
         except Exception:
+            # Treat a transient database error as an observability event and retry.
+            # finish_job/fail_job still enforce ownership atomically.
             logging.exception("Could not renew active job lease for %s", job_id)
 
 
@@ -451,13 +455,15 @@ def save_result(job: sqlite3.Row, result: str) -> str:
     path.write_text(header + result + "\n", encoding="utf-8")
     return str(path)
 
-def finish_job(job_id: str, result_path: str) -> None:
+def finish_job(job_id: str, result_path: str) -> bool:
     with connect_db() as db:
-        db.execute(
+        changed = db.execute(
             """UPDATE jobs SET status='completed',result_path=?,error=NULL,
-            locked_by=NULL,lock_until=NULL,updated_at=? WHERE id=?""",
-            (result_path, iso_now(), job_id),
-        )
+            locked_by=NULL,lock_until=NULL,updated_at=?
+            WHERE id=? AND status='running' AND locked_by=?""",
+            (result_path, iso_now(), job_id, INSTANCE_ID),
+        ).rowcount
+    return changed == 1
 
 def fail_job(job: sqlite3.Row, exc: Exception) -> None:
     message = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:3000]
@@ -465,11 +471,16 @@ def fail_job(job: sqlite3.Row, exc: Exception) -> None:
     delay = min(3600, 15 * (2 ** max(0, int(job["attempts"]) - 1)))
     run_after = (utc_now() + dt.timedelta(seconds=delay)).isoformat(timespec="seconds")
     with connect_db() as db:
-        db.execute(
+        changed = db.execute(
             """UPDATE jobs SET status=?,run_after=?,error=?,locked_by=NULL,
-            lock_until=NULL,updated_at=? WHERE id=?""",
-            ("failed" if terminal else "pending", run_after, message, iso_now(), job["id"]),
-        )
+            lock_until=NULL,updated_at=? WHERE id=? AND status='running' AND locked_by=?""",
+            ("failed" if terminal else "pending", run_after, message, iso_now(),
+             job["id"], INSTANCE_ID),
+        ).rowcount
+    if changed != 1:
+        logging.warning("Ignoring failure from a worker that no longer owns job %s", job["id"])
+        return
+
     try:
         remember_event(infer_project(job), "short", "job_failure",
                        f"Task {job['title']} failed on attempt {job['attempts']}/{MAX_ATTEMPTS}: {message}")
@@ -519,15 +530,19 @@ def worker_loop() -> None:
             continue
         logging.info("Started %s | %s | %s", job["id"], job["role"], job["title"])
         lease_stop = threading.Event()
+        lease_lost = threading.Event()
         lease_thread = threading.Thread(
-            target=lease_heartbeat_loop, args=(job["id"], lease_stop),
+            target=lease_heartbeat_loop, args=(job["id"], lease_stop, lease_lost),
             name=f"lease-{job['id'][:8]}", daemon=True
         )
         lease_thread.start()
         try:
             result = execute_job_swarm(job)
+            if lease_lost.is_set():
+                raise RuntimeError("Worker lost job ownership during agent execution")
             path = save_result(job, result)
-            finish_job(job["id"], path)
+            if not finish_job(job["id"], path):
+                raise RuntimeError("Worker no longer owns job; completion was not committed")
             project = infer_project(job)
             remember_event(project, "short", "job_completed",
                            f"Completed {job['task_type']} task: {job['title']}. Artifact stored at {path}.")

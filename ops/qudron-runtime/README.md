@@ -1,62 +1,69 @@
-# Qudron Runtime — persistent background worker
+# Qudron Runtime — restart-safe AI swarm worker
 
-A self-hosted, restartable task runner for QudSystem. It provides recurring task scheduling, a durable SQLite queue, concurrent workers, retry/backoff, stale-job recovery, logs, report files, and a health endpoint.
+Qudron is a self-hosted operating layer for QudSystem. It separates ChatGPT's interactive control role from background task execution. Once deployed on an always-on host and configured with model endpoints, the worker can continue queued tasks independently of a ChatGPT conversation.
 
-IMPORTANT: this does not keep ChatGPT alive. It runs independently on infrastructure controlled by QudSystem and calls an OpenAI-compatible LLM endpoint only after one is configured.
+## Specialist swarm registry
 
-## Included recurring roles
-- CVPen growth research and experiments
-- QudSystem social content drafts
-- Short-form video scripts and bilingual subtitle drafts
-- Sales segments and outreach templates
-- SEO planning
+The registry contains 30+ specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
 
-These are role-specific jobs processed by a shared model endpoint, not separately hosted AI models or human employees.
+These are **role-specialized AI workers**, not 30 separately hosted models or human employees. A job selects a team and runs a bounded sequential swarm. Configure QUDRON_MAX_SWARM_AGENTS (default 3, maximum 5) to cap calls, cost, and latency. Each specialist can be routed to a different OpenAI-compatible model profile.
+
+## Model routing and cost control
+
+Set the default LLM_BASE_URL / LLM_MODEL. Optional profiles:
+- LLM_FAST_* for classification and routine low-cost tasks.
+- LLM_BALANCED_* for drafting and analysis.
+- LLM_REASONING_* for complex strategy, fact checking, and risk review.
+
+If a profile is blank it falls back to the default endpoint. Configure price limits, request limits, provider keys, and usage alerts at the gateway/provider as well. Qudron does not assume external model calls are free and does not claim to force any model's maximum reasoning setting.
 
 ## Start with Docker
-1. Copy this folder to an always-on computer or server.
-2. Copy .env.example to .env.
-3. Configure LLM_BASE_URL and LLM_MODEL for a reachable OpenAI-compatible model endpoint. If a model server is on another machine, use its LAN address, not 127.0.0.1.
-4. Run: docker compose up -d --build
-5. Check: curl http://localhost:8765/health and docker compose logs -f qudron
 
-Completed drafts are saved under reports/; durable task state is in data/; logs are in logs/.
+1. Copy this folder to an always-on server or computer.
+2. Copy .env.example to .env and configure model endpoints. Do not commit secrets.
+3. Run: docker compose up -d --build
+4. Check: curl http://127.0.0.1:8765/health and docker compose logs -f qudron
 
-## Run without Docker
-Requires Python 3.10+. Copy .env.example to .env, export the values with your shell or secrets manager, then run python qudron_worker.py.
+The health port is bound to localhost by default. Put an authenticated reverse proxy or private VPN in front of any remote operational interface; do not expose the health service publicly.
 
-## Add scheduled tasks
-Edit schedule.json. Each item needs a unique id, every_minutes >= 1, role, supported task_type, title, and prompt. Supported types: research, social_post_draft, video_script, translation, seo_plan, lead_research.
+Completed drafts are saved under reports/; durable task state and sanitized memory are in data/; logs are in logs/.
 
-The scheduler currently uses UTC interval timing; the timezone field documents the intended business timezone but does not implement local wall-clock scheduling.
+## Memory
 
-## Reliability
-- SQLite WAL durable queue
-- Atomic job claiming across worker threads
-- Capped exponential retry backoff
-- Stale lease recovery after worker crash/restart
-- Docker restart policy and health check
-- JSON status at /health and /status
+SQLite memory now has:
+- Short-term, project-scoped operational events with a 14-day default expiry.
+- Long-term portfolio memory from weekly strategy reports.
+- Retrieval of relevant project memory plus portfolio-wide strategy notes before the next swarm.
+- Best-effort redaction of common email, Egyptian mobile, 14-digit national ID, payment-number, and API-token patterns before memory persistence.
 
-## Safety boundaries
-The runtime only creates drafts/research artifacts. It does not publish, message leads, send email, buy ads, spend money, transfer funds, or modify production services. Add those only with verified provider credentials, explicit destination checks, audit logs, and approval controls.
+Memory is deliberately not a customer-record database. Do not put CV source documents, identity documents, payment credentials, full card data, or sensitive personal information into strategic memory. Redaction is best-effort, not a substitute for minimization and access controls. A production customer workflow needs a separate encrypted customer-data store with strict tenant isolation and retention/deletion controls.
 
-Never commit API keys. Keep .env private, restrict health endpoint network access, and back up the database and reports.
+## CVPen workflow design and payment safety
 
-## Production checklist
-1. Configure and test a model endpoint.
-2. Deploy to an always-on host with backups and monitoring.
-3. Add approved integrations with explicit account identity and human approval gates.
-4. Validate output quality and factual claims before using leads or publishing.
-5. Add a managed queue/database and secret manager before scaling beyond this starter.
+service_workflows.json defines a 12-stage CVPen order path from intake to aftercare. It is marked DESIGNED_NOT_CONNECTED. No real customer intake, WhatsApp channel, CV document generator, or payment provider is wired up by this configuration alone.
 
-If the host, power, network, or model endpoint fails, tasks pause. The process resumes pending work after it restarts; this is restart-safe, not literally uninterrupted.
-## Review cadence now configured
-- Daily: CVPen growth opportunities, QudSystem content draft, target-customer research, and an operations/error-prevention review.
-- Every 3 days: process optimization and QA review.
-- Weekly: deep portfolio strategy review, including CVPen revenue funnel assumptions and prioritization.
+payment_guard.py provides a fail-closed HMAC callback verification primitive and unit tests for signature, order, amount, currency, settlement status, and transaction ID. It is not a provider-specific Paymob or Etisalat Cash adapter. Implement provider-specific signature rules only from current official documentation, then test against sandbox events before accepting live payment callbacks. SMS, screenshots, and user claims are not sufficient proof of settlement.
 
-These are recurring queued prompts, not proof that live project logs or external platform activity are automatically visible to the model. The current starter does not yet implement a true long-term/short-term memory retrieval layer or automatic remediation against production systems. Those require an explicit memory store, verified data connectors, and policy-controlled action tools. Until then, review outputs are recommendations/drafts only.
+## Recurring jobs and operational boundaries
 
-## Reasoning quality
-The runtime can route different roles and task prompts to an OpenAI-compatible model, but it cannot force a model to have ChatGPT's highest reasoning tier or guarantee deep reasoning. Use a capable hosted reasoning endpoint for weekly strategy and a smaller local model for routine drafting, with separate budgets and evaluations, if the provider supports those options.
+schedule.json has recurring research and draft jobs. The current scheduler uses UTC interval timing; the timezone field documents the business timezone but does not implement local wall-clock scheduling.
+
+This runtime currently creates research, drafts, operational memory notes, and health information. It does not publish posts, send sales messages, accept customer payments, transfer money, issue refunds, or modify production customer accounts. Those actions require connected provider credentials, idempotency, audit logs, authorization checks, and end-to-end tests.
+
+## Reliability and verification
+
+- SQLite WAL queue with atomic job claiming.
+- Bounded worker concurrency and capped exponential retry.
+- Stale lease recovery after crashes/restarts.
+- Idempotent recurring schedule enqueueing within an interval.
+- Health/status endpoint, logs, durable artifact paths.
+- Unit tests for concurrent claims, stale recovery, recurring idempotency, memory scoping/redaction, swarm planning, and payment callback verification.
+
+Run tests locally:
+```bash
+python -m py_compile *.py
+python -m unittest discover -s tests -v
+docker compose build
+```
+
+A passing CI run proves the tested code/configuration passed those checks. It does not prove the runtime is deployed, external model keys work, connected channels receive real customer orders, or payments are settled. A production readiness gate must also include provider sandbox tests, end-to-end customer journeys, load tests, failure injection, restore tests, and live observability.

@@ -218,6 +218,8 @@ def handle_mcp_request(
 
     if method == "initialize":
         requested = params.get("protocolVersion")
+        if requested is not None and not isinstance(requested, str):
+            return _rpc_error(request_id, -32602, "protocolVersion must be a string")
         supported = {"2025-03-26", "2025-06-18"}
         version = requested if requested in supported else PROTOCOL_VERSION
         result = {
@@ -274,10 +276,11 @@ def handle_mcp_request(
             query = arguments.get("query")
             kind = arguments.get("kind")
             limit = arguments.get("limit", 20)
-            if not isinstance(query, str) or len(query) > 160:
-                raise MCPGatewayError("query must be a string up to 160 characters")
-            if kind is not None and not isinstance(kind, str):
-                raise MCPGatewayError("kind must be a string")
+            if not isinstance(query, str) or len(query) > 160 or not query.strip():
+                raise MCPGatewayError("query must be a non-empty string up to 160 characters")
+            allowed_kinds = {"agent", "tool", "mcp_server", "model", "workflow", "repository", "paper", "source"}
+            if kind is not None and (not isinstance(kind, str) or kind not in allowed_kinds):
+                raise MCPGatewayError("kind must be one of the supported capability kinds")
             if type(limit) is not int or not 1 <= limit <= 50:
                 raise MCPGatewayError("limit must be an integer from 1 to 50")
             result = search_capabilities(query, kind, limit) if search_capabilities else None

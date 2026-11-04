@@ -45,6 +45,31 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertIn("draft", seen_contexts[2])
         self.assertIn("review", seen_contexts[2])
 
+
+    def test_five_agent_cvpen_swarm_aggregates_all_independent_reviews(self):
+        calls = []
+        contexts = []
+        def fake_call(agent, instruction, context):
+            calls.append(agent["id"])
+            contexts.append(context)
+            if len(calls) == 1:
+                return "initial draft"
+            if len(calls) in (2, 3, 4):
+                return f"review finding {len(calls)-1}"
+            return "final corrected CV"
+        result = execute_swarm(
+            {"task_type":"cvpen_cv_creation"},
+            fake_call,
+            max_agents=5
+        )
+        self.assertEqual(len(calls), 5)
+        self.assertTrue(result.endswith("final corrected CV"))
+        self.assertIn("initial draft", contexts[1])
+        self.assertIn("review finding 1", contexts[2])
+        self.assertIn("review finding 1", contexts[4])
+        self.assertIn("review finding 2", contexts[4])
+        self.assertIn("review finding 3", contexts[4])
+
     def test_empty_agent_output_fails_closed(self):
         def fake_call(agent, instruction, context):
             return ""

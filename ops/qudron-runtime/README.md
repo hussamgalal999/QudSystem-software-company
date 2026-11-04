@@ -21,13 +21,13 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 
 ## Token and model-spend controls
 
-**Fail-closed by default:** generic model calls are blocked unless at least one positive daily or monthly USD budget is configured and exact input/output token prices are set for every enabled profile. `QUDRON_REQUIRE_MODEL_BUDGET=false` is an explicit development-only escape hatch; do not use it on a hosted pilot. CVPen additionally requires its own per-order USD cap. Enable provider-side hard spending limits as a second independent control: local token estimates and usage reports cannot guarantee the final provider invoice ceiling.
+**Fail-closed by default:** generic model calls require a positive daily or monthly USD budget. Anonymous FreeLLM routes may use zero provider-price estimates only when no upstream provider keys are present; the runtime also limits these routes to public, non-sensitive work and omits private Qudron memory. All keyed/custom endpoints require exact input/output prices, and zero-price keyed endpoints are blocked unless explicitly allowed after verification. `QUDRON_REQUIRE_MODEL_BUDGET=false` is an isolated-development escape hatch only. CVPen additionally requires its own per-order USD cap. Enable provider-side hard spending limits as a second independent control: local token estimates and usage reports cannot guarantee the final provider invoice ceiling.
 
 
 - Every model call sets a configurable output token ceiling (`QUDRON_MAX_OUTPUT_TOKENS`, default 1,200; hard range 128–4,000).
 - Task input, prior-stage context and memory are bounded before being sent to providers.
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
-- Configure exact input/output rates per million tokens for each profile. When rates are absent, token counts can still be recorded, but cost is reported as unknown.
+- Configure exact input/output rates per million tokens for each keyed/custom profile. Anonymous FreeLLM routes default to zero provider-price estimates while the daily cap and provider quotas remain active; cost is reported as an estimate, not an invoice guarantee.
 - Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. CVPen creation additionally requires a per-order USD cap; the sum of provider usage and outstanding reservations for that order cannot exceed it.  Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
 - Fast/Balanced/Reasoning routing keeps routine work bounded to five specialists. CVPen uses ten specialists only for the CV-creation task and requires a per-order spend cap plus configured price rates before the first model request.
 
@@ -216,7 +216,7 @@ If `GITHUB_OWNER` or `GITHUB_TOKEN` is absent, the scheduled job writes a clear 
 
 ## Multi-provider model gateway (keyless starter)
 
-The included FreeLLM sidecar is now the default OpenAI-compatible gateway when `LLM_BASE_URL` is blank. It is pinned to `freelm==0.5.2`; its own local server key is generated inside the persistent `freellm-state` volume, not committed to Git. It can discover and fail over among published free-tier endpoints. The gateway itself does not supply unlimited inference: anonymous endpoints have tight per-IP quotas, provider free tiers change, and each provider's data handling applies.
+The included FreeLLM sidecar is the default OpenAI-compatible gateway when `LLM_BASE_URL` is blank. It is pinned to `freelm==0.5.2`; its own local server key is generated inside the persistent `freellm-state` volume, not committed to Git. It can discover and fail over among published free-tier endpoints. The gateway itself does not supply unlimited inference: anonymous endpoints have tight per-IP quotas, provider free tiers change, and each provider's data handling applies.
 
 **Keyless mode is for public, non-sensitive work only.** Qudron's worker will fail closed before sending jobs involving CV customer data, support records, payments, incident/security reports, private source code or other sensitive workflows through this route. It also refuses a keyless request if its prompt contains a value that the existing PII/token redactor would mask. Add an approved provider key or private model endpoint before enabling those workflows. Do not place private customer records, credentials, private source code or payment evidence in an anonymous/free endpoint.
 

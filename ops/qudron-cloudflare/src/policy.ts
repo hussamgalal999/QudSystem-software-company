@@ -1,11 +1,11 @@
 export type TaskKind="research"|"draft";
 export type IntakeResult={ok:true;task:{kind:TaskKind;prompt:string;title:string}}|{ok:false;error:string};
 const SENSITIVE_PATTERNS=[
- /\\b\\d{14}\\b/,
- /\\b(?:\\+?20|0)1[0125]\\d{8}\\b/,
- /\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/i,
- /\\b(?:password|passcode|api[_ -]?key|secret key|client secret|access token|refresh token)\\s*[:=]\\s*\\S+/i,
- /\\b(?:otp|one[- ]time password|pin|wallet pin|cvv|cvc)\\s*[:=]?\\s*\\d{3,8}\\b/i,
+ /\b\d{14}\b/,
+ /\b(?:\+?20|0)1[0125]\d{8}\b/,
+ /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+ /\b(?:password|passcode|api[_ -]?key|secret key|client secret|access token|refresh token)\s*[:=]\s*\S+/i,
+ /\b(?:otp|one[- ]time password|pin|wallet pin|cvv|cvc)\s*[:=]?\s*\d{3,8}\b/i,
  /-----BEGIN (?:RSA|OPENSSH|EC) PRIVATE KEY-----/
 ];
 export function validateIntake(input:unknown):IntakeResult{

@@ -1,0 +1,38 @@
+name: Qudron Cloudflare pilot CI
+on:
+  push:
+    branches: [feature/qudron-cvpen-swarm-release-candidate]
+    paths:
+      - "ops/qudron-cloudflare/**"
+      - ".github/workflows/qudron-cloudflare-ci.yml"
+  pull_request:
+    paths:
+      - "ops/qudron-cloudflare/**"
+      - ".github/workflows/qudron-cloudflare-ci.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qudron-cloudflare-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ops/qudron-cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ops/qudron-cloudflare/package.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Validate and bundle Worker, Workflow and Durable Object
+        run: npm run build

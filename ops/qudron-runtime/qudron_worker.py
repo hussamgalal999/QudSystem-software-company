@@ -573,33 +573,33 @@ def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("idempotency_key values must be unique within a batch")
 
     now = iso_now()
-    results: list[dict[str, Any]] = []
-    created_count = 0
+    result_by_key: dict[str, dict[str, Any]] = {}
+    new_jobs: list[tuple[str, dict[str, str]]] = []
     with connect_db() as db:
         db.execute("BEGIN IMMEDIATE")
-        pending: list[tuple[str, dict[str, str]]] = []
         for item in items:
             job_key = f"api:{item['idempotency_key']}"
             existing = db.execute(
                 "SELECT id,status,title FROM jobs WHERE job_key=?", (job_key,)
             ).fetchone()
             if existing:
-                results.append({"created": False, "job": dict(existing)})
+                result_by_key[item["idempotency_key"]] = {
+                    "created": False, "job": dict(existing)
+                }
             else:
-                pending.append((job_key, item))
+                new_jobs.append((job_key, item))
 
         active = int(db.execute(
             "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
         ).fetchone()[0])
-        if active + len(pending) > MAX_PENDING_JOBS:
+        if active + len(new_jobs) > MAX_PENDING_JOBS:
             db.rollback()
             raise ValueError(
-                f"queue_capacity_reached: batch needs {len(pending)} new slots, "
+                f"queue_capacity_reached: batch needs {len(new_jobs)} new slots, "
                 f"but only {max(0, MAX_PENDING_JOBS - active)} remain"
             )
 
-        pending_results: list[dict[str, Any]] = []
-        for job_key, item in pending:
+        for job_key, item in new_jobs:
             job_id = uuid.uuid4().hex
             db.execute(
                 """INSERT INTO jobs
@@ -608,31 +608,14 @@ def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
                 (job_id, job_key, item["title"], item["role"], item["task_type"],
                  item["prompt"], now, now, now),
             )
-            pending_results.append({"created": True, "job": {
-                "id": job_id, "status": "pending", "title": item["title"]
-            }})
+            result_by_key[item["idempotency_key"]] = {
+                "created": True,
+                "job": {"id": job_id, "status": "pending", "title": item["title"]},
+            }
         db.commit()
-        results.extend(pending_results)
-        created_count = len(pending_results)
 
-    # Preserve caller order even when an existing key and a new key are mixed.
-    by_key = {}
-    for result in results:
-        job = result["job"]
-        for item in items:
-            if job.get("title") == item["title"] and job.get("status") in {"pending", "running"}:
-                # Titles need not be unique; use the idempotency lookup below instead.
-                pass
-    ordered: list[dict[str, Any]] = []
-    with connect_db() as db:
-        for item in items:
-            row = db.execute(
-                "SELECT id,status,title FROM jobs WHERE job_key=?",
-                (f"api:{item['idempotency_key']}",),
-            ).fetchone()
-            ordered.append({"created": bool(row and row["id"] in {
-                r["job"]["id"] for r in results if r["created"]
-            }), "job": dict(row) if row else None})
+    ordered = [result_by_key[item["idempotency_key"]] for item in items]
+    created_count = sum(1 for result in ordered if result["created"])
     return {
         "created_count": created_count,
         "duplicate_count": len(items) - created_count,

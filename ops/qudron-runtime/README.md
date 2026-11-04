@@ -38,6 +38,15 @@ SQLite memory now has:
 
 Memory is deliberately not a customer-record database. Do not put CV source documents, identity documents, payment credentials, full card data, or sensitive personal information into strategic memory. Redaction is best-effort, not a substitute for minimization and access controls. A production customer workflow needs a separate encrypted customer-data store with strict tenant isolation and retention/deletion controls.
 
+## Authenticated task intake API
+
+After deployment, external orchestrators can enqueue approved internal draft/research jobs:
+- `POST /jobs` with `Authorization: Bearer <QUDRON_API_TOKEN>`.
+- `GET /jobs/{job_id}` with the same header to read a task status.
+- Requests require a caller-supplied idempotency key; duplicate submissions return the existing job instead of creating duplicate work.
+- Intake is allowlisted to internal research/draft/review task types. CV customer-data tasks, payment reconciliation, customer support with customer records, and financial actions are intentionally blocked from this generic endpoint.
+- The default Docker mapping binds the port to localhost. Remote integrations must use HTTPS, a private network or authenticated reverse proxy, request logging, and secret rotation. Never expose this endpoint directly to the public internet.
+
 ## CVPen workflow design and payment safety
 
 service_workflows.json defines a 12-stage CVPen order path from intake to aftercare. It is marked DESIGNED_NOT_CONNECTED. No real customer intake, WhatsApp channel, CV document generator, or payment provider is wired up by this configuration alone.

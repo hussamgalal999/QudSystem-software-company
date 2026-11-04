@@ -30,7 +30,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
 from deepseek_web import search_web, WebResearchError
-from metricool_sync import build_social_context
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))

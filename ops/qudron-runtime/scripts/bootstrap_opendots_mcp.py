@@ -114,15 +114,20 @@ def ensure_commander_dot(workspace: Any, owner_token: str) -> str:
 
 
 def main() -> int:
-    owner_token = read_secret("OPENDOTS_OWNER_TOKEN", OWNER_TOKEN_FILE)
-    qudron_token = read_secret("QUDRON_API_TOKEN", QUDRON_TOKEN_FILE)
-    if len(owner_token) < 24:
-        raise BootstrapError("OpenDots owner token is not available in its private data volume")
-    if len(qudron_token) < 32:
-        raise BootstrapError("Qudron owner token is not available in its private data volume")
-
     last_error = "OpenDots did not become ready"
     for attempt in range(1, 31):
+        # Both tokens are read on every attempt because OpenDots and Qudron
+        # create their private token files during first startup.
+        owner_token = read_secret("OPENDOTS_OWNER_TOKEN", OWNER_TOKEN_FILE)
+        qudron_token = read_secret("QUDRON_API_TOKEN", QUDRON_TOKEN_FILE)
+        if owner_token and len(owner_token) < 24:
+            raise BootstrapError("OpenDots owner token is invalid")
+        if qudron_token and len(qudron_token) < 32:
+            raise BootstrapError("Qudron owner token is invalid")
+        if not owner_token or not qudron_token:
+            last_error = "private credentials are not ready"
+            time.sleep(min(10, 1 + attempt // 3))
+            continue
         try:
             workspace = request_json(f"{OPENDOTS_URL}/api/workspace", owner_token)
             dot_id = ensure_commander_dot(workspace, owner_token)
@@ -142,12 +147,20 @@ def main() -> int:
                 connection_id = existing.get("id")
                 if not connection_id:
                     raise BootstrapError("Existing Qudron connection has no ID")
-                refreshed = request_json(
-                    f"{OPENDOTS_URL}/api/connections/{connection_id}/refresh",
-                    owner_token,
-                    method="POST",
-                    payload={},
-                )
+                try:
+                    refreshed = request_json(
+                        f"{OPENDOTS_URL}/api/connections/{connection_id}/refresh",
+                        owner_token,
+                        method="POST",
+                        payload={},
+                    )
+                except urllib.error.HTTPError as exc:
+                    if exc.code not in (401, 403):
+                        raise
+                    # A rotated Qudron token can make the old connection
+                    # unauthorized. Delete only this named connection, then
+                    # recreate it below with the newly read token.
+                    refreshed = {"error": "connection_unauthorized"}
                 if isinstance(refreshed, dict) and refreshed.get("error"):
                     request_json(
                         f"{OPENDOTS_URL}/api/connections/{connection_id}",

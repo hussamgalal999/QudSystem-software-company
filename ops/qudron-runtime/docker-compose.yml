@@ -20,6 +20,22 @@ services:
       retries: 3
       start_period: 20s
 
+  # Optional owner-only Telegram command bridge. It polls outbound to Telegram;
+  # no inbound webhook or public port is opened. Enable only after configuring the
+  # bot token and the numeric owner chat ID allowlist in .env.
+  telegram-gateway:
+    profiles: ["telegram"]
+    build: .
+    container_name: qudron-telegram-gateway
+    restart: unless-stopped
+    env_file: [.env]
+    command: ["python", "-u", "telegram_gateway.py"]
+    environment:
+      QUDRON_INTERNAL_URL: http://qudron:8765
+    depends_on:
+      qudron:
+        condition: service_healthy
+
   # Optional free-tier model router. No host port is published: only services
   # on this Compose network can reach it. It is not enabled unless --profile
   # free-ai is selected.

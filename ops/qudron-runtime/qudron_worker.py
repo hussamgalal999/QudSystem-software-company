@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import logging
 import hmac
+import math
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
@@ -401,8 +402,8 @@ def profile_cost_rates(profile: str) -> tuple[float | None, float | None]:
         if raw is None or not raw.strip():
             return None
         value = float(raw)
-        if value < 0:
-            raise ValueError(f"{name} must be >= 0")
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"{name} must be a finite number >= 0")
         return value
     return read_rate("INPUT_USD_PER_1M"), read_rate("OUTPUT_USD_PER_1M")
 
@@ -412,8 +413,8 @@ def configured_budget(name: str) -> float | None:
     if not raw:
         return None
     value = float(raw)
-    if value <= 0:
-        raise ValueError(f"{name} must be > 0 when configured")
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a finite number > 0 when configured")
     return value
 
 
@@ -488,7 +489,9 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
 
 def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
                        response_data: dict[str, Any], reservation_id: str | None) -> None:
-    usage = response_data.get("usage") or {}
+    usage = response_data.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     total_tokens = usage.get("total_tokens")
@@ -506,7 +509,7 @@ def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
     cost_usd: float | None = None
     try:
         candidate = float(provider_cost)
-        if candidate >= 0:
+        if math.isfinite(candidate) and candidate >= 0:
             cost_usd = candidate
     except (TypeError, ValueError):
         if prompt_tokens is not None and completion_tokens is not None and input_rate is not None and output_rate is not None:

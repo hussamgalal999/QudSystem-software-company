@@ -16,6 +16,7 @@ from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import re
+import secrets
 import signal
 import socket
 import sqlite3
@@ -49,7 +50,10 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_TIMEOUT = max(10, int(os.getenv("LLM_TIMEOUT_SECONDS", "180")))
 API_TOKEN = os.getenv("QUDRON_API_TOKEN", "")
+API_TOKEN_FILE = Path(os.getenv("QUDRON_API_TOKEN_FILE", str(APP_DIR / "data" / "api_token")))
 MAX_API_BODY_BYTES = 65536
+MAX_API_BATCH_SIZE = max(1, min(100, int(os.getenv("QUDRON_MAX_API_BATCH_SIZE", "100"))))
+MAX_PENDING_JOBS = max(1000, min(1_000_000, int(os.getenv("QUDRON_MAX_PENDING_JOBS", "100000"))))
 MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS", "1200"))))
 MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
@@ -454,6 +458,49 @@ def mcp_get_status() -> dict[str, Any]:
         "llm_configured": snapshot.get("llm_configured", False),
     }
 
+def ensure_api_token() -> str:
+    """Persist an owner-only random API token when the host has not supplied one.
+
+    The token file stays inside the private data volume (mode 0600); it is never
+    logged or returned by health/status endpoints. An explicitly configured
+    environment token always takes precedence and is synchronized to the file
+    so private sidecars can read it without duplicating secrets in Compose.
+    """
+    configured = os.getenv("QUDRON_API_TOKEN", "").strip()
+    API_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(API_TOKEN_FILE.parent, 0o700)
+    except OSError:
+        pass
+    if configured:
+        temp = API_TOKEN_FILE.with_name(API_TOKEN_FILE.name + ".tmp")
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(configured + "\\n")
+        os.replace(temp, API_TOKEN_FILE)
+        try:
+            os.chmod(API_TOKEN_FILE, 0o600)
+        except OSError:
+            pass
+        return configured
+    try:
+        token = API_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        token = ""
+    if not token:
+        token = secrets.token_urlsafe(48)
+        fd = os.open(API_TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token + "\\n")
+    if len(token) < 32:
+        raise RuntimeError("Persisted Qudron API token is too short; rotate it safely.")
+    try:
+        os.chmod(API_TOKEN_FILE, 0o600)
+    except OSError:
+        pass
+    return token
+
+
 def is_api_authorized(authorization: str, token: str | None = None) -> bool:
     expected = API_TOKEN if token is None else token
     if not expected:
@@ -461,9 +508,9 @@ def is_api_authorized(authorization: str, token: str | None = None) -> bool:
     return hmac.compare_digest(str(authorization), f"Bearer {expected}")
 
 
-def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(payload, dict):
-        raise ValueError("JSON body must be an object")
+        raise ValueError("Each job must be a JSON object")
     task_type = str(payload.get("task_type", "")).strip()
     if task_type not in EXTERNAL_API_TASK_TYPES:
         raise ValueError("task_type is not enabled for external intake")
@@ -479,7 +526,13 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         raise ValueError("role is required and must be <= 100 characters")
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,120}", key):
         raise ValueError("idempotency_key must be 8-120 safe ASCII characters")
-    job_key = f"api:{key}"
+    return {"task_type": task_type, "title": title, "prompt": prompt,
+            "role": role, "idempotency_key": key}
+
+
+def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    item = _validate_api_job(payload)
+    job_key = f"api:{item['idempotency_key']}"
     now = iso_now()
     job_id = uuid.uuid4().hex
     with connect_db() as db:
@@ -490,14 +543,114 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         if existing:
             db.commit()
             return dict(existing), False
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+        if active >= MAX_PENDING_JOBS:
+            db.rollback()
+            raise ValueError("queue_capacity_reached: Qudron's pending-job limit has been reached")
         db.execute(
             """INSERT INTO jobs
             (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
             VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
-            (job_id, job_key, title, role, task_type, prompt, now, now, now),
+            (job_id, job_key, item["title"], item["role"], item["task_type"],
+             item["prompt"], now, now, now),
         )
         db.commit()
-    return {"id": job_id, "status": "pending", "title": title}, True
+    return {"id": job_id, "status": "pending", "title": item["title"]}, True
+
+
+def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
+    """Atomically accept up to 100 idempotent, internal-only draft/research jobs."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("body must contain a jobs array")
+    raw_jobs = payload["jobs"]
+    if not 1 <= len(raw_jobs) <= MAX_API_BATCH_SIZE:
+        raise ValueError(f"jobs must contain between 1 and {MAX_API_BATCH_SIZE} items")
+    items = [_validate_api_job(item) for item in raw_jobs]
+    keys = [item["idempotency_key"] for item in items]
+    if len(keys) != len(set(keys)):
+        raise ValueError("idempotency_key values must be unique within a batch")
+
+    now = iso_now()
+    results: list[dict[str, Any]] = []
+    created_count = 0
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        pending: list[tuple[str, dict[str, str]]] = []
+        for item in items:
+            job_key = f"api:{item['idempotency_key']}"
+            existing = db.execute(
+                "SELECT id,status,title FROM jobs WHERE job_key=?", (job_key,)
+            ).fetchone()
+            if existing:
+                results.append({"created": False, "job": dict(existing)})
+            else:
+                pending.append((job_key, item))
+
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+        if active + len(pending) > MAX_PENDING_JOBS:
+            db.rollback()
+            raise ValueError(
+                f"queue_capacity_reached: batch needs {len(pending)} new slots, "
+                f"but only {max(0, MAX_PENDING_JOBS - active)} remain"
+            )
+
+        pending_results: list[dict[str, Any]] = []
+        for job_key, item in pending:
+            job_id = uuid.uuid4().hex
+            db.execute(
+                """INSERT INTO jobs
+                (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+                (job_id, job_key, item["title"], item["role"], item["task_type"],
+                 item["prompt"], now, now, now),
+            )
+            pending_results.append({"created": True, "job": {
+                "id": job_id, "status": "pending", "title": item["title"]
+            }})
+        db.commit()
+        results.extend(pending_results)
+        created_count = len(pending_results)
+
+    # Preserve caller order even when an existing key and a new key are mixed.
+    by_key = {}
+    for result in results:
+        job = result["job"]
+        for item in items:
+            if job.get("title") == item["title"] and job.get("status") in {"pending", "running"}:
+                # Titles need not be unique; use the idempotency lookup below instead.
+                pass
+    ordered: list[dict[str, Any]] = []
+    with connect_db() as db:
+        for item in items:
+            row = db.execute(
+                "SELECT id,status,title FROM jobs WHERE job_key=?",
+                (f"api:{item['idempotency_key']}",),
+            ).fetchone()
+            ordered.append({"created": bool(row and row["id"] in {
+                r["job"]["id"] for r in results if r["created"]
+            }), "job": dict(row) if row else None})
+    return {
+        "created_count": created_count,
+        "duplicate_count": len(items) - created_count,
+        "jobs": ordered,
+        "queue": queue_capacity_snapshot(),
+    }
+
+
+def queue_capacity_snapshot() -> dict[str, int]:
+    with connect_db() as db:
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+    return {
+        "active": active,
+        "maximum": MAX_PENDING_JOBS,
+        "remaining": max(0, MAX_PENDING_JOBS - active),
+    }
 
 
 def infer_project(job: sqlite3.Row) -> str:
@@ -1089,7 +1242,7 @@ def status_snapshot() -> dict[str, Any]:
         ).fetchall()
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
-        "counts": counts, "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
+        "counts": counts, "queue_capacity": queue_capacity_snapshot(), "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
@@ -1239,7 +1392,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         if self.path == "/mcp":
             self._handle_mcp_post()
             return
-        if self.path != "/jobs":
+        if self.path not in {"/jobs", "/jobs/batch"}:
             self.send_error(404)
             return
         if not is_api_authorized(self.headers.get("Authorization", "")):
@@ -1255,6 +1408,13 @@ class HealthHandler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if self.path == "/jobs/batch":
+                batch = enqueue_api_batch(payload)
+                self._send_json(202 if batch["created_count"] else 200, {
+                    **batch,
+                    "note": "Jobs are queued as internal drafts/research only. This endpoint does not publish, message customers, process payments, or accept CV customer data."
+                })
+                return
             item, created = enqueue_api_job(payload)
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._send_json(400, {"error": "invalid_json"})
@@ -1274,6 +1434,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 def run() -> None:
     setup_logging()
     init_db()
+    global AGENT_REGISTRY, API_TOKEN
+    API_TOKEN = ensure_api_token()
+    logging.info("Owner API authentication is ready; token remains in the private data volume.")
     global AGENT_REGISTRY
     AGENT_REGISTRY = load_agent_registry(AGENT_REGISTRY_PATH)
     logging.info("Loaded %s specialist agents across %s teams.",

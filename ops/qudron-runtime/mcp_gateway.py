@@ -50,6 +50,51 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False},
     },
     {
+        "name": "qudron_submit_batch",
+        "description": (
+            "Submit up to 100 independent internal research, analysis, or draft jobs in one atomic batch. "
+            "Each job needs a unique idempotency_key. This queues work; it does not publish, contact customers, "
+            "process payments, or access CV/customer data. This mutating tool requires owner approval."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "jobs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "minLength": 1, "maxLength": 160},
+                            "prompt": {"type": "string", "minLength": 1, "maxLength": 8000},
+                            "role": {"type": "string", "maxLength": 100},
+                            "task_type": {
+                                "type": "string",
+                                "enum": [
+                                    "research", "social_post_draft", "video_script", "translation",
+                                    "seo_plan", "lead_research", "product_review",
+                                    "engineering_review", "strategy_review", "risk_review",
+                                ],
+                            },
+                            "idempotency_key": {
+                                "type": "string",
+                                "minLength": 8,
+                                "maxLength": 120,
+                                "pattern": "^[A-Za-z0-9._:-]{8,120}$",
+                            },
+                        },
+                        "required": ["title", "prompt", "task_type", "idempotency_key"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["jobs"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False},
+    },
+    {
         "name": "qudron_get_job",
         "description": "Get status and safe metadata for a Qudron job by ID. Does not expose internal file paths.",
         "inputSchema": {
@@ -200,6 +245,10 @@ def handle_mcp_request(
     try:
         if name == "qudron_submit_job":
             result = enqueue_job(arguments)
+        elif name == "qudron_submit_batch":
+            if enqueue_batch is None:
+                raise MCPGatewayError("Batch submission is not enabled on this runtime")
+            result = enqueue_batch(arguments)
         elif name == "qudron_get_job":
             job_id = arguments.get("job_id")
             if not isinstance(job_id, str) or not 8 <= len(job_id) <= 64:

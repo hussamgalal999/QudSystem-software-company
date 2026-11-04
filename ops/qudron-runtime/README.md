@@ -23,7 +23,7 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 - Task input, prior-stage context and memory are bounded before being sent to providers.
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
 - Configure exact input/output rates per million tokens for each profile. When rates are absent, token counts can still be recorded, but cost is reported as unknown.
-- Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
+- Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
 - Fast/Balanced/Reasoning routing and a maximum of five specialist stages per job keep routine work from automatically using the most expensive profile.
 
 ## Start with Docker

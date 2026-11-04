@@ -1,4 +1,4 @@
-import json, tempfile, unittest
+import json, tempfile, unittest\nfrom urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 from unittest.mock import patch
 import github_inventory as gi
@@ -14,7 +14,7 @@ class GitHubInventoryTests(unittest.TestCase):
   calls=[]
   def fake(url,token,timeout=30):
    calls.append(url)
-   page=int(url.split("page=")[1].split("&")[0])
+   page=int(parse_qs(urlsplit(url).query)["page"][0])
    if page==1:return [{"full_name":"owner/a","owner":{"login":"owner"},"default_branch":"main"}]
    return [{"full_name":"owner/b","owner":{"login":"owner"},"default_branch":"main"}] if page==2 else []
   with patch.object(gi,"_request_json",side_effect=fake):

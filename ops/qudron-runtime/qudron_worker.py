@@ -1004,11 +1004,11 @@ def status_snapshot() -> dict[str, Any]:
             "SELECT status,COUNT(*) n FROM jobs GROUP BY status"
         )}
         latest = db.execute(
-            "SELECT title,status,updated_at,error FROM jobs ORDER BY updated_at DESC LIMIT 5"
+            "SELECT id,title,status,updated_at,error,result_path FROM jobs ORDER BY updated_at DESC LIMIT 20"
         ).fetchall()
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
-        "counts": counts, "latest_jobs": [dict(r) for r in latest],
+        "counts": counts, "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,

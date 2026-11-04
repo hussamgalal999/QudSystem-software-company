@@ -19,4 +19,4 @@ export class QudronTaskWorkflow extends WorkflowEntrypoint<Env,TaskPayload>{
   return{taskId:task.taskId,title:task.title,kind:task.kind,status:"completed",createdAt:task.createdAt,completedAt:new Date().toISOString(),result:reviewed.text,review:"A separate QA inference reviewed the first draft. Human approval is still required before external publication or customer delivery.",model:this.env.QUDRON_AI_MODEL||"@cf/meta/llama-3.3-70b-instruct-fp8-fast"};
  }
 }
-export interface Env{AI:Ai;QUDRON_WORKFLOW:Workflow<TaskPayload>;QUDRON_API_TOKEN:string;TELEGRAM_BOT_TOKEN?:string;TELEGRAM_WEBHOOK_SECRET?:string;TELEGRAM_OWNER_CHAT_IDS?:string;QUDRON_AI_MODEL?:string;QUDRON_MAX_OUTPUT_TOKENS?:string;QUDRON_MAX_DAILY_TASKS?:string}
+export interface Env{AI:Ai;QUDRON_WORKFLOW:Workflow<TaskPayload>;TASK_ADMISSION:DurableObjectNamespace;QUDRON_API_TOKEN:string;TELEGRAM_BOT_TOKEN?:string;TELEGRAM_WEBHOOK_SECRET?:string;TELEGRAM_OWNER_CHAT_IDS?:string;QUDRON_AI_MODEL?:string;QUDRON_MAX_OUTPUT_TOKENS?:string;QUDRON_MAX_DAILY_TASKS?:string}

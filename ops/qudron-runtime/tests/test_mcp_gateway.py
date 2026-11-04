@@ -17,6 +17,7 @@ class MCPGatewayTests(unittest.TestCase):
             get_job_result=lambda job_id: self.calls.append(("get_result", job_id)) or "# report\n\nDraft only.",
             get_status=lambda: {"service": "qudron-runtime", "counts": {"pending": 2}},
             get_usage=lambda: {"daily": {"calls": 3, "known_cost_usd": 0.01}},
+            enqueue_batch=lambda args: self.calls.append(("batch", args)) or {"created_count": len(args["jobs"])},
         )
 
     def test_initialize_negotiates_streamable_http_protocol(self):
@@ -41,6 +42,8 @@ class MCPGatewayTests(unittest.TestCase):
         self.assertFalse(tools["qudron_submit_job"]["annotations"]["readOnlyHint"])
         self.assertTrue(tools["qudron_get_status"]["annotations"]["readOnlyHint"])
         self.assertIn("idempotency_key", tools["qudron_submit_job"]["inputSchema"]["required"])
+        self.assertFalse(tools["qudron_submit_batch"]["annotations"]["readOnlyHint"])
+        self.assertEqual(tools["qudron_submit_batch"]["inputSchema"]["properties"]["jobs"]["maxItems"], 100)
 
     def test_submit_job_passes_arguments_to_existing_fail_closed_queue(self):
         args = {"title": "Test research", "prompt": "Research only", "task_type": "research",
@@ -86,6 +89,16 @@ class MCPGatewayTests(unittest.TestCase):
         )
         self.assertEqual(captured, [("browser", "tool", 5)])
         self.assertIn("Browser", result["result"]["content"][0]["text"])
+
+    def test_submit_batch_uses_atomic_batch_callback(self):
+        args = {"jobs": [
+            {"title": "Research one", "prompt": "Public source one", "task_type": "research", "idempotency_key": "batch-one-001"},
+            {"title": "Research two", "prompt": "Public source two", "task_type": "research", "idempotency_key": "batch-two-002"},
+        ]}
+        result = self.handle({"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+                              "params": {"name": "qudron_submit_batch", "arguments": args}})
+        self.assertIn('"created_count": 2', result["result"]["content"][0]["text"])
+        self.assertEqual(self.calls[0], ("batch", args))
 
     def test_unknown_tool_is_rejected(self):
         result = self.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call",

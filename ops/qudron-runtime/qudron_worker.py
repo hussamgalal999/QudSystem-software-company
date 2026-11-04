@@ -201,6 +201,31 @@ def enqueue_due_schedules() -> None:
                 db.rollback()
                 logging.exception("Schedule enqueue failed: %s", sid)
 
+def renew_job_lease(job_id: str) -> bool:
+    """Extend the current worker's lease while a long model call is active."""
+    now = utc_now()
+    lease_until = (now + dt.timedelta(seconds=LOCK_SECONDS)).isoformat(timespec="seconds")
+    with connect_db() as db:
+        changed = db.execute(
+            """UPDATE jobs SET lock_until=?,updated_at=?
+            WHERE id=? AND status='running' AND locked_by=?""",
+            (lease_until, now.isoformat(timespec="seconds"), job_id, INSTANCE_ID),
+        ).rowcount
+    return changed == 1
+
+
+def lease_heartbeat_loop(job_id: str, stop_event: threading.Event) -> None:
+    """Keep active jobs leased; stop if ownership was lost or DB updates fail."""
+    interval = max(5, min(60, LOCK_SECONDS // 3))
+    while not stop_event.wait(interval):
+        try:
+            if not renew_job_lease(job_id):
+                logging.error("Lost job lease for %s; worker will not claim ownership again.", job_id)
+                return
+        except Exception:
+            logging.exception("Could not renew active job lease for %s", job_id)
+
+
 def recover_stale_jobs() -> None:
     stamp = iso_now()
     with connect_db() as db:
@@ -493,6 +518,12 @@ def worker_loop() -> None:
             STOP.wait(POLL_SECONDS)
             continue
         logging.info("Started %s | %s | %s", job["id"], job["role"], job["title"])
+        lease_stop = threading.Event()
+        lease_thread = threading.Thread(
+            target=lease_heartbeat_loop, args=(job["id"], lease_stop),
+            name=f"lease-{job['id'][:8]}", daemon=True
+        )
+        lease_thread.start()
         try:
             result = execute_job_swarm(job)
             path = save_result(job, result)
@@ -505,6 +536,9 @@ def worker_loop() -> None:
             logging.info("Completed %s -> %s", job["id"], path)
         except Exception as exc:
             fail_job(job, exc)
+        finally:
+            lease_stop.set()
+            lease_thread.join(timeout=5)
 
 def status_snapshot() -> dict[str, Any]:
     with connect_db() as db:

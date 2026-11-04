@@ -186,6 +186,36 @@
       "name": "Long-horizon Strategy Council",
       "profile": "reasoning",
       "responsibilities": "Compare strategic options, downside scenarios, operating constraints, and investment priorities."
+    },
+    {
+      "id": "cv_grammar_editor",
+      "name": "CV Grammar & Localization Reviewer",
+      "profile": "fast",
+      "responsibilities": "Review Arabic/English grammar, spelling, verb tense, terminology and translation consistency while preserving all source facts."
+    },
+    {
+      "id": "cv_role_match_reviewer",
+      "name": "Target-Role Alignment Reviewer",
+      "profile": "balanced",
+      "responsibilities": "Map target-job requirements to evidence actually supplied by the candidate; flag unsupported matches and genuine gaps."
+    },
+    {
+      "id": "cv_achievement_reviewer",
+      "name": "Achievement Evidence Reviewer",
+      "profile": "fast",
+      "responsibilities": "Improve clarity and action verbs; verify every number and outcome has candidate-provided evidence; never invent metrics."
+    },
+    {
+      "id": "cv_readability_reviewer",
+      "name": "CV Readability & Layout Reviewer",
+      "profile": "fast",
+      "responsibilities": "Check skimmability, section order, hierarchy, text density and ATS-safe structure; do not claim to have rendered or inspected final PDF geometry."
+    },
+    {
+      "id": "cv_privacy_reviewer",
+      "name": "CV Privacy Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Flag unnecessary national IDs, full addresses, sensitive disclosures and excess personal data while preserving contact information genuinely needed for applications."
     }
   ],
   "teams": {
@@ -218,10 +248,15 @@
       "privacy_qa"
     ],
     "cvpen_cv_creation": [
-      "career_strategist",
       "cv_writer",
+      "career_strategist",
       "ats_specialist",
       "fact_checker",
+      "cv_grammar_editor",
+      "cv_role_match_reviewer",
+      "cv_achievement_reviewer",
+      "cv_readability_reviewer",
+      "cv_privacy_reviewer",
       "cv_qa"
     ],
     "cvpen_ats_audit": [

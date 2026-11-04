@@ -1,8 +1,13 @@
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
-RUN python -m pip install --no-cache-dir "freelm==0.5.2"
+RUN python -m pip install --no-cache-dir "freelm==0.5.2" \
+    && groupadd --gid 10001 freelm \
+    && useradd --uid 10001 --gid 10001 --home-dir /home/freelm --create-home freelm \
+    && mkdir -p /home/freelm/.cache/freelm \
+    && chown -R freelm:freelm /home/freelm
 WORKDIR /app
 COPY start_freellm.sh /usr/local/bin/start_freellm
 RUN chmod 0755 /usr/local/bin/start_freellm
+USER freelm
 EXPOSE 4000
 ENTRYPOINT ["/usr/local/bin/start_freellm"]

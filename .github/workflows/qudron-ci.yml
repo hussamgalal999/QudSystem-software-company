@@ -38,7 +38,7 @@ jobs:
         working-directory: ops/qudron-runtime
         run: |
           cp .env.example .env
-          docker compose --profile free-ai config --quiet
+          docker compose --profile free-ai --profile telegram config --quiet
           rm -f .env
       - name: Smoke-test FreeLLM sidecar authentication and health
         run: |

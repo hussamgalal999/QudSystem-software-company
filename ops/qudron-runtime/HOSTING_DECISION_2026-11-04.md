@@ -120,3 +120,14 @@ Sources checked 4 November 2026:
 - Gemini project rate limits: https://ai.google.dev/gemini-api/docs/rate-limits
 - Groq rate limits: https://console.groq.com/docs/rate-limits
 - Cerebras pricing: https://inference-docs.cerebras.ai/support/pricing
+
+## Railway: useful temporary Docker validation, not permanent free hosting
+
+Railway can run persistent container services and workers, making it technically compatible with the current Docker Compose architecture. Its official Trial provides a one-time $5 credit for up to 30 days; after the trial, the Free plan provides only $1 of usage credit per month. The Free plan allows up to 0.5 GB RAM and one shared vCPU per service. RAM is priced at $10/GB-month and CPU at $20/vCPU-month. Therefore, holding 0.5 GB RAM continuously is about $5/month for memory alone before CPU, egress or storage. The $1 monthly free credit is not enough for a reliable always-on Qudron worker at that size.
+
+**Decision:** Railway is a reasonable short-lived staging option using the trial credit, with an explicit shutdown date and usage alert. It is not a permanent zero-cost answer. The Railway ChatGPT app is available to connect for account inspection and deployment actions, but it is not currently connected here. Do not start a paid subscription or consume any paid balance without explicit approval.
+
+Official references:
+- Railway compute and persistent services: https://docs.railway.com/build-deploy
+- Railway Trial: https://docs.railway.com/pricing/free-trial
+- Railway plan resources and metered resource prices: https://docs.railway.com/pricing/plans

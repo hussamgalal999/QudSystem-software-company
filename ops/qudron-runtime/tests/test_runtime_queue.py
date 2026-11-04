@@ -80,6 +80,61 @@ class RuntimeQueueTests(unittest.TestCase):
         })
         self.assertEqual(unsupported, [])
 
+
+    def test_sqlite_context_manager_closes_connection(self):
+        with worker.connect_db() as db:
+            db.execute("SELECT 1").fetchone()
+            connection = db
+        with self.assertRaises(Exception):
+            connection.execute("SELECT 1")
+
+    def test_terminal_failure_queues_single_same_day_incident_triage(self):
+        self.insert_job("terminal-failure", status="running", attempts=worker.MAX_ATTEMPTS,
+                        lock_until=(worker.utc_now()+timedelta(minutes=5)).isoformat())
+        with worker.connect_db() as db:
+            row = db.execute("SELECT * FROM jobs WHERE id='terminal-failure'").fetchone()
+        worker.fail_job(row, RuntimeError("Provider temporarily unavailable"))
+        worker.fail_job(row, RuntimeError("Provider temporarily unavailable"))
+        with worker.connect_db() as db:
+            main = db.execute("SELECT status FROM jobs WHERE id='terminal-failure'").fetchone()
+            triage = db.execute(
+                "SELECT id,task_type,status,job_key FROM jobs WHERE job_key='incident-triage:terminal-failure'"
+            ).fetchall()
+        self.assertEqual(main["status"], "failed")
+        self.assertEqual(len(triage), 1)
+        self.assertEqual(triage[0]["task_type"], "incident_triage")
+        self.assertEqual(triage[0]["status"], "pending")
+
+    def test_incident_triage_failure_does_not_spawn_recursive_triage(self):
+        self.insert_job("failed-triage", status="running", attempts=worker.MAX_ATTEMPTS,
+                        lock_until=(worker.utc_now()+timedelta(minutes=5)).isoformat())
+        with worker.connect_db() as db:
+            db.execute("UPDATE jobs SET task_type='incident_triage' WHERE id='failed-triage'")
+            row = db.execute("SELECT * FROM jobs WHERE id='failed-triage'").fetchone()
+        worker.fail_job(row, RuntimeError("reasoning endpoint offline"))
+        with worker.connect_db() as db:
+            triage_count = db.execute(
+                "SELECT COUNT(*) FROM jobs WHERE job_key LIKE 'incident-triage:%'"
+            ).fetchone()[0]
+        self.assertEqual(triage_count, 0)
+
+    def test_malformed_and_unsupported_schedules_are_skipped_safely(self):
+        worker.SCHEDULE_PATH.write_text(json.dumps({
+            "schedules":[
+                {"id":"good","every_minutes":60,"role":"Tester","task_type":"research",
+                 "title":"Valid","prompt":"Run a valid task"},
+                {"id":"bad-type","every_minutes":60,"role":"Tester","task_type":"unknown",
+                 "title":"Unsupported","prompt":"Should be skipped"},
+                {"id":"missing-prompt","every_minutes":60,"role":"Tester","task_type":"research",
+                 "title":"Missing prompt"},
+                {"id":"good","every_minutes":60,"role":"Tester","task_type":"research",
+                 "title":"Duplicate id","prompt":"Should be skipped"},
+                None
+            ]
+        }), encoding="utf-8")
+        loaded = worker.load_schedules()
+        self.assertEqual([item["id"] for item in loaded], ["good"])
+
     def test_memory_is_project_scoped_and_redacted(self):
         worker.remember_event("cvpen","short","job_event",
             "Customer a@example.com called 01012345678. CVPen task complete.")

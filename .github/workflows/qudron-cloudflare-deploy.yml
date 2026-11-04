@@ -1,0 +1,80 @@
+name: Deploy Qudron Cloudflare pilot
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/qudron-cvpen-swarm-release-candidate]
+    paths: ["ops/qudron-cloudflare/**", ".github/workflows/qudron-cloudflare-deploy.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: qudron-cloudflare-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Preflight required deployment secrets
+        id: preflight
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUDRON_API_TOKEN: ${{ secrets.QUDRON_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          TELEGRAM_OWNER_CHAT_IDS: ${{ secrets.TELEGRAM_OWNER_CHAT_IDS }}
+        run: |
+          missing=()
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing+=("CLOUDFLARE_API_TOKEN")
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
+          [ -n "$QUDRON_API_TOKEN" ] || missing+=("QUDRON_API_TOKEN")
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && { [ -z "$TELEGRAM_WEBHOOK_SECRET" ] || [ -z "$TELEGRAM_OWNER_CHAT_IDS" ]; }; then
+            echo "::error title=Incomplete Telegram configuration::When TELEGRAM_BOT_TOKEN is set, both TELEGRAM_WEBHOOK_SECRET and TELEGRAM_OWNER_CHAT_IDS are required."
+            exit 1
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'deploy=false\n' >> "$GITHUB_OUTPUT"
+            {
+              echo "## Cloudflare deployment: SKIPPED"
+              echo ""
+              echo "No deployment was attempted and no Cloudflare resources or Worker secrets were changed."
+              echo ""
+              echo "Missing GitHub Actions secrets (names only):"
+              printf -- '- `%s`\n' "${missing[@]}"
+              echo ""
+              echo "See the bootstrap instructions in ops/qudron-cloudflare/README.md and Issue 7."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Cloudflare deployment skipped::Required repository secrets are missing. CI remains successful, but no live deployment occurred."
+            exit 0
+          fi
+          printf 'deploy=true\n' >> "$GITHUB_OUTPUT"
+      - name: Install, verify, deploy and configure runtime secrets
+        if: steps.preflight.outputs.deploy == 'true'
+        working-directory: ops/qudron-cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUDRON_API_TOKEN: ${{ secrets.QUDRON_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          TELEGRAM_OWNER_CHAT_IDS: ${{ secrets.TELEGRAM_OWNER_CHAT_IDS }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run build
+          npx wrangler deploy
+          printf '%s' "$QUDRON_API_TOKEN" | npx wrangler secret put QUDRON_API_TOKEN
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            printf '%s' "$TELEGRAM_BOT_TOKEN" | npx wrangler secret put TELEGRAM_BOT_TOKEN
+            printf '%s' "$TELEGRAM_WEBHOOK_SECRET" | npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+            printf '%s' "$TELEGRAM_OWNER_CHAT_IDS" | npx wrangler secret put TELEGRAM_OWNER_CHAT_IDS
+          fi
+          {
+            echo "## Cloudflare deployment: attempted"
+            echo ""
+            echo "Wrangler deployment and configured Worker secrets completed. Verify the live endpoint and inference separately."
+          } >> "$GITHUB_STEP_SUMMARY"

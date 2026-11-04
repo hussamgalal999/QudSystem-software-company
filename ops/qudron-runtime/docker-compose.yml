@@ -1,0 +1,77 @@
+services:
+  qudron:
+    build: .
+    container_name: qudron-runtime
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      # The internal FreeLLM sidecar is optional. This key is only used if
+      # LLM_FAST_BASE_URL is explicitly set to http://freellm:4000/v1.
+      LLM_FAST_API_KEY: ${FREELM_SERVER_KEY:-}
+    ports: ["127.0.0.1:8765:8765"]
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Optional owner-only Telegram command bridge. It polls outbound to Telegram;
+  # no inbound webhook or public port is opened. Enable only after configuring the
+  # bot token and the numeric owner chat ID allowlist in .env.
+  telegram-gateway:
+    profiles: ["telegram"]
+    build: .
+    container_name: qudron-telegram-gateway
+    restart: unless-stopped
+    env_file: [.env]
+    command: ["python", "-u", "telegram_gateway.py"]
+    environment:
+      QUDRON_INTERNAL_URL: http://qudron:8765
+    depends_on:
+      qudron:
+        condition: service_healthy
+
+  # Optional free-tier model router. No host port is published: only services
+  # on this Compose network can reach it. It is not enabled unless --profile
+  # free-ai is selected.
+  freellm:
+    profiles: ["free-ai"]
+    build:
+      context: .
+      dockerfile: Dockerfile.freellm
+    container_name: qudron-freellm
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      FREELM_KEYLESS: ${FREELM_KEYLESS:-auto}
+      FREELM_PERSIST: "1"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      KILO_API_KEY: ${KILO_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      FREELM_SERVER_KEY: ${FREELM_SERVER_KEY:-}
+    expose: ["4000"]
+    volumes:
+      - freellm-state:/root/.cache/freelm
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  freellm-state:
+    name: qudron-freellm-state

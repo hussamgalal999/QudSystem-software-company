@@ -1,0 +1,162 @@
+{
+  "timezone": "Africa/Cairo",
+  "schedules": [
+    {
+      "id": "cvpen-growth",
+      "role": "Growth & Product Manager",
+      "task_type": "research",
+      "title": "CVPen daily growth opportunities",
+      "prompt": "Prepare a practical daily growth brief for CVPen, an ATS-focused CV improvement service in Egypt. Include 3 offer/content experiments, one low-cost acquisition channel, a draft CTA, and measurable KPIs. Do not invent demand or conversion data. Separate hypotheses from verified facts.",
+      "at_local": "08:15",
+      "every_days": 1
+    },
+    {
+      "id": "qudsystem-content",
+      "role": "Marketing & Social Media",
+      "task_type": "social_post_draft",
+      "title": "QudSystem social content draft",
+      "prompt": "Create one useful Arabic Egyptian social post for QudSystem about custom software, AI automation, websites, dashboards, or business process improvement. Avoid hype and fear. Include a clear business problem, concrete solution, proof requirements, CTA, and 3 hashtags. Draft only; do not publish.",
+      "at_local": "09:00",
+      "every_days": 1
+    },
+    {
+      "id": "video-production-ideas",
+      "role": "Video Producer & Localization",
+      "task_type": "video_script",
+      "title": "Short-form video concept and script",
+      "prompt": "Create one 30-45 second vertical video concept for QudSystem or CVPen. Deliver hook, storyboard, Egyptian Arabic voiceover, on-screen text, B-roll/editing notes, English subtitle translation, and CTA. Keep production possible with a phone and free tools. Do not claim a video was rendered.",
+      "at_local": "11:00",
+      "every_days": 2,
+      "anchor_date": "2026-11-04"
+    },
+    {
+      "id": "sales-pipeline",
+      "role": "Sales & Business Development",
+      "task_type": "lead_research",
+      "title": "Target customer segments and outreach drafts",
+      "prompt": "Identify best-fit customer segments for QudSystem web/software/AI automation services and CVPen in Egypt. Produce an ICP, qualification questions, ethical public-source research plan, and personalized outreach templates. Never fabricate named leads, contact details, or claim anyone was contacted.",
+      "at_local": "08:45",
+      "every_days": 1
+    },
+    {
+      "id": "seo-improvement",
+      "role": "SEO & Website Strategy",
+      "task_type": "seo_plan",
+      "title": "QudSystem SEO improvement plan",
+      "prompt": "Create a prioritized SEO plan for a small Egyptian software and AI company targeting Egypt and English-speaking international customers. Include service-page structure, search-intent clusters, technical SEO checks, internal linking, and a 4-week content roadmap. Flag anything requiring live website inspection.",
+      "at_local": "09:00",
+      "weekdays": [
+        0
+      ]
+    },
+    {
+      "id": "daily-operations-review",
+      "role": "COO & Reliability Reviewer",
+      "task_type": "engineering_review",
+      "title": "Daily operations review and error-prevention plan",
+      "prompt": "Produce a daily operational review framework for QudSystem's active workstreams. Prioritize identifying blockers, quality risks, missed handoffs, duplicated effort, and errors that should be fixed today. Clearly distinguish observed evidence from unknowns: this worker may not have access to live execution logs or external app statuses, so never claim a real task was completed or failed unless evidence is supplied. Deliver a same-day action queue with severity, owner role, validation test, and rollback note.",
+      "at_local": "18:00",
+      "every_days": 1
+    },
+    {
+      "id": "three-day-optimization",
+      "role": "Process Optimization & QA Lead",
+      "task_type": "research",
+      "title": "Three-day process optimization review",
+      "prompt": "Run a structured optimization review for QudSystem's service delivery and internal agent workflows. Evaluate time/cost/quality trade-offs, failure modes, repeated rework, prompt clarity, automation opportunities, and customer experience. Propose the smallest high-impact improvements, expected measurable outcomes, risks, and an experiment plan. Do not invent operating metrics; mark missing measurements and propose how to collect them.",
+      "at_local": "16:00",
+      "every_days": 3,
+      "anchor_date": "2026-11-04"
+    },
+    {
+      "id": "weekly-deep-strategy",
+      "role": "Chief Strategy & Research Council",
+      "task_type": "strategy_review",
+      "title": "Weekly deep strategic reasoning and portfolio review",
+      "prompt": "Conduct a deep weekly strategy review for QudSystem across CVPen, custom software and AI automation services, mini-apps, QudSchool/Qudemy, and Vision Guard Systems. Prioritize revenue potential, customer segment precision, competitor positioning, differentiation, delivery economics, brand trust, and execution capacity. For CVPen, build a realistic path toward EGP 100,000-200,000 monthly revenue using explicit price x volume x conversion assumptions, funnel math, channel experiments, and capacity constraints; do not promise results or fabricate competitor intelligence. Include long-horizon strategic options, short-horizon next-week actions, downside scenarios, and a decision log of assumptions to validate.",
+      "at_local": "08:00",
+      "weekdays": [
+        0
+      ]
+    },
+    {
+      "id": "vision-guard-trust-content",
+      "role": "Brand Strategist & Customer Education",
+      "task_type": "social_post_draft",
+      "title": "Vision Guard Systems trust-led customer education",
+      "prompt": "Create one Egyptian Arabic educational post for Vision Guard Systems about CCTV, access control, installation quality, maintenance, camera placement, or choosing a security solution. Use reassurance and clarity, not fear. Include a useful tip, a transparent service CTA, and what proof (real installation photo, warranty terms, technician credentials) should be added before publication. Draft only.",
+      "at_local": "15:00",
+      "every_days": 1
+    },
+    {
+      "id": "qudschool-learning-content",
+      "role": "Education Product & Curriculum Team",
+      "task_type": "social_post_draft",
+      "title": "QudSchool daily learning idea",
+      "prompt": "Create a short Egyptian Arabic post or parent-facing learning idea for QudSchool, an engaging coding/AI/design learning experience for children. Include age-appropriate learning outcome, simple activity, parent benefit, and a truthful CTA. Do not invent active enrollment, curriculum completion, student outcomes, or platform capabilities.",
+      "at_local": "10:30",
+      "every_days": 1
+    },
+    {
+      "id": "qudcopy-product-review",
+      "role": "Product Management & UX Research",
+      "task_type": "product_review",
+      "title": "QudCopy product and customer value review",
+      "prompt": "Review QudCopy as a product that helps turn visual references into front-end implementation workflows. Identify one high-value customer segment, 3 workflow improvements, measurable acceptance criteria, risks, and a low-cost experiment. Distinguish product facts from assumptions; do not claim current user analytics are available.",
+      "at_local": "12:00",
+      "every_days": 3,
+      "anchor_date": "2026-11-04"
+    },
+    {
+      "id": "qudemy-curriculum-growth",
+      "role": "Learning Experience & Partnerships Team",
+      "task_type": "strategy_review",
+      "title": "Qudemy curriculum and partnership strategy",
+      "prompt": "Develop a practical weekly curriculum and partnership strategy for Qudemy/QudAcademy in Egypt under a near-zero operating budget. Prioritize employable AI, software, cybersecurity, and digital skills; define one free cohort-to-paid-advanced pathway, trainer QA, learner projects, transparent certificate wording, and partner value. No invented partnerships or student outcomes.",
+      "at_local": "10:00",
+      "weekdays": [
+        0
+      ]
+    },
+    {
+      "id": "qudsystem-engineering-quality",
+      "role": "Engineering, Reliability & QA Team",
+      "task_type": "engineering_review",
+      "title": "QudSystem engineering and reliability backlog",
+      "prompt": "Create a prioritized engineering quality review for QudSystem's products and service delivery. Cover security basics, dependency risk, monitoring, backups, accessibility, performance, regression tests, and deployment safety. Provide acceptance criteria and rollback notes. Do not claim to have inspected repositories or deployed systems unless files/logs are supplied.",
+      "at_local": "14:00",
+      "weekdays": [
+        2
+      ]
+    },
+    {
+      "id": "qudsystem-customer-experience",
+      "role": "Customer Success & Policy Review",
+      "task_type": "customer_support_reply",
+      "title": "QudSystem service FAQ and objection handling",
+      "prompt": "Create one useful customer FAQ/objection response for QudSystem services. Explain scope, process, required customer inputs, delivery expectations, revision boundaries, and what is not guaranteed. Use Egyptian Arabic. Avoid fabricated prices, timelines, warranty claims, or portfolio proof; flag details that need business-owner approval.",
+      "at_local": "13:00",
+      "every_days": 1
+    },
+    {
+      "id": "portfolio-metrics-review",
+      "role": "Data Analyst & Strategy Council",
+      "task_type": "product_review",
+      "title": "QudSystem portfolio KPI and revenue review",
+      "prompt": "Create a measurement plan for QudSystem services with priority on CVPen revenue and fulfillment. Define daily metrics for qualified inquiries, paid orders, average order value, conversion, delivery time, revision rate, refunds, contribution margin, and acquisition cost. No actual results are available unless supplied; present formulas and data collection requirements, not invented numbers.",
+      "at_local": "19:00",
+      "every_days": 1
+    },
+    {
+      "id": "weekly-risk-privacy-review",
+      "role": "Privacy, Compliance & Reliability Council",
+      "task_type": "risk_review",
+      "title": "Weekly QudSystem privacy, payment, and reliability review",
+      "prompt": "Review the design risks for a multi-service AI business: customer data minimization, tenant isolation, retention, audit logging, model provider data handling, webhook verification, duplicate payment callbacks, secrets management, backup/restore, and incident response. Provide specific controls and test cases. This is a design review, not a compliance certification.",
+      "at_local": "16:00",
+      "weekdays": [
+        4
+      ]
+    }
+  ]
+}

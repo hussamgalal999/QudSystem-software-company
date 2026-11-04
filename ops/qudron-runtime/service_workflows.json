@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "workflows": {
+    "cvpen_order": {
+      "name": "CVPen paid CV fulfillment",
+      "status": "DESIGNED_NOT_CONNECTED",
+      "steps": [
+        {
+          "id": "request_intake",
+          "owner": "customer_success",
+          "gate": "Collect only required contact, career, language, target-role, and delivery data; obtain privacy notice acceptance."
+        },
+        {
+          "id": "requirements_validation",
+          "owner": "career_strategist",
+          "gate": "Reject or request clarification for missing or contradictory source facts."
+        },
+        {
+          "id": "quote_and_order",
+          "owner": "finance_ops",
+          "gate": "Create unique order ID, exact EGP amount, currency, service SKU, and expiry."
+        },
+        {
+          "id": "payment_confirmation",
+          "owner": "payment_verifier",
+          "gate": "Require provider-authenticated webhook/signature, matching order ID, amount, currency, successful settlement status, and unique transaction ID. SMS, screenshots, and customer claims are not sufficient alone."
+        },
+        {
+          "id": "career_strategy",
+          "owner": "career_strategist",
+          "gate": "Map client-provided evidence to target role; no invented experience or credentials."
+        },
+        {
+          "id": "cv_draft",
+          "owner": "cv_writer",
+          "gate": "Generate editable draft using only supplied and confirmed facts."
+        },
+        {
+          "id": "ats_review",
+          "owner": "ats_specialist",
+          "gate": "Check headings, parsing, keywords, formatting, and target-role relevance."
+        },
+        {
+          "id": "fact_review",
+          "owner": "fact_checker",
+          "gate": "Block unsupported employers, dates, degrees, certifications, metrics, or achievements."
+        },
+        {
+          "id": "independent_qa",
+          "owner": "cv_qa",
+          "gate": "Independent checklist review; unresolved critical issue blocks delivery."
+        },
+        {
+          "id": "file_export",
+          "owner": "software_engineer",
+          "gate": "Export validated DOCX and PDF; scan for missing fonts, layout overflow, and malformed text."
+        },
+        {
+          "id": "delivery",
+          "owner": "customer_success",
+          "gate": "Deliver to verified channel and log the exact artifact version and timestamp."
+        },
+        {
+          "id": "aftercare",
+          "owner": "customer_success",
+          "gate": "Collect feedback, track revisions, and record anonymized quality metrics."
+        }
+      ],
+      "non_negotiable_invariants": [
+        "No CV work starts as paid work until payment is verified by a trusted provider event.",
+        "A successful payment must be idempotent; duplicate webhooks cannot create duplicate orders or deliveries.",
+        "Never store payment credentials, full card details, or unnecessary identity documents in agent memory.",
+        "No agent may fabricate a fact, claim, certification, metric, employer, or job outcome.",
+        "Critical QA findings block final delivery."
+      ]
+    }
+  }
+}

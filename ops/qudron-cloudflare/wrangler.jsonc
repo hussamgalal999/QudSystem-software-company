@@ -1,0 +1,10 @@
+{
+ "$schema":"node_modules/wrangler/config-schema.json",
+ "name":"qudron-control-plane","main":"src/index.ts","compatibility_date":"2026-11-04",
+ "compatibility_flags":["nodejs_compat"],"workers_dev":true,"observability":{"enabled":true},
+ "ai":{"binding":"AI"},
+ "durable_objects":{"bindings":[{"name":"TASK_ADMISSION","class_name":"TaskAdmission"}]},
+ "migrations":[{"tag":"v1","new_sqlite_classes":["TaskAdmission"]}],
+ "workflows":[{"name":"qudron-task-workflow","binding":"QUDRON_WORKFLOW","class_name":"QudronTaskWorkflow"}],
+ "vars":{"QUDRON_AI_MODEL":"@cf/meta/llama-3.3-70b-instruct-fp8-fast","QUDRON_MAX_OUTPUT_TOKENS":"1200","QUDRON_MAX_DAILY_TASKS":"5"}
+}

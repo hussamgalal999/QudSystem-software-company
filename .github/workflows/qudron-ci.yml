@@ -1,0 +1,80 @@
+name: Qudron Runtime Checks
+on:
+  pull_request:
+    paths:
+      - 'ops/qudron-runtime/**'
+      - '.github/workflows/qudron-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/qudron-runtime/**'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile runtime modules
+        run: python -m py_compile ops/qudron-runtime/*.py
+      - name: Validate runtime JSON configuration
+        run: |
+          python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
+          python -m json.tool ops/qudron-runtime/agent_registry.json > /dev/null
+          python -m json.tool ops/qudron-runtime/service_workflows.json > /dev/null
+      - name: Run unit and safety tests
+        working-directory: ops/qudron-runtime
+        run: python -m unittest discover -s tests -v
+      - name: Build Qudron runtime image
+        run: docker build -t qudron-runtime:ci ops/qudron-runtime
+      - name: Build pinned FreeLLM sidecar image
+        run: docker build -f ops/qudron-runtime/Dockerfile.freellm -t qudron-freellm:ci ops/qudron-runtime
+      - name: Validate optional Compose profile
+        working-directory: ops/qudron-runtime
+        run: |
+          cp .env.example .env
+          docker compose --profile free-ai --profile telegram config --quiet
+          rm -f .env
+      - name: Smoke-test FreeLLM sidecar authentication and health
+        run: |
+          docker run -d --name qudron-freellm-ci \
+            -e FREELM_SERVER_KEY=ci-only-secret-not-for-production \
+            -e FREELM_KEYLESS=auto \
+            qudron-freellm:ci
+          trap 'docker rm -f qudron-freellm-ci >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            running=$(docker inspect -f '{{.State.Running}}' qudron-freellm-ci 2>/dev/null || echo false)
+            if [ "$running" != "true" ]; then
+              docker logs qudron-freellm-ci
+              exit 1
+            fi
+            if docker exec qudron-freellm-ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=2)" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec qudron-freellm-ci python - <<'PY'
+          import urllib.error
+          import urllib.request
+          base = "http://127.0.0.1:4000"
+          try:
+              urllib.request.urlopen(base + "/v1", timeout=5)
+              raise SystemExit("unauthenticated /v1 unexpectedly succeeded")
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 401, exc.code
+          request = urllib.request.Request(
+              base + "/v1",
+              headers={"Authorization": "Bearer ci-only-secret-not-for-production"},
+          )
+          with urllib.request.urlopen(request, timeout=5) as response:
+              assert response.status == 200
+          print("FreeLLM health and bearer authentication passed")
+          PY
+      - name: Verify timezone database inside runtime image
+        run: |
+          docker run --rm --entrypoint python qudron-runtime:ci -c "from zoneinfo import ZoneInfo; import datetime; z=ZoneInfo('Africa/Cairo'); print(datetime.datetime.now(z).isoformat())"

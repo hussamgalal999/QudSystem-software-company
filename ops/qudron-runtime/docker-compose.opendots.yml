@@ -1,0 +1,75 @@
+services:
+  opendots:
+    profiles: ["opendots"]
+    build:
+      context: ../../integrations/OpenDots
+      dockerfile: Dockerfile
+      target: app
+    container_name: qudron-opendots
+    entrypoint: ["/bin/sh", "/run/opendots-entrypoint.sh"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4310:4310"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4310"
+      DATABASE_PATH: /data/opendots.sqlite
+      OWNER_TOKEN_FILE: /data/.owner-token
+      APP_ORIGIN: ${OPENDOTS_APP_ORIGIN:-http://localhost:4310}
+      OWNER_ID: ${OPENDOTS_OWNER_ID:-qudron-owner}
+      CPK_INTELLIGENCE_API_KEY: ${OPENDOTS_CPK_INTELLIGENCE_API_KEY:-}
+      CPK_TELEMETRY_ID: ${OPENDOTS_CPK_TELEMETRY_ID:-}
+      INTELLIGENCE_API_URL: ${OPENDOTS_INTELLIGENCE_API_URL:-}
+      OPENAI_API_KEY: ${OPENDOTS_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENDOTS_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENDOTS_OPENAI_MODEL:-}
+      OPENDOTS_ENABLE_KEYLESS_MODEL: ${OPENDOTS_ENABLE_KEYLESS_MODEL:-false}
+      OPENDOTS_MODEL_KEY_FILE: /run/freellm/server.key
+      WEB_SEARCH_PROVIDER: ${OPENDOTS_WEB_SEARCH_PROVIDER:-parallel}
+      PARALLEL_API_KEY: ${OPENDOTS_PARALLEL_API_KEY:-}
+      DO_NOT_TRACK: "1"
+      COPILOTKIT_TELEMETRY_DISABLED: "true"
+    volumes:
+      - opendots-data:/data
+      - ./scripts/opendots-entrypoint.sh:/run/opendots-entrypoint.sh:ro
+      - freellm-state:/run/freellm:ro
+    networks:
+      - default
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      qudron:
+        condition: service_healthy
+      freellm:
+        condition: service_healthy
+
+  opendots-bootstrap:
+    profiles: ["opendots"]
+    image: python:3.12-slim
+    container_name: qudron-opendots-bootstrap
+    restart: "no"
+    command: ["python", "-u", "/app/bootstrap_opendots_mcp.py"]
+    environment:
+      OPENDOTS_INTERNAL_URL: http://opendots:4310
+      OPENDOTS_OWNER_TOKEN_FILE: /opendots-data/.owner-token
+      QUDRON_TOKEN_FILE: /qudron-data/api_token
+      QUDRON_MCP_URL: http://qudron:8765/mcp
+    volumes:
+      - ./scripts/bootstrap_opendots_mcp.py:/app/bootstrap_opendots_mcp.py:ro
+      - opendots-data:/opendots-data:ro
+      - ./data:/qudron-data:ro
+    networks:
+      - default
+    depends_on:
+      qudron:
+        condition: service_healthy
+      opendots:
+        condition: service_started
+
+volumes:
+  opendots-data:
+    name: qudron-opendots-data

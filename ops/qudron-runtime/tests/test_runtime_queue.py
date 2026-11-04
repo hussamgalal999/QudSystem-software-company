@@ -29,7 +29,7 @@ class RuntimeQueueTests(unittest.TestCase):
                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (job_id, None, f"Job {job_id}", "Test Agent", "research", "test prompt",
                  status, attempts, (worker.utc_now()-timedelta(minutes=1)).isoformat(),
-                 "test-instance" if status == "running" else None, lock_until, now, now)
+                 worker.INSTANCE_ID if status == "running" else None, lock_until, now, now)
             )
 
     def test_concurrent_claims_are_unique(self):
@@ -100,6 +100,35 @@ class RuntimeQueueTests(unittest.TestCase):
         with worker.connect_db() as db:
             db.execute("UPDATE jobs SET locked_by='another-instance' WHERE id='lease-foreign'")
         self.assertFalse(worker.renew_job_lease("lease-foreign"))
+
+
+    def test_stale_worker_cannot_finish_or_fail_a_reclaimed_job(self):
+        self.insert_job("reclaimed", status="running", attempts=worker.MAX_ATTEMPTS,
+                        lock_until=(worker.utc_now()+timedelta(minutes=5)).isoformat())
+        with worker.connect_db() as db:
+            db.execute("UPDATE jobs SET locked_by='new-owner' WHERE id='reclaimed'")
+            stale_row = db.execute("SELECT * FROM jobs WHERE id='reclaimed'").fetchone()
+
+        self.assertFalse(worker.finish_job("reclaimed", "/tmp/should-not-commit.md"))
+        worker.fail_job(stale_row, RuntimeError("old worker failed late"))
+
+        with worker.connect_db() as db:
+            row = db.execute("SELECT status,locked_by FROM jobs WHERE id='reclaimed'").fetchone()
+            incident_count = db.execute(
+                "SELECT COUNT(*) FROM jobs WHERE job_key='incident-triage:reclaimed'"
+            ).fetchone()[0]
+        self.assertEqual(row["status"], "running")
+        self.assertEqual(row["locked_by"], "new-owner")
+        self.assertEqual(incident_count, 0)
+
+    def test_completion_commits_only_for_current_lease_owner(self):
+        self.insert_job("owned", status="running", attempts=1,
+                        lock_until=(worker.utc_now()+timedelta(minutes=5)).isoformat())
+        self.assertTrue(worker.finish_job("owned", "/tmp/owned-result.md"))
+        with worker.connect_db() as db:
+            row = db.execute("SELECT status,result_path FROM jobs WHERE id='owned'").fetchone()
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["result_path"], "/tmp/owned-result.md")
 
     def test_sqlite_context_manager_closes_connection(self):
         with worker.connect_db() as db:

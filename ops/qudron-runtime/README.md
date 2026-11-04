@@ -195,3 +195,8 @@ Remove `LLM_FAST_BASE_URL` and `LLM_FAST_MODEL` from `.env` to return FAST tasks
 - vision_adapter.py accepts local images only under QUDRON_IMAGE_ROOT and calls a configured multimodal OpenAI-compatible model. It reuses the runtime spend reservation and concurrency controls. It is a callable adapter, not a public upload route. Use only a provider whose data handling is approved for the image content.
 
 These modules are optional and do not run until called by an authenticated orchestration workflow. No external post is published by this release.
+
+
+## Owner completion reports
+
+When the optional Telegram gateway is configured, it checks the latest 20 task records every 60 seconds. Completed tasks send their bounded Markdown report to the allowlisted owner private chat; failed tasks send a short status notice without exposing internal provider errors. A SQLite ledger in the shared persistent data volume deduplicates notifications across gateway restarts. This requires the runtime and Telegram gateway to remain running on an always-on host.

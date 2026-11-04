@@ -21,6 +21,9 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 
 ## Token and model-spend controls
 
+**Fail-closed by default:** generic model calls are blocked unless at least one positive daily or monthly USD budget is configured and exact input/output token prices are set for every enabled profile. `QUDRON_REQUIRE_MODEL_BUDGET=false` is an explicit development-only escape hatch; do not use it on a hosted pilot. CVPen additionally requires its own per-order USD cap. Enable provider-side hard spending limits as a second independent control: local token estimates and usage reports cannot guarantee the final provider invoice ceiling.
+
+
 - Every model call sets a configurable output token ceiling (`QUDRON_MAX_OUTPUT_TOKENS`, default 1,200; hard range 128–4,000).
 - Task input, prior-stage context and memory are bounded before being sent to providers.
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.

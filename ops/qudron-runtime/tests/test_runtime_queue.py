@@ -81,6 +81,26 @@ class RuntimeQueueTests(unittest.TestCase):
         self.assertEqual(unsupported, [])
 
 
+
+    def test_active_job_lease_can_be_renewed_only_by_its_owner(self):
+        worker.LOCK_SECONDS = 60
+        self.insert_job("lease-owner", status="running", attempts=1,
+                        lock_until=(worker.utc_now()-timedelta(seconds=10)).isoformat())
+        with worker.connect_db() as db:
+            db.execute("UPDATE jobs SET locked_by=? WHERE id='lease-owner'", (worker.INSTANCE_ID,))
+            before = db.execute("SELECT lock_until FROM jobs WHERE id='lease-owner'").fetchone()["lock_until"]
+        self.assertTrue(worker.renew_job_lease("lease-owner"))
+        with worker.connect_db() as db:
+            after = db.execute("SELECT lock_until FROM jobs WHERE id='lease-owner'").fetchone()["lock_until"]
+        self.assertGreater(after, before)
+
+    def test_active_job_lease_cannot_be_stolen_or_renewed_by_another_instance(self):
+        self.insert_job("lease-foreign", status="running", attempts=1,
+                        lock_until=(worker.utc_now()-timedelta(seconds=10)).isoformat())
+        with worker.connect_db() as db:
+            db.execute("UPDATE jobs SET locked_by='another-instance' WHERE id='lease-foreign'")
+        self.assertFalse(worker.renew_job_lease("lease-foreign"))
+
     def test_sqlite_context_manager_closes_connection(self):
         with worker.connect_db() as db:
             db.execute("SELECT 1").fetchone()

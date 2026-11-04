@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from telegram_gateway import format_status, format_usage, parse_command, parse_owner_ids
 
@@ -27,6 +28,33 @@ class TelegramGatewayTests(unittest.TestCase):
         })
         self.assertIn("daily: calls=3", result)
         self.assertIn("known_cost_usd=0.04", result)
+
+    def test_non_owner_messages_are_ignored(self):
+        from telegram_gateway import TelegramGateway
+        gateway = TelegramGateway()
+        gateway.owner_ids = {"111"}
+        gateway.send = Mock()
+        gateway.handle_update({
+            "update_id": 10,
+            "message": {"chat": {"id": 222}, "text": "/status"},
+        })
+        gateway.send.assert_not_called()
+
+    def test_owner_task_command_uses_update_id_for_idempotency(self):
+        from telegram_gateway import TelegramGateway
+        gateway = TelegramGateway()
+        gateway.owner_ids = {"111"}
+        gateway.send = Mock()
+        gateway.enqueue_research = Mock(return_value={
+            "created": True, "job": {"id": "job-123", "status": "pending"}
+        })
+        gateway.handle_update({
+            "update_id": 42,
+            "message": {"chat": {"id": 111}, "text": "/task research Minya market"},
+        })
+        gateway.enqueue_research.assert_called_once_with(42, "research Minya market")
+        gateway.send.assert_called_once()
+        self.assertIn("job-123", gateway.send.call_args.args[1])
 
 
 if __name__ == "__main__":

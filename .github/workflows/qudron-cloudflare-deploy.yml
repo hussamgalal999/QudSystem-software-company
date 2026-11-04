@@ -45,7 +45,7 @@ jobs:
               echo "Missing GitHub Actions secrets (names only):"
               printf -- '- `%s`\n' "${missing[@]}"
               echo ""
-              echo "See `ops/qudron-cloudflare/README.md` and Issue #7 for the one-time account bootstrap."
+              echo "See the bootstrap instructions in ops/qudron-cloudflare/README.md and Issue 7."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::warning title=Cloudflare deployment skipped::Required repository secrets are missing. CI remains successful, but no live deployment occurred."
             exit 0

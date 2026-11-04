@@ -16,6 +16,7 @@ from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import re
+import secrets
 import signal
 import socket
 import sqlite3
@@ -31,6 +32,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
 from deepseek_web import search_web, WebResearchError
 from capability_miner import mine_from_environment
+from capability_registry import search_capabilities as search_capability_registry
+from mcp_gateway import handle_mcp_request, MCPGatewayError
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -48,7 +51,10 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_TIMEOUT = max(10, int(os.getenv("LLM_TIMEOUT_SECONDS", "180")))
 API_TOKEN = os.getenv("QUDRON_API_TOKEN", "")
+API_TOKEN_FILE = Path(os.getenv("QUDRON_API_TOKEN_FILE", str(APP_DIR / "data" / "api_token")))
 MAX_API_BODY_BYTES = 65536
+MAX_API_BATCH_SIZE = max(1, min(100, int(os.getenv("QUDRON_MAX_API_BATCH_SIZE", "100"))))
+MAX_PENDING_JOBS = max(1000, min(1_000_000, int(os.getenv("QUDRON_MAX_PENDING_JOBS", "100000"))))
 MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS", "1200"))))
 MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
@@ -404,6 +410,226 @@ def claim_job() -> sqlite3.Row | None:
             return None
         return db.execute("SELECT * FROM jobs WHERE id=?", (row["id"],)).fetchone()
 
+
+def mcp_get_job(job_id: str) -> dict[str, Any] | None:
+    with connect_db() as db:
+        row = db.execute(
+            """SELECT id,title,status,attempts,run_after,error,result_path,updated_at
+            FROM jobs WHERE id=?""", (job_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"], "title": row["title"], "status": row["status"],
+        "attempts": row["attempts"], "run_after": row["run_after"],
+        "error": row["error"], "updated_at": row["updated_at"],
+        "result_available": bool(row["status"] == "completed" and row["result_path"]),
+    }
+
+
+def mcp_get_job_result(job_id: str) -> str | None:
+    with connect_db() as db:
+        row = db.execute(
+            "SELECT status,result_path FROM jobs WHERE id=?", (job_id,)
+        ).fetchone()
+    if row is None or row["status"] != "completed" or not row["result_path"]:
+        return None
+    try:
+        root = REPORTS_DIR.resolve()
+        report_path = Path(row["result_path"]).resolve()
+        if not report_path.is_relative_to(root) or not report_path.is_file():
+            return None
+        if report_path.stat().st_size > 100_000:
+            return report_path.read_text(encoding="utf-8")[:100_000] + "\n\n[Report truncated by MCP gateway.]"
+        return report_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def mcp_get_agents() -> dict[str, Any]:
+    agents = AGENT_REGISTRY.get("agents", []) if isinstance(AGENT_REGISTRY, dict) else []
+    teams = AGENT_REGISTRY.get("teams", {}) if isinstance(AGENT_REGISTRY, dict) else {}
+    return {
+        "registered_agent_roles": len(agents),
+        "registered_teams": len(teams),
+        "agents": [
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "profile": item.get("profile"),
+                "responsibilities": item.get("responsibilities"),
+            }
+            for item in agents if isinstance(item, dict)
+        ],
+        "teams": teams,
+        "note": "These are registered role definitions, not always-running processes or proof of live concurrent capacity.",
+    }
+
+
+def mcp_get_models() -> dict[str, Any]:
+    catalog_path = Path(os.getenv("QUDRON_MODEL_CATALOG_PATH", str(APP_DIR / "model_provider_catalog.json")))
+    catalog: dict[str, Any] = {}
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        catalog = {}
+    providers = []
+    for provider in catalog.get("providers", []) if isinstance(catalog, dict) else []:
+        if not isinstance(provider, dict):
+            continue
+        auth_env = str(provider.get("auth_env", ""))
+        models = provider.get("models", [])
+        providers.append({
+            "provider": provider.get("provider"),
+            "auth_configured": bool(auth_env and os.getenv(auth_env, "").strip()),
+            "candidate_models": [
+                {
+                    "id": model.get("id"),
+                    "display_name": model.get("display_name"),
+                    "enabled_in_catalog": bool(model.get("enabled", False)),
+                    "source": model.get("source"),
+                    "api_protocols": model.get("api_protocols", []),
+                    "execution_protocol": model.get("execution_protocol", "openai_chat_completions"),
+                    "requires_provider_key": bool(model.get("requires_provider_key", True)),
+                    "compatible_with_current_chat_completions_router": model.get("execution_protocol", "openai_chat_completions") == "openai_chat_completions",
+                    "context_tokens": model.get("context_tokens"),
+                    "max_output_tokens": model.get("max_output_tokens"),
+                }
+                for model in models if isinstance(model, dict)
+            ],
+        })
+
+    base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    model_url = base_url + ("/models" if base_url.endswith("/v1") else "/v1/models") if base_url else ""
+    gateway = {
+        "configured": bool(base_url),
+        "base_url": base_url,
+        "catalogue_reachable": False,
+        "advertised_model_ids": [],
+        "inference_test_performed": False,
+        "status": "not_configured" if not base_url else "not_checked",
+    }
+    if model_url:
+        key = os.getenv("LLM_API_KEY", "") or _read_secret_file(os.getenv("LLM_API_KEY_FILE", ""))
+        headers = {"Accept": "application/json"}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        try:
+            request = urllib.request.Request(model_url, headers=headers, method="GET")
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = json.loads(response.read(1_000_001).decode("utf-8"))
+            gateway["catalogue_reachable"] = True
+            gateway["status"] = "catalogue_reachable_inference_unverified"
+            gateway["advertised_model_ids"] = [
+                str(item.get("id"))[:160]
+                for item in data.get("data", [])[:100]
+                if isinstance(item, dict) and item.get("id")
+            ] if isinstance(data, dict) else []
+        except Exception:
+            gateway["status"] = "unreachable_or_unauthorized"
+
+    return {
+        "catalogue_as_of": catalog.get("as_of") if isinstance(catalog, dict) else None,
+        "policy": catalog.get("policy") if isinstance(catalog, dict) else "No catalogue policy available.",
+        "gateway": gateway,
+        "providers": providers,
+        "note": "A provider key being configured or a model appearing in a catalogue is not proof of live inference. No paid inference request was made by this read-only tool.",
+    }
+
+
+def mcp_search_capabilities(query: str, kind: str | None, limit: int) -> list[dict[str, Any]]:
+    path = Path(os.getenv("QUDRON_CAPABILITY_DB", str(DB_PATH.parent / "capabilities.sqlite3")))
+    records = search_capability_registry(
+        path,
+        query=query,
+        kind=kind,
+        statuses=("discovered", "candidate", "verified", "active", "limited"),
+        limit=limit,
+    )
+    return [
+        {
+            "id": item.get("id"),
+            "kind": item.get("kind"),
+            "name": item.get("name"),
+            "description": item.get("description"),
+            "version": item.get("version"),
+            "source_url": item.get("source_url"),
+            "license": item.get("license"),
+            "status": item.get("status"),
+            "trust_score": item.get("trust_score"),
+            "verified_at": item.get("verified_at"),
+            "tags": item.get("tags", []),
+        }
+        for item in records
+    ]
+
+def mcp_get_status() -> dict[str, Any]:
+    snapshot = status_snapshot()
+    return {
+        "service": snapshot.get("service"),
+        "time_utc": snapshot.get("time_utc"),
+        "counts": snapshot.get("counts", {}),
+        "registered_agents": snapshot.get("registered_agents", 0),
+        "registered_teams": snapshot.get("registered_teams", 0),
+        "max_agents_per_task": snapshot.get("max_agents_per_task", 1),
+        "max_concurrent_model_calls": snapshot.get("max_concurrent_model_calls", 1),
+        "llm_configured": snapshot.get("llm_configured", False),
+    }
+
+def ensure_api_token() -> str:
+    """Persist an owner-only random API token when the host has not supplied one.
+
+    The token file stays inside the private data volume (mode 0600); it is never
+    logged or returned by health/status endpoints. An explicitly configured
+    environment token always takes precedence and is synchronized to the file
+    so private sidecars can read it without duplicating secrets in Compose.
+    """
+    configured = os.getenv("QUDRON_API_TOKEN", "").strip()
+    API_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # The OpenDots app joins this one group to read only the dedicated
+        # auth volume; it does not receive Qudron's operational data volume.
+        os.chown(API_TOKEN_FILE.parent, 0, 10001)
+        os.chmod(API_TOKEN_FILE.parent, 0o750)
+    except OSError:
+        pass
+    if configured:
+        temp = API_TOKEN_FILE.with_name(API_TOKEN_FILE.name + ".tmp")
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(configured + "\n")
+        os.replace(temp, API_TOKEN_FILE)
+        try:
+            os.chown(API_TOKEN_FILE, 0, 10001)
+        except OSError:
+            pass
+        try:
+            os.chmod(API_TOKEN_FILE, 0o640)
+        except OSError:
+            pass
+        return configured
+    try:
+        token = API_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        token = ""
+    if not token:
+        token = secrets.token_urlsafe(48)
+        fd = os.open(API_TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token + "\n")
+    if len(token) < 32:
+        raise RuntimeError("Persisted Qudron API token is too short; rotate it safely.")
+    try:
+        os.chown(API_TOKEN_FILE, 0, 10001)
+    except OSError:
+        pass
+    try:
+        os.chmod(API_TOKEN_FILE, 0o640)
+    except OSError:
+        pass
+    return token
+
+
 def is_api_authorized(authorization: str, token: str | None = None) -> bool:
     expected = API_TOKEN if token is None else token
     if not expected:
@@ -411,9 +637,9 @@ def is_api_authorized(authorization: str, token: str | None = None) -> bool:
     return hmac.compare_digest(str(authorization), f"Bearer {expected}")
 
 
-def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(payload, dict):
-        raise ValueError("JSON body must be an object")
+        raise ValueError("Each job must be a JSON object")
     task_type = str(payload.get("task_type", "")).strip()
     if task_type not in EXTERNAL_API_TASK_TYPES:
         raise ValueError("task_type is not enabled for external intake")
@@ -429,7 +655,13 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         raise ValueError("role is required and must be <= 100 characters")
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,120}", key):
         raise ValueError("idempotency_key must be 8-120 safe ASCII characters")
-    job_key = f"api:{key}"
+    return {"task_type": task_type, "title": title, "prompt": prompt,
+            "role": role, "idempotency_key": key}
+
+
+def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    item = _validate_api_job(payload)
+    job_key = f"api:{item['idempotency_key']}"
     now = iso_now()
     job_id = uuid.uuid4().hex
     with connect_db() as db:
@@ -440,14 +672,97 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         if existing:
             db.commit()
             return dict(existing), False
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+        if active >= MAX_PENDING_JOBS:
+            db.rollback()
+            raise ValueError("queue_capacity_reached: Qudron's pending-job limit has been reached")
         db.execute(
             """INSERT INTO jobs
             (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
             VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
-            (job_id, job_key, title, role, task_type, prompt, now, now, now),
+            (job_id, job_key, item["title"], item["role"], item["task_type"],
+             item["prompt"], now, now, now),
         )
         db.commit()
-    return {"id": job_id, "status": "pending", "title": title}, True
+    return {"id": job_id, "status": "pending", "title": item["title"]}, True
+
+
+def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
+    """Atomically accept up to 100 idempotent, internal-only draft/research jobs."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("body must contain a jobs array")
+    raw_jobs = payload["jobs"]
+    if not 1 <= len(raw_jobs) <= MAX_API_BATCH_SIZE:
+        raise ValueError(f"jobs must contain between 1 and {MAX_API_BATCH_SIZE} items")
+    items = [_validate_api_job(item) for item in raw_jobs]
+    keys = [item["idempotency_key"] for item in items]
+    if len(keys) != len(set(keys)):
+        raise ValueError("idempotency_key values must be unique within a batch")
+
+    now = iso_now()
+    result_by_key: dict[str, dict[str, Any]] = {}
+    new_jobs: list[tuple[str, dict[str, str]]] = []
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        for item in items:
+            job_key = f"api:{item['idempotency_key']}"
+            existing = db.execute(
+                "SELECT id,status,title FROM jobs WHERE job_key=?", (job_key,)
+            ).fetchone()
+            if existing:
+                result_by_key[item["idempotency_key"]] = {
+                    "created": False, "job": dict(existing)
+                }
+            else:
+                new_jobs.append((job_key, item))
+
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+        if active + len(new_jobs) > MAX_PENDING_JOBS:
+            db.rollback()
+            raise ValueError(
+                f"queue_capacity_reached: batch needs {len(new_jobs)} new slots, "
+                f"but only {max(0, MAX_PENDING_JOBS - active)} remain"
+            )
+
+        for job_key, item in new_jobs:
+            job_id = uuid.uuid4().hex
+            db.execute(
+                """INSERT INTO jobs
+                (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+                (job_id, job_key, item["title"], item["role"], item["task_type"],
+                 item["prompt"], now, now, now),
+            )
+            result_by_key[item["idempotency_key"]] = {
+                "created": True,
+                "job": {"id": job_id, "status": "pending", "title": item["title"]},
+            }
+        db.commit()
+
+    ordered = [result_by_key[item["idempotency_key"]] for item in items]
+    created_count = sum(1 for result in ordered if result["created"])
+    return {
+        "created_count": created_count,
+        "duplicate_count": len(items) - created_count,
+        "jobs": ordered,
+        "queue": queue_capacity_snapshot(),
+    }
+
+
+def queue_capacity_snapshot() -> dict[str, int]:
+    with connect_db() as db:
+        active = int(db.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('pending','running')"
+        ).fetchone()[0])
+    return {
+        "active": active,
+        "maximum": MAX_PENDING_JOBS,
+        "remaining": max(0, MAX_PENDING_JOBS - active),
+    }
 
 
 def infer_project(job: sqlite3.Row) -> str:
@@ -605,6 +920,22 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     input_rate, output_rate = profile_cost_rates(profile)
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
                       "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    selected_base_url = (os.getenv(f"{profile_prefix}_BASE_URL") or LLM_BASE_URL).strip()
+    anonymous_free_route = is_anonymous_freellm_route(selected_base_url)
+    if anonymous_free_route:
+        # Anonymous routes are quota-limited free-tier endpoints; no paid key is
+        # configured. Record their provider charge as zero, but keep the daily
+        # budget and provider quotas active. Never infer zero cost for keyed APIs.
+        input_rate = 0.0 if input_rate is None else input_rate
+        output_rate = 0.0 if output_rate is None else output_rate
+    if not anonymous_free_route and (input_rate == 0 or output_rate == 0) and os.getenv(
+        "QUDRON_ALLOW_ZERO_RATE_PROVIDER", "false"
+    ).strip().lower() not in {"1", "true", "yes", "on"}:
+        raise RuntimeError(
+            "A keyed/custom provider has a zero token price configured. Set exact "
+            "input/output rates; set QUDRON_ALLOW_ZERO_RATE_PROVIDER=true only after "
+            "verifying that the provider explicitly charges zero."
+        )
     if input_rate is None or output_rate is None:
         raise RuntimeError(
             "Qudron model budget is enabled, but exact input/output price rates are missing "
@@ -790,6 +1121,72 @@ def model_usage_snapshot(recent_limit: int = 20) -> dict[str, Any]:
     }
 
 
+PUBLIC_KEYLESS_TASK_TYPES = {
+    "research", "social_post_draft", "video_script", "translation", "seo_plan"
+}
+KEYLESS_PROVIDER_KEYS = (
+    "GEMINI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY",
+    "CLOUDFLARE_API_TOKEN", "MISTRAL_API_KEY", "NVIDIA_API_KEY",
+    "CEREBRAS_API_KEY", "ZAI_API_KEY", "KILO_API_KEY", "COHERE_API_KEY",
+    "DEEPSEEK_API_KEY", "MIMO_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+)
+
+
+def _read_secret_file(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def is_anonymous_freellm_route(base_url: str) -> bool:
+    if "freellm" not in base_url.lower():
+        return False
+    mode = os.getenv("FREELM_KEYLESS", "auto").strip().lower()
+    if mode in {"0", "false", "no", "off"}:
+        return False
+    if mode in {"1", "true", "yes", "on"}:
+        return True
+    if mode == "auto":
+        # FreeLLM's documented auto mode uses anonymous endpoints only when no
+        # upstream provider key is configured.
+        return not any(os.getenv(name, "").strip() for name in KEYLESS_PROVIDER_KEYS)
+    return False
+
+
+def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) -> None:
+    if not is_anonymous_freellm_route(base_url):
+        return
+    task_type = str(job["task_type"])
+    if task_type not in PUBLIC_KEYLESS_TASK_TYPES:
+        raise RuntimeError(
+            "Anonymous free-model routing is limited to public research and content drafts. "
+            "Configure an approved authenticated/private provider for customer data, private code, "
+            "support, finance, CVs, security incidents or confidential work."
+        )
+    lowered = user_text.lower()
+    restricted_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if any(marker in lowered for marker in restricted_markers):
+        raise RuntimeError(
+            "The request contains an explicit confidential/customer/credential marker; "
+            "anonymous free-model routing is blocked."
+        )
+    # Existing redaction rules cover common contact/identity/payment/token patterns.
+    # If any sensitive-looking value would be redacted, fail closed rather than ship it.
+    if redact_sensitive_text(user_text) != user_text:
+        raise RuntimeError(
+            "The prompt contains a value flagged by Qudron's sensitive-data redactor; "
+            "anonymous free-model routing is blocked."
+        )
+
+
 def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
              prior_context: str, memory_context: str) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
@@ -797,6 +1194,10 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
               "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
     api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
+    if not api_key:
+        api_key = _read_secret_file(
+            os.getenv(f"{prefix}_API_KEY_FILE") or os.getenv("LLM_API_KEY_FILE", "")
+        )
     model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
     if not base_url or not model:
         raise RuntimeError(
@@ -812,6 +1213,10 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         f"Your specialist identity is {agent.get('name', agent.get('id', 'Specialist'))}. "
         f"Responsibilities: {agent.get('responsibilities', 'Complete the assigned specialist stage.')}"
     )
+    anonymous_route = is_anonymous_freellm_route(base_url)
+    if anonymous_route:
+        # Never send Qudron's persistent internal memory to anonymous public APIs.
+        memory_context = "[omitted: private Qudron memory is not sent to anonymous providers]"
     user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
         f"Original task and instructions:\n{str(job['prompt'])[:MAX_INPUT_CHARS]}\n\n"
@@ -821,6 +1226,7 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
         "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
+    validate_keyless_payload(job, user, base_url)
     payload = json.dumps({
         "model": model,
         "temperature": 0.3 if profile == "reasoning" else 0.4,
@@ -1039,7 +1445,7 @@ def status_snapshot() -> dict[str, Any]:
         ).fetchall()
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
-        "counts": counts, "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
+        "counts": counts, "queue_capacity": queue_capacity_snapshot(), "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
@@ -1073,6 +1479,13 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if self.path == "/mcp":
+            self.send_response(405)
+            self.send_header("Allow", "POST")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path == "/health":
             # Keep the unauthenticated container probe deliberately non-sensitive.
             self._send_json(200, {"ok": True, "service": "qudron-runtime"})
@@ -1140,8 +1553,64 @@ class HealthHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def _send_mcp_response(self, status: int, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("MCP-Protocol-Version", "2025-06-18")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_mcp_post(self) -> None:
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            self._send_json(415, {"error": "mcp_requires_application_json"})
+            return
+        if not is_api_authorized(self.headers.get("Authorization", "")):
+            self._send_json(503 if not API_TOKEN else 401, {"error": "unauthorized_or_api_token_not_configured"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(400, {"error": "invalid_content_length"})
+            return
+        if length < 1 or length > MAX_API_BODY_BYTES:
+            self._send_json(413, {"error": "invalid_or_oversized_body"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            result = handle_mcp_request(
+                payload,
+                is_authorized=lambda: True,
+                enqueue_job=lambda payload: enqueue_api_job(payload)[0],
+                get_job=mcp_get_job,
+                get_job_result=mcp_get_job_result,
+                get_status=mcp_get_status,
+                get_usage=model_usage_snapshot,
+                get_agents=mcp_get_agents,
+                get_models=mcp_get_models,
+                search_capabilities=mcp_search_capabilities,
+                enqueue_batch=enqueue_api_batch,
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
+            self._send_json(400, {"error": "invalid_mcp_request"})
+            return
+        if result is None:
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        self._send_mcp_response(200, result)
+
     def do_POST(self) -> None:
-        if self.path != "/jobs":
+        if self.path == "/mcp":
+            self._handle_mcp_post()
+            return
+        if self.path not in {"/jobs", "/jobs/batch"}:
             self.send_error(404)
             return
         if not is_api_authorized(self.headers.get("Authorization", "")):
@@ -1157,6 +1626,13 @@ class HealthHandler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if self.path == "/jobs/batch":
+                batch = enqueue_api_batch(payload)
+                self._send_json(202 if batch["created_count"] else 200, {
+                    **batch,
+                    "note": "Jobs are queued as internal drafts/research only. This endpoint does not publish, message customers, process payments, or accept CV customer data."
+                })
+                return
             item, created = enqueue_api_job(payload)
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._send_json(400, {"error": "invalid_json"})
@@ -1174,9 +1650,11 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 
 def run() -> None:
+    global AGENT_REGISTRY, API_TOKEN
     setup_logging()
     init_db()
-    global AGENT_REGISTRY
+    API_TOKEN = ensure_api_token()
+    logging.info("Owner API authentication is ready; token remains in the private data volume.")
     AGENT_REGISTRY = load_agent_registry(AGENT_REGISTRY_PATH)
     logging.info("Loaded %s specialist agents across %s teams.",
                  len(AGENT_REGISTRY.get("agents", [])), len(AGENT_REGISTRY.get("teams", {})))

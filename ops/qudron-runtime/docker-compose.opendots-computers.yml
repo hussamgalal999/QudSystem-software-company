@@ -1,0 +1,70 @@
+# Optional OpenBot per-Dot computer pool for OpenDots.
+# The privileged Docker socket is mounted ONLY into the supervisor service.
+services:
+  computer-image:
+    profiles: ["build-computers"]
+    image: opendots-computer:b6932d3
+    build:
+      context: https://github.com/CopilotKit/OpenBot.git#b6932d31a8d6e7896c15139dfc27a6c6911deb27
+      dockerfile: agent-computer/Dockerfile
+    command: ["true"]
+
+  computer-supervisor:
+    profiles: ["opendots-computers"]
+    image: opendots-supervisor:b6932d3-qudron
+    build:
+      context: ../../integrations/OpenDots
+      dockerfile: deployment/computers/supervisor.Dockerfile
+      additional_contexts:
+        openbot: https://github.com/CopilotKit/OpenBot.git#b6932d31a8d6e7896c15139dfc27a6c6911deb27
+    environment:
+      PORT: "4300"
+      SUPERVISOR_TOKEN: ${COMPUTER_SUPERVISOR_TOKEN:?Run scripts/prepare_opendots_computers.py first}
+      COMPUTER_TOKEN: ${COMPUTER_TOKEN:?Run scripts/prepare_opendots_computers.py first}
+      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-qudron}
+      COMPUTER_IMAGE: opendots-computer:b6932d3
+      COMPUTER_BROWSER_MODE: headless
+      COMPUTER_NETWORK: ${COMPUTER_NAMESPACE:-qudron}-computers
+      COMPUTER_MEMORY_BYTES: ${COMPUTER_MEMORY_BYTES:-2147483648}
+      COMPUTER_RUNTIME: ${COMPUTER_RUNTIME:-}
+    volumes:
+      - ${ENGINE_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - computer-control
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://localhost:4300/health'); const j = await r.json(); process.exit(r.ok && j.docker ? 0 : 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  opendots:
+    environment:
+      COMPUTER_SUPERVISOR_URL: http://computer-supervisor:4300
+      COMPUTER_SUPERVISOR_TOKEN: ${COMPUTER_SUPERVISOR_TOKEN:?Run scripts/prepare_opendots_computers.py first}
+      COMPUTER_TOKEN: ${COMPUTER_TOKEN:?Run scripts/prepare_opendots_computers.py first}
+      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-qudron}
+    networks:
+      - default
+      - computer-control
+    depends_on:
+      computer-supervisor:
+        condition: service_healthy
+
+networks:
+  computer-control:
+    internal: true
+  computers:
+    name: ${COMPUTER_NAMESPACE:-qudron}-computers
+    external: true

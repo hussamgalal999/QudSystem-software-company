@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'ops/qudron-runtime/**'
+      - 'integrations/OpenDots'
+      - '.gitmodules'
       - '.github/workflows/qudron-ci.yml'
   push:
     branches: [main]
     paths:
       - 'ops/qudron-runtime/**'
+      - 'integrations/OpenDots'
+      - '.gitmodules'
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -16,12 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Compile runtime modules
-        run: python -m py_compile ops/qudron-runtime/*.py
+        run: |
+          python -m py_compile ops/qudron-runtime/*.py ops/qudron-runtime/scripts/*.py
+          sh -n ops/qudron-runtime/scripts/opendots-entrypoint.sh
+          sh -n ops/qudron-runtime/start_freellm.sh
       - name: Validate runtime JSON configuration
         run: |
           python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
@@ -40,7 +48,11 @@ jobs:
         working-directory: ops/qudron-runtime
         run: |
           cp .env.example .env
-          docker compose --profile free-ai --profile telegram config --quiet
+          python3 scripts/prepare_opendots_computers.py .env
+          docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots --profile telegram config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.opendots.yml --profile opendots build --no-cache opendots
+          docker compose -f docker-compose.yml -f docker-compose.opendots.yml -f docker-compose.opendots-computers.yml --profile opendots --profile opendots-computers config --quiet
+          docker network rm qudron-computers >/dev/null 2>&1 || true
           rm -f .env
       - name: Smoke-test FreeLLM sidecar authentication and health
         run: |

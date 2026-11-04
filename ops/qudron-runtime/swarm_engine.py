@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import concurrent.futures
 from pathlib import Path
 from typing import Any, Callable
 
@@ -41,7 +42,12 @@ DEFAULT_AGENT_REGISTRY = {
         {"id":"reliability_engineer","name":"Reliability Engineer","profile":"reasoning","stage":"review","responsibilities":"Review retries, recovery, monitoring, and failure modes."},
         {"id":"qa_engineer","name":"QA Engineer","profile":"balanced","stage":"finalize","responsibilities":"Write and validate test plans and release gates."},
         {"id":"data_analyst","name":"Data Analyst","profile":"balanced","stage":"review","responsibilities":"Analyze real measurements only; identify missing data."},
-        {"id":"strategy_council","name":"Strategy Council","profile":"reasoning","stage":"draft","responsibilities":"Compare options, constraints, and downside scenarios."}
+        {"id":"strategy_council","name":"Strategy Council","profile":"reasoning","stage":"draft","responsibilities":"Compare options, constraints, and downside scenarios."},
+        {"id":"cv_grammar_editor","name":"CV Grammar & Localization Reviewer","profile":"fast","stage":"review","responsibilities":"Review Arabic/English grammar, spelling, verb tense, terminology and translation consistency while preserving all source facts."},
+        {"id":"cv_role_match_reviewer","name":"Target-Role Alignment Reviewer","profile":"balanced","stage":"review","responsibilities":"Map target-job requirements to evidence actually supplied by the candidate; flag unsupported matches and genuine gaps."},
+        {"id":"cv_achievement_reviewer","name":"Achievement Evidence Reviewer","profile":"fast","stage":"review","responsibilities":"Improve clarity and action verbs; verify every number and outcome has candidate-provided evidence; never invent metrics."},
+        {"id":"cv_readability_reviewer","name":"CV Readability & Layout Reviewer","profile":"fast","stage":"review","responsibilities":"Check skimmability, section order, hierarchy, text density and ATS-safe structure; do not claim to have rendered or inspected final PDF geometry."},
+        {"id":"cv_privacy_reviewer","name":"CV Privacy Reviewer","profile":"reasoning","stage":"review","responsibilities":"Flag unnecessary national IDs, full addresses, sensitive disclosures and excess personal data while preserving contact information genuinely needed for applications."}
     ],
     "teams": {
         "research":["research_analyst","evidence_checker"],
@@ -50,7 +56,7 @@ DEFAULT_AGENT_REGISTRY = {
         "translation":["localization_specialist","language_qa"],
         "seo_plan":["seo_strategist","technical_seo","evidence_checker"],
         "lead_research":["market_research","sales_qualifier","privacy_qa"],
-        "cvpen_cv_creation":["career_strategist","cv_writer","ats_specialist","fact_checker","cv_qa"],
+        "cvpen_cv_creation":["cv_writer","career_strategist","ats_specialist","fact_checker","cv_grammar_editor","cv_role_match_reviewer","cv_achievement_reviewer","cv_readability_reviewer","cv_privacy_reviewer","cv_qa"],
         "cvpen_ats_audit":["ats_specialist","fact_checker","cv_qa"],
         "customer_support_reply":["customer_success","policy_checker","brand_quality"],
         "payment_reconciliation":["finance_ops","payment_verifier","compliance_reviewer"],
@@ -100,60 +106,97 @@ def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
 
 def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], str, str], str],
                   registry: dict[str, Any] | None = None, memory_context: str = "",
-                  max_agents: int = 3, max_context_chars: int = 12000) -> str:
+                  max_agents: int = 3, max_context_chars: int = 12000,
+                  max_parallel_reviews: int = 8) -> str:
+    """Run a producer, bounded independent review swarm in parallel, then a finalizer."""
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
-    draft_output = ""
-    review_outputs: list[str] = []
-    final_output = ""
-    for agent in plan:
-        stage = agent["execution_stage"]
-        if stage == "produce":
-            instruction = (
-                "Produce the requested deliverable. Be specific, useful, and honest. "
-                "Separate verified facts from assumptions and unknowns. Do not claim external actions."
+    producer = next((agent for agent in plan if agent["execution_stage"] == "produce"), None)
+    reviewers = [agent for agent in plan if agent["execution_stage"] == "review"]
+    finalizer = next((agent for agent in plan if agent["execution_stage"] == "finalize"), None)
+
+    if producer is None:
+        raise RuntimeError("Swarm plan has no producer stage")
+
+    produce_instruction = (
+        "Produce the requested deliverable. Be specific, useful, and honest. "
+        "Separate verified facts from assumptions and unknowns. Do not claim external actions."
+    )
+    draft_output = call_agent(producer, produce_instruction, memory_context)
+    if not isinstance(draft_output, str) or not draft_output.strip():
+        raise RuntimeError(f"Agent returned empty output: {producer['id']}")
+    draft_output = draft_output.strip()[-max_context_chars:]
+
+    review_outputs: list[tuple[dict[str, Any], str]] = []
+    if reviewers:
+        review_instruction = (
+            "Independently audit the draft from your specialist perspective. Identify factual gaps, "
+            "missing requirements, risks, privacy issues, contradictions, accessibility or parsing "
+            "problems, and concrete corrections. Do not invent evidence. Do not repeat another "
+            "reviewer's work; return distinct, actionable findings. This is a review, not a rewrite "
+            "of facts unsupported by the source."
+        )
+        review_context = (
+            memory_context[-3000:] + "\n\nDRAFT TO REVIEW:\n" + draft_output
+        )[-max_context_chars:]
+        worker_count = max(1, min(len(reviewers), max_parallel_reviews))
+        results: dict[str, str] = {}
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=worker_count, thread_name_prefix="qudron-review"
+        ) as pool:
+            futures = {
+                agent["id"]: pool.submit(
+                    call_agent, agent, review_instruction, review_context
+                )
+                for agent in reviewers
+            }
+            for agent in reviewers:
+                response = futures[agent["id"]].result()
+                if not isinstance(response, str) or not response.strip():
+                    raise RuntimeError(f"Reviewer returned empty output: {agent['id']}")
+                results[agent["id"]] = response.strip()
+        per_review_chars = max(
+            500, min(2500, (max_context_chars - 4500) // max(1, len(reviewers)))
+        )
+        review_outputs = [
+            (agent, results[agent["id"]][-per_review_chars:])
+            for agent in reviewers
+        ]
+
+    if finalizer is not None:
+        final_instruction = (
+            "Create the final corrected deliverable using the original task, draft, and ALL "
+            "independent review notes. Resolve only issues supported by supplied information; "
+            "list unresolved checks and verification gates. Do not expose hidden reasoning or claim "
+            "tests/actions were performed unless evidenced."
+        )
+        review_sections = [
+            f"REVIEW — {agent['name']} ({agent['id']}):\n{note}"
+            for agent, note in review_outputs
+        ]
+        final_context = (
+            "RELEVANT MEMORY:\n" + memory_context[-1500:]
+            + "\n\nINITIAL DRAFT:\n" + draft_output[-2500:]
+            + "\n\nINDEPENDENT REVIEW NOTES:\n"
+            + ("\n\n".join(review_sections) if review_sections else "[no separate review stage]")
+        )[-max_context_chars:]
+        final_output = call_agent(finalizer, final_instruction, final_context)
+        if not isinstance(final_output, str) or not final_output.strip():
+            raise RuntimeError(f"Finalizer returned empty output: {finalizer['id']}")
+        final_output = final_output.strip()[-max_context_chars:]
+    else:
+        final_output = (
+            draft_output + (
+                "\n\nREVIEW NOTES:\n" + "\n\n".join(note for _, note in review_outputs)
+                if review_outputs else ""
             )
-            context = memory_context
-        elif stage == "review":
-            instruction = (
-                "Independently audit the draft. Identify factual gaps, missing requirements, risks, "
-                "privacy issues, contradictions, and concrete corrections. Do not invent evidence. "
-                "Avoid repeating earlier review notes; add distinct findings."
-            )
-            earlier_reviews = "\n\n".join(
-                f"REVIEW {index + 1}:\n{note}" for index, note in enumerate(review_outputs)
-            )
-            context = (
-                memory_context + "\n\nDRAFT TO REVIEW:\n" + draft_output
-                + ("\n\nEARLIER REVIEW NOTES:\n" + earlier_reviews if earlier_reviews else "")
-            )[-max_context_chars:]
-        else:
-            instruction = (
-                "Create the final corrected deliverable using the original task, draft, and ALL "
-                "independent review notes. Resolve only issues supported by supplied information; "
-                "list unresolved checks. Do not expose hidden reasoning or claim tests/actions unless evidenced."
-            )
-            all_reviews = "\n\n".join(
-                f"REVIEW {index + 1}:\n{note}" for index, note in enumerate(review_outputs)
-            )
-            combined = (
-                "DRAFT:\n" + draft_output + "\n\nALL REVIEWS:\n"
-                + (all_reviews or "[no separate review stage]")
-            )
-            context = (memory_context + "\n\n" + combined)[-max_context_chars:]
-        response = call_agent(agent, instruction, context)
-        if not isinstance(response, str) or not response.strip():
-            raise RuntimeError(f"Agent returned empty output: {agent['id']}")
-        response = response.strip()[-max_context_chars:]
-        if stage == "produce":
-            draft_output = response
-        elif stage == "review":
-            review_outputs.append(response)
-        else:
-            final_output = response
-    if not final_output:
-        final_output = "\n\n".join(review_outputs) or draft_output
+        )
+
     team_names = " → ".join(agent["name"] for agent in plan)
-    return f"## Qudron swarm\nTeam: {team_names}\nAgents invoked: {len(plan)}\n\n{final_output}"
+    return (
+        f"## Qudron swarm\nTeam: {team_names}\n"
+        f"Agents invoked: {len(plan)}\n"
+        f"Independent reviews: {len(review_outputs)}\n\n{final_output}"
+    )
 
 def redact_sensitive_text(value: str) -> str:
     """Best-effort redaction before operational text is persisted in shared memory."""

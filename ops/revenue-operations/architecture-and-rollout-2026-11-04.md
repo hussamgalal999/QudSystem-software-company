@@ -63,13 +63,15 @@ The existing CVPen source branch currently narrows the automated free checker to
 
 ### Do not plan a EGP 200k–1m business turnover around the personal Etisalat Cash wallet
 
-The current published e& Etisalat Cash terms found in the official e& Egypt page list:
+The currently published official e& Etisalat Cash terms list:
 - EGP 30,000 maximum daily transactions.
 - EGP 100,000 maximum monthly transactions.
-- EGP 100,000 maximum wallet balance.
-- EGP 50,000 maximum daily cash-in.
+- EGP 100,000 maximum wallet balance on the English product page; another official regional/product page has also displayed EGP 50,000, so confirm the current limit in the My Etisalat app or with e& before relying on wallet capacity.
+- EGP 50,000 maximum daily cash-in on the English product terms.
 
-The CBE's general individual mobile-wallet information also publishes EGP 30,000/day and EGP 100,000/month. A separate CBE announcement in 2023 raised limits for certain financial-inclusion accounts, prepaid cards and mobile banking categories, but that does not, by itself, prove that the e& consumer wallet has adopted the higher limits or offers a merchant settlement product. Treat the official e& wallet product terms as the wallet-specific limit unless Banque du Caire/e& confirms an updated product in writing.
+The CBE's official mobile-wallet page independently publishes EGP 30,000/day and EGP 100,000/month for individuals. That is the wallet-specific rule to use for planning today. Separate CBE announcements have raised limits for some financial-inclusion accounts, prepaid cards and mobile-banking categories. Those categories must not be assumed to change the published e& consumer-wallet caps, and do not establish a merchant-settlement product for this personal wallet.
+
+**Correction to the earlier research narrative:** a secondary source's report of a later EGP 300,000 financial-inclusion account limit is not evidence that an e& Etisalat Cash wallet itself can receive or settle EGP 300,000 of business receipts. The e& product page and CBE wallet page are more directly relevant and both currently show EGP 100,000 monthly for a consumer wallet. No business wallet/merchant tier was verified.
 
 **Operational conclusion:** do not route a target of EGP 200,000 or EGP 1,000,000 through the one personal consumer wallet. Do not split proceeds among family or other consumer wallets to evade limits. No wallet PIN, OTP or password should ever enter Qudron or ChatGPT.
 
@@ -105,6 +107,16 @@ Do not install Baileys, whatsapp-web.js or other unofficial WhatsApp-Web automat
 Activepieces' currently documented WhatsApp Business connector includes send text, send media and send template message actions. Its current listing reports zero triggers, so incoming messages should be received through the official Meta webhook/Chatwoot inbox, not assumed to arrive through that connector as an event source.
 
 Meta's pricing is per delivered message and varies by category and recipient country. The research snapshot for Egypt in late 2026 identified a marketing-template rate near US$0.0644 and utility/authentication rates near US$0.0036, but obtain the current Meta rate card at onboarding; pricing changes and intermediaries may add fees.
+
+ 
+### Primary-source corrections added on 4 November 2026
+
+- The Central Bank of Egypt's mobile-wallet page lists individual limits of EGP 30,000/day and EGP 100,000/month, and explicitly describes merchant payment and B2B functions in the broader wallet ecosystem. That does not turn a personal wallet into a merchant-settlement account. [CBE mobile-wallet page](https://www.cbe.org.eg/en/payment-systems-and-services/payment-services/mobile-wallet)
+- e& Egypt's own Etisalat Cash terms list EGP 30,000/day, EGP 100,000/month and a maximum wallet balance. Its English product page and the CBE page are the relevant references for this consumer wallet. [e& Etisalat Cash terms](https://www.etisalat.eg/StaticFiles/portal/etisalat/pages/services/etisalat_cash_en.html)
+- Paymob's official Egypt pricing page currently advertises 2.75% + EGP 3 for the Standard Plan and weekly settlement to a bank account. This is a published price snapshot, not proof that a given merchant applicant will be accepted or receive these exact terms. [Paymob Egypt pricing](https://paymob.eg/en/pricing)
+- TikTok's official Content Posting API guidance says unaudited clients are restricted to private/self-only visibility, and public Direct Post requires approval of the `video.publish` scope and audit. [TikTok Direct Post setup](https://developers.tiktok.com/docs/en/content-posting-api-get-started)
+- LinkedIn's official Posts API documentation identifies `w_member_social` for member posting and `w_organization_social` for organization posting with permitted Page roles. [LinkedIn Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api?view=li-lms-2026-09)
+- Postiz's pricing page lists hosted plans starting at US$29/month and says its self-hosted version is AGPL-3.0, with the operator responsible for server operation and social-app approvals. [Postiz pricing](https://postiz.com/pricing)
 
 ## Cross-platform publishing policy
 

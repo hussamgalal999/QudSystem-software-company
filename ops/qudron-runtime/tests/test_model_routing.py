@@ -62,6 +62,46 @@ class ModelRoutingTests(unittest.TestCase):
 
 
 
+
+    def test_cvpen_creation_fails_closed_without_per_order_budget(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "QUDRON_CVPEN_JOB_BUDGET_USD"):
+                worker.reserve_model_budget(
+                    "cv-order-1","cv_writer","balanced","cv-model",1000,
+                    task_type="cvpen_cv_creation"
+                )
+
+    def test_cvpen_per_order_budget_caps_parallel_agent_reservations(self):
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M":"1",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M":"1",
+            "QUDRON_CVPEN_JOB_BUDGET_USD":"0.003"
+        }, clear=True):
+            first = worker.reserve_model_budget(
+                "cv-order-2","cv_writer","balanced","cv-model",1000,
+                task_type="cvpen_cv_creation"
+            )
+            self.assertIsNotNone(first)
+            with self.assertRaisesRegex(RuntimeError, "CVPen per-order model budget reached"):
+                worker.reserve_model_budget(
+                    "cv-order-2","cv_grammar_editor","balanced","cv-model",1000,
+                    task_type="cvpen_cv_creation"
+                )
+            worker.release_model_budget_reservation(first)
+        with worker.connect_db() as db:
+            remaining = db.execute(
+                "SELECT COUNT(*) FROM llm_usage_reservations WHERE job_id='cv-order-2'"
+            ).fetchone()[0]
+        self.assertEqual(remaining, 0)
+
+    def test_non_cvpen_work_does_not_require_cvpen_specific_budget(self):
+        with patch.dict("os.environ", {}, clear=True):
+            reservation = worker.reserve_model_budget(
+                "research-job","research_analyst","balanced","research-model",500,
+                task_type="research"
+            )
+        self.assertIsNone(reservation)
+
     def test_budget_fails_closed_when_profile_pricing_is_missing(self):
         with patch.dict("os.environ", {
             "QUDRON_MONTHLY_MODEL_BUDGET_USD":"5"

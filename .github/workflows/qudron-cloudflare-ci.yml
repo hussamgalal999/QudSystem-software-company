@@ -2,13 +2,9 @@ name: Qudron Cloudflare pilot CI
 on:
   push:
     branches: [feature/qudron-cvpen-swarm-release-candidate]
-    paths:
-      - "ops/qudron-cloudflare/**"
-      - ".github/workflows/qudron-cloudflare-ci.yml"
+    paths: ["ops/qudron-cloudflare/**", ".github/workflows/qudron-cloudflare-ci.yml"]
   pull_request:
-    paths:
-      - "ops/qudron-cloudflare/**"
-      - ".github/workflows/qudron-cloudflare-ci.yml"
+    paths: ["ops/qudron-cloudflare/**", ".github/workflows/qudron-cloudflare-ci.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,8 +22,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: ops/qudron-cloudflare/package.json
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Type check

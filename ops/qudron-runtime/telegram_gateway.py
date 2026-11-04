@@ -85,7 +85,12 @@ class TelegramGateway:
         return result
 
     def telegram(self, method: str, payload: dict[str, Any] | None = None) -> Any:
-        return self._request(f"{TELEGRAM_API}/bot{self.token}/{method}", payload)
+        # Telegram long polling can wait up to 50 seconds; the HTTP client
+        # timeout must exceed that server-side wait or every poll will time out.
+        request_timeout = 65 if method == "getUpdates" else self.timeout
+        return self._request(
+            f"{TELEGRAM_API}/bot{self.token}/{method}", payload, timeout=request_timeout
+        )
 
     def qudron(self, path: str) -> Any:
         return self._request(

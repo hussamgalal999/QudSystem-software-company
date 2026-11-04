@@ -2,6 +2,8 @@
 
 This runbook takes the tested Docker runtime to a **private internal pilot**. It does not enable public customer intake, payments, WhatsApp, or social publishing.
 
+> **Hosting decision (4 November 2026):** Read [HOSTING_DECISION_2026-11-04.md](./HOSTING_DECISION_2026-11-04.md) before provisioning. A free OCI A1 VM can host Docker for a pilot but may be reclaimed when Oracle's seven-day idle thresholds are met, so it is not a production uptime guarantee. The preferred zero-monthly-cost route for event-driven availability is a separate Cloudflare Workers + Queues + D1 + R2 port; this is not a drop-in host for the existing Python containers. Neither route is deployed yet. Do not use a paid tier or upgrade billing without owner approval.
+
 ## 0. Release gate
 
 Before deployment, confirm:

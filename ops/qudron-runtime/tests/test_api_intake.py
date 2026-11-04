@@ -77,6 +77,71 @@ class AuthenticatedIntakeApiTests(unittest.TestCase):
         self.assertEqual(status, 422)
         self.assertIn("idempotency_key", body["error"])
 
+
+    def test_completed_result_is_available_only_through_authenticated_safe_endpoint(self):
+        status, body = self.post(self.payload(), "unit-test-token")
+        job_id = body["job"]["id"]
+        report_dir = Path(worker.REPORTS_DIR)
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report = report_dir / "safe-result.md"
+        report.write_text("# Verified draft\\nNo private data.\\n", encoding="utf-8")
+        with worker.connect_db() as db:
+            db.execute(
+                "UPDATE jobs SET status='completed',result_path=?,updated_at=? WHERE id=?",
+                (str(report), worker.iso_now(), job_id)
+            )
+
+        request = urllib.request.Request(
+            self.base + f"/jobs/{job_id}/result",
+            headers={"Authorization":"Bearer unit-test-token"}
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn("text/markdown", response.headers.get("Content-Type", ""))
+            self.assertIn("Verified draft", response.read().decode())
+
+        unauthenticated = urllib.request.Request(self.base + f"/jobs/{job_id}/result")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(unauthenticated, timeout=3)
+        self.assertEqual(ctx.exception.code, 401)
+
+    def test_result_endpoint_rejects_paths_outside_reports_directory(self):
+        status, body = self.post(self.payload(), "unit-test-token")
+        job_id = body["job"]["id"]
+        outside = Path(self.temp.name) / "outside.md"
+        outside.write_text("not a report", encoding="utf-8")
+        with worker.connect_db() as db:
+            db.execute(
+                "UPDATE jobs SET status='completed',result_path=? WHERE id=?",
+                (str(outside), job_id)
+            )
+        request = urllib.request.Request(
+            self.base + f"/jobs/{job_id}/result",
+            headers={"Authorization":"Bearer unit-test-token"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(ctx.exception.code, 404)
+
+    def test_pending_result_endpoint_returns_conflict_not_file_path(self):
+        status, body = self.post(self.payload(), "unit-test-token")
+        job_id = body["job"]["id"]
+        request = urllib.request.Request(
+            self.base + f"/jobs/{job_id}/result",
+            headers={"Authorization":"Bearer unit-test-token"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(ctx.exception.code, 409)
+
+        status_request = urllib.request.Request(
+            self.base + f"/jobs/{job_id}",
+            headers={"Authorization":"Bearer unit-test-token"}
+        )
+        with urllib.request.urlopen(status_request, timeout=3) as response:
+            payload = json.loads(response.read().decode())
+        self.assertNotIn("result_path", payload)
+
     def test_job_status_requires_authentication(self):
         status, body = self.post(self.payload(), "unit-test-token")
         job_id = body["job"]["id"]

@@ -97,7 +97,7 @@ class ModelRoutingTests(unittest.TestCase):
 
     def test_generic_model_calls_fail_closed_without_a_daily_or_monthly_budget(self):
         with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaisesRegex(RuntimeError, "daily or monthly model budget"):
+            with self.assertRaisesRegex(RuntimeError, "fail-closed until QUDRON_DAILY_MODEL_BUDGET_USD"):
                 worker.reserve_model_budget(
                     "research-job","research_analyst","balanced","research-model",500,
                     task_type="research"

@@ -53,6 +53,8 @@ SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true
 MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
 MAX_CVPEN_AGENTS = max(1, min(10, int(os.getenv("QUDRON_MAX_CVPEN_AGENTS", "10"))))
 MAX_PARALLEL_REVIEWS = max(1, min(8, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "8"))))
+MAX_CONCURRENT_MODEL_CALLS = max(1, min(32, int(os.getenv("QUDRON_MAX_CONCURRENT_MODEL_CALLS", "8"))))
+MODEL_CALL_SLOT_TIMEOUT_SECONDS = max(5, min(900, int(os.getenv("QUDRON_MODEL_CALL_SLOT_TIMEOUT_SECONDS", "120"))))
 AGENT_REGISTRY: dict[str, Any] = {}
 EXTERNAL_API_TASK_TYPES = {
     "research", "social_post_draft", "video_script", "translation",
@@ -143,6 +145,12 @@ def init_db() -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_llm_reservations_created
           ON llm_usage_reservations(created_at);
+        CREATE TABLE IF NOT EXISTS model_call_slots (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+          lease_until TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_model_call_slots_lease
+          ON model_call_slots(lease_until);
         """)
 
 def next_local_occurrence(item: dict[str, Any], after_utc: dt.datetime) -> dt.datetime:
@@ -531,6 +539,43 @@ def configured_budget(name: str) -> float | None:
     return value
 
 
+def acquire_model_call_slot(job_id: str, agent_id: str) -> str:
+    """Acquire a cross-worker bounded provider-call slot from the shared SQLite DB."""
+    deadline = time.monotonic() + MODEL_CALL_SLOT_TIMEOUT_SECONDS
+    slot_ttl_seconds = max(300, LLM_TIMEOUT * 3)
+    slot_id = uuid.uuid4().hex
+    while True:
+        now = utc_now()
+        stamp = now.isoformat(timespec="seconds")
+        lease_until = (now + dt.timedelta(seconds=slot_ttl_seconds)).isoformat(timespec="seconds")
+        with connect_db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM model_call_slots WHERE lease_until<=?", (stamp,))
+            active = db.execute("SELECT COUNT(*) FROM model_call_slots").fetchone()[0]
+            if int(active) < MAX_CONCURRENT_MODEL_CALLS:
+                db.execute(
+                    """INSERT INTO model_call_slots(id,job_id,agent_id,lease_until,created_at)
+                    VALUES(?,?,?,?,?)""",
+                    (slot_id, job_id, agent_id, lease_until, stamp),
+                )
+                db.commit()
+                return slot_id
+            db.rollback()
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"Qudron model-call concurrency limit ({MAX_CONCURRENT_MODEL_CALLS}) "
+                f"remained full for {MODEL_CALL_SLOT_TIMEOUT_SECONDS}s."
+            )
+        time.sleep(0.2)
+
+
+def release_model_call_slot(slot_id: str | None) -> None:
+    if not slot_id:
+        return
+    with connect_db() as db:
+        db.execute("DELETE FROM model_call_slots WHERE id=?", (slot_id,))
+
+
 def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
                          payload_bytes: int, task_type: str | None = None) -> str | None:
     daily_budget = configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD")
@@ -775,23 +820,29 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload),
         str(job["task_type"])
     )
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    request = urllib.request.Request(
-        f"{base_url}/chat/completions", data=payload, headers=headers, method="POST"
-    )
+    slot_id = None
     try:
-        with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        slot_id = acquire_model_call_slot(
+            str(job["id"]), str(agent.get("id", "unknown"))
+        )
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        request = urllib.request.Request(
+            f"{base_url}/chat/completions", data=payload, headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:1500]
+            raise RuntimeError(f"LLM HTTP {exc.code}: {detail}") from exc
         record_model_usage(
             str(job["id"]), str(agent.get("id", "unknown")), profile, model, data, reservation_id
         )
         reservation_id = None
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1500]
-        raise RuntimeError(f"LLM HTTP {exc.code}: {detail}") from exc
     finally:
+        release_model_call_slot(slot_id)
         release_model_budget_reservation(reservation_id)
     choices = data.get("choices") or []
     answer = choices[0].get("message", {}).get("content") if choices else None
@@ -954,6 +1005,7 @@ def status_snapshot() -> dict[str, Any]:
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
         "max_agents_per_cvpen_job": MAX_CVPEN_AGENTS if SWARM_ENABLED else 1,
         "max_parallel_reviews": MAX_PARALLEL_REVIEWS if SWARM_ENABLED else 1,
+        "max_concurrent_model_calls": MAX_CONCURRENT_MODEL_CALLS,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
         "registered_teams": len(AGENT_REGISTRY.get("teams", {})),
         "teams": sorted((AGENT_REGISTRY.get("teams") or {}).keys()),

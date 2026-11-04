@@ -17,18 +17,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install, verify and deploy (skip safely without credentials)
+      - name: Install, verify, deploy and configure runtime secrets
         working-directory: ops/qudron-cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUDRON_API_TOKEN: ${{ secrets.QUDRON_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          TELEGRAM_OWNER_CHAT_IDS: ${{ secrets.TELEGRAM_OWNER_CHAT_IDS }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "Cloudflare credentials are not configured; deployment safely skipped."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$QUDRON_API_TOKEN" ]; then
+            echo "Required Cloudflare deployment secrets are not configured; deployment safely skipped."
             exit 0
+          fi
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && { [ -z "$TELEGRAM_WEBHOOK_SECRET" ] || [ -z "$TELEGRAM_OWNER_CHAT_IDS" ]; }; then
+            echo "Telegram bot token is present but webhook secret or owner allowlist is missing."
+            exit 1
           fi
           npm install --no-audit --no-fund
           npm run typecheck
           npm test
           npm run build
           npx wrangler deploy
+          printf '%s' "$QUDRON_API_TOKEN" | npx wrangler secret put QUDRON_API_TOKEN
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            printf '%s' "$TELEGRAM_BOT_TOKEN" | npx wrangler secret put TELEGRAM_BOT_TOKEN
+            printf '%s' "$TELEGRAM_WEBHOOK_SECRET" | npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+            printf '%s' "$TELEGRAM_OWNER_CHAT_IDS" | npx wrangler secret put TELEGRAM_OWNER_CHAT_IDS
+          fi

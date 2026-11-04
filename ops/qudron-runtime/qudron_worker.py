@@ -595,6 +595,9 @@ def ensure_api_token() -> str:
         os.replace(temp, API_TOKEN_FILE)
         try:
             os.chown(API_TOKEN_FILE, 0, 10001)
+        except OSError:
+            pass
+        try:
             os.chmod(API_TOKEN_FILE, 0o640)
         except OSError:
             pass
@@ -612,6 +615,9 @@ def ensure_api_token() -> str:
         raise RuntimeError("Persisted Qudron API token is too short; rotate it safely.")
     try:
         os.chown(API_TOKEN_FILE, 0, 10001)
+    except OSError:
+        pass
+    try:
         os.chmod(API_TOKEN_FILE, 0o640)
     except OSError:
         pass

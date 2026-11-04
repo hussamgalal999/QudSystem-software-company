@@ -64,6 +64,70 @@
       "task_type": "research",
       "title": "Weekly deep strategic reasoning and portfolio review",
       "prompt": "Conduct a deep weekly strategy review for QudSystem across CVPen, custom software and AI automation services, mini-apps, QudSchool/Qudemy, and Vision Guard Systems. Prioritize revenue potential, customer segment precision, competitor positioning, differentiation, delivery economics, brand trust, and execution capacity. For CVPen, build a realistic path toward EGP 100,000-200,000 monthly revenue using explicit price x volume x conversion assumptions, funnel math, channel experiments, and capacity constraints; do not promise results or fabricate competitor intelligence. Include long-horizon strategic options, short-horizon next-week actions, downside scenarios, and a decision log of assumptions to validate."
+    },
+    {
+      "id": "vision-guard-trust-content",
+      "every_minutes": 1440,
+      "role": "Brand Strategist & Customer Education",
+      "task_type": "social_post_draft",
+      "title": "Vision Guard Systems trust-led customer education",
+      "prompt": "Create one Egyptian Arabic educational post for Vision Guard Systems about CCTV, access control, installation quality, maintenance, camera placement, or choosing a security solution. Use reassurance and clarity, not fear. Include a useful tip, a transparent service CTA, and what proof (real installation photo, warranty terms, technician credentials) should be added before publication. Draft only."
+    },
+    {
+      "id": "qudschool-learning-content",
+      "every_minutes": 1440,
+      "role": "Education Product & Curriculum Team",
+      "task_type": "social_post_draft",
+      "title": "QudSchool daily learning idea",
+      "prompt": "Create a short Egyptian Arabic post or parent-facing learning idea for QudSchool, an engaging coding/AI/design learning experience for children. Include age-appropriate learning outcome, simple activity, parent benefit, and a truthful CTA. Do not invent active enrollment, curriculum completion, student outcomes, or platform capabilities."
+    },
+    {
+      "id": "qudcopy-product-review",
+      "every_minutes": 4320,
+      "role": "Product Management & UX Research",
+      "task_type": "product_review",
+      "title": "QudCopy product and customer value review",
+      "prompt": "Review QudCopy as a product that helps turn visual references into front-end implementation workflows. Identify one high-value customer segment, 3 workflow improvements, measurable acceptance criteria, risks, and a low-cost experiment. Distinguish product facts from assumptions; do not claim current user analytics are available."
+    },
+    {
+      "id": "qudemy-curriculum-growth",
+      "every_minutes": 10080,
+      "role": "Learning Experience & Partnerships Team",
+      "task_type": "strategy_review",
+      "title": "Qudemy curriculum and partnership strategy",
+      "prompt": "Develop a practical weekly curriculum and partnership strategy for Qudemy/QudAcademy in Egypt under a near-zero operating budget. Prioritize employable AI, software, cybersecurity, and digital skills; define one free cohort-to-paid-advanced pathway, trainer QA, learner projects, transparent certificate wording, and partner value. No invented partnerships or student outcomes."
+    },
+    {
+      "id": "qudsystem-engineering-quality",
+      "every_minutes": 10080,
+      "role": "Engineering, Reliability & QA Team",
+      "task_type": "engineering_review",
+      "title": "QudSystem engineering and reliability backlog",
+      "prompt": "Create a prioritized engineering quality review for QudSystem's products and service delivery. Cover security basics, dependency risk, monitoring, backups, accessibility, performance, regression tests, and deployment safety. Provide acceptance criteria and rollback notes. Do not claim to have inspected repositories or deployed systems unless files/logs are supplied."
+    },
+    {
+      "id": "qudsystem-customer-experience",
+      "every_minutes": 1440,
+      "role": "Customer Success & Policy Review",
+      "task_type": "customer_support_reply",
+      "title": "QudSystem service FAQ and objection handling",
+      "prompt": "Create one useful customer FAQ/objection response for QudSystem services. Explain scope, process, required customer inputs, delivery expectations, revision boundaries, and what is not guaranteed. Use Egyptian Arabic. Avoid fabricated prices, timelines, warranty claims, or portfolio proof; flag details that need business-owner approval."
+    },
+    {
+      "id": "portfolio-metrics-review",
+      "every_minutes": 1440,
+      "role": "Data Analyst & Strategy Council",
+      "task_type": "product_review",
+      "title": "QudSystem portfolio KPI and revenue review",
+      "prompt": "Create a measurement plan for QudSystem services with priority on CVPen revenue and fulfillment. Define daily metrics for qualified inquiries, paid orders, average order value, conversion, delivery time, revision rate, refunds, contribution margin, and acquisition cost. No actual results are available unless supplied; present formulas and data collection requirements, not invented numbers."
+    },
+    {
+      "id": "weekly-risk-privacy-review",
+      "every_minutes": 10080,
+      "role": "Privacy, Compliance & Reliability Council",
+      "task_type": "engineering_review",
+      "title": "Weekly QudSystem privacy, payment, and reliability review",
+      "prompt": "Review the design risks for a multi-service AI business: customer data minimization, tenant isolation, retention, audit logging, model provider data handling, webhook verification, duplicate payment callbacks, secrets management, backup/restore, and incident response. Provide specific controls and test cases. This is a design review, not a compliance certification."
     }
   ]
 }

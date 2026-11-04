@@ -367,6 +367,15 @@ def retrieve_memory_context(project: str, limit: int = 10) -> str:
     return "\\n".join(lines)[:8000]
 
 
+def any_model_profile_configured() -> bool:
+    for prefix in ("LLM_FAST", "LLM_BALANCED", "LLM_REASONING"):
+        base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).strip()
+        model = (os.getenv(f"{prefix}_MODEL") or LLM_MODEL).strip()
+        if base_url and model:
+            return True
+    return False
+
+
 def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
              prior_context: str, memory_context: str) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
@@ -566,7 +575,7 @@ def status_snapshot() -> dict[str, Any]:
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
         "counts": counts, "latest_jobs": [dict(r) for r in latest],
-        "llm_configured": bool(LLM_BASE_URL and LLM_MODEL),
+        "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
@@ -686,8 +695,8 @@ def run() -> None:
                  len(AGENT_REGISTRY.get("agents", [])), len(AGENT_REGISTRY.get("teams", {})))
     logging.info("Starting Qudron runtime: %s", INSTANCE_ID)
     logging.info("DB=%s reports=%s workers=%s", DB_PATH, REPORTS_DIR, WORKERS)
-    if not LLM_BASE_URL or not LLM_MODEL:
-        logging.warning("LLM is not configured. Jobs will retry; no fake outputs are generated.")
+    if not any_model_profile_configured():
+        logging.warning("No LLM model profile is configured. Jobs will retry; no fake outputs are generated.")
 
     def handle_signal(signum: int, _frame: Any) -> None:
         logging.warning("Signal %s received; stopping gracefully.", signum)

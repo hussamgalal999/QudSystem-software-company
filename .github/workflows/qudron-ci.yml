@@ -1,0 +1,24 @@
+name: Qudron Runtime Checks
+on:
+  pull_request:
+    paths:
+      - 'ops/qudron-runtime/**'
+      - '.github/workflows/qudron-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/qudron-runtime/**'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python worker
+        run: python -m py_compile ops/qudron-runtime/qudron_worker.py
+      - name: Validate recurring schedule JSON
+        run: python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
+      - name: Build container
+        run: docker build -t qudron-runtime:ci ops/qudron-runtime

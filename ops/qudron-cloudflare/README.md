@@ -7,7 +7,7 @@ Serverless pilot adapter, separate from the Docker/Python runtime. It does not r
 - Workflows: durable execution, checkpointed steps, retries and status retrieval.
 - Workers AI binding: initial generation plus a separate QA inference.
 - SQLite-backed Durable Object: idempotent admission ledger and strict five-task/day internal pilot cap.
-- Telegram webhook: owner-only task submission and status checks.
+- Telegram webhook: owner-only research/draft task submission, status checks and automatic completion delivery to allowlisted owner chats.
 - No VPS, Docker daemon or always-on process is required for this pilot.
 
 ## Free-plan envelope
@@ -26,7 +26,7 @@ References:
 - Only research and draft task kinds are accepted.
 - Intake rejects common PII/credential patterns. This is a guardrail, not complete DLP.
 - Use synthetic/public prompts only. No CVs, customer records, credentials, financial data or confidential files.
-- Results are not automatically sent to customers or published. Owner review is required.
+- Reviewed results can be delivered automatically to explicitly allowlisted owner Telegram chats when bot credentials are configured. They are never sent to customers or published automatically; owner review is required.
 - Workflow inputs and outputs are persisted by Cloudflare Workflows; do not submit sensitive content.
 
 ## Bootstrap and deployment
@@ -42,7 +42,7 @@ References:
 - GET /health — liveness.
 - POST /api/tasks — authenticated JSON with kind research or draft, title and prompt.
 - GET /api/tasks/{taskId} — authenticated Workflow status and result.
-- POST /telegram/webhook — Telegram webhook guarded by secret header and owner allowlist.
+- POST /telegram/webhook — Telegram webhook guarded by secret header and owner allowlist. Telegram commands: /task or /research for research, /draft for content drafts, and /status <task-id>.
 
 ## Not enabled
 No Cloudflare account deployment, API token, Workers AI inference, Telegram webhook or bot credentials are claimed to be configured by this commit. No customer intake, CVPen, payment verification, file uploads, WhatsApp, voice, autonomous external publishing or financial actions are enabled.

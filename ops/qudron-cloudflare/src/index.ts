@@ -1,5 +1,5 @@
 import type{Env,TaskPayload}from"./workflow";
-import{validateIntake,normalizeIdempotencyKey}from"./policy";
+import{validateIntake,normalizeIdempotencyKey,isAuthorizedTelegramOwner}from"./policy";
 export{QudronTaskWorkflow}from"./workflow";
 export{TaskAdmission}from"./admission";
 const HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
@@ -27,10 +27,10 @@ async function createTask(env:Env,kind:"research"|"draft",title:string,prompt:st
 async function handleTelegram(request:Request,env:Env){
  if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||request.headers.get("x-telegram-bot-api-secret-token")!==env.TELEGRAM_WEBHOOK_SECRET)return json({error:"unauthorized"},401);
  const update=await request.json()as Record<string,any>,message=update.message,chatId=String(message?.chat?.id??"");
- if(!chatId||!owners(env).has(chatId))return json({ok:true,ignored:true});
- const text=typeof message?.text==="string"?message.text.trim():"",parts=text.split(/\s+/),command=(parts.shift()||"").split("@")[0].toLowerCase(),argument=parts.join(" ");
+ if(!isAuthorizedTelegramOwner(message,owners(env)))return json({ok:true,ignored:true});
+ const text=typeof message?.text==="string"?message.text.trim():"",parts=text.split(/\\s+/),command=(parts.shift()||"").split("@")[0].toLowerCase(),argument=parts.join(" ");
  let reply="Unknown command. Send /help.";
- if(command==="/start"||command==="/help")reply="Qudron Cloud pilot\n/status <task-id> — task status\n/task <request> — internal research task\nOnly synthetic/public information is allowed. External publishing and customer messaging are disabled.";
+ if(command==="/start"||command==="/help")reply="Qudron Cloud pilot\\n/status <task-id> — task status\\n/task <request> — internal research task\\nOnly synthetic/public information is allowed. External publishing and customer messaging are disabled.";
  else if(command==="/task"||command==="/research"||command==="/draft"){
   const kind=command==="/draft"?"draft":"research",title=kind==="draft"?"Telegram owner draft task":"Telegram owner research task";
   const checked=validateIntake({kind,title,prompt:argument});
@@ -41,7 +41,7 @@ async function handleTelegram(request:Request,env:Env){
     else reply="Task "+(created.created?"accepted":"already received")+".\\nID: "+created.instance.id+"\\nYou will receive the reviewed result here when complete.";}}
  }else if(command==="/status"){
   if(!argument||argument.length>100||!/^[A-Za-z0-9._:-]+$/.test(argument))reply="Usage: /status <task-id>";
-  else{try{const instance=await env.QUDRON_WORKFLOW.get(argument),s=await instance.status();reply="Task "+argument+"\nStatus: "+s.status+(s.output?"\nResult available in authenticated API.":"");}catch{reply="Task not found.";}}
+  else{try{const instance=await env.QUDRON_WORKFLOW.get(argument),s=await instance.status();reply="Task "+argument+"\\nStatus: "+s.status+(s.output?"\\nResult available in authenticated API.":"");}catch{reply="Task not found.";}}
  }
  await fetch("https://api.telegram.org/bot"+env.TELEGRAM_BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:chatId,text:reply.slice(0,3900),disable_web_page_preview:true})});
  return json({ok:true});
@@ -59,7 +59,7 @@ export default{async fetch(request:Request,env:Env):Promise<Response>{
   if(created.limited)return json({error:"daily_task_limit_reached",reset:"00:00 UTC"},429);
   return json({taskId:created.instance.id,created:created.created,status:(await created.instance.status()).status},created.created?202:200);
  }
- const match=url.pathname.match(/^\/api\/tasks\/([A-Za-z0-9._:-]{1,100})$/);
+ const match=url.pathname.match(/^\\/api\\/tasks\\/([A-Za-z0-9._:-]{1,100})$/);
  if(request.method==="GET"&&match){try{const instance=await env.QUDRON_WORKFLOW.get(match[1]),s=await instance.status();return json({taskId:match[1],...s});}catch{return json({error:"task_not_found"},404);}}
  return json({error:"not_found"},404);
 }};

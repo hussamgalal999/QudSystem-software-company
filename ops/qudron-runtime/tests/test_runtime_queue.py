@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import timedelta
 from pathlib import Path
 
@@ -70,6 +71,102 @@ class RuntimeQueueTests(unittest.TestCase):
             count = db.execute("SELECT COUNT(*) FROM jobs WHERE job_key LIKE 'schedule:one:%'").fetchone()[0]
         self.assertEqual(count, 1)
 
+
+
+    def test_next_local_occurrence_respects_cairo_wall_clock_time(self):
+        item = {
+            "id":"local-daily", "timezone":"Africa/Cairo",
+            "at_local":"09:00", "every_days":1
+        }
+        after = worker.dt.datetime.fromisoformat("2026-11-04T06:30:00+00:00")
+        next_run = worker.next_local_occurrence(item, after)
+        self.assertEqual(next_run.isoformat(), "2026-11-04T07:00:00+00:00")
+
+    def test_weekday_schedule_skips_to_next_configured_local_weekday(self):
+        item = {
+            "id":"monday-review", "timezone":"Africa/Cairo",
+            "at_local":"09:00", "weekdays":[0]
+        }
+        after = worker.dt.datetime.fromisoformat("2026-11-08T08:00:00+00:00")
+        next_run = worker.next_local_occurrence(item, after)
+        self.assertEqual(next_run.isoformat(), "2026-11-09T07:00:00+00:00")
+
+    def test_every_three_days_uses_explicit_local_anchor_date(self):
+        item = {
+            "id":"three-day", "timezone":"Africa/Cairo",
+            "at_local":"16:00", "every_days":3, "anchor_date":"2026-11-04"
+        }
+        after = worker.dt.datetime.fromisoformat("2026-11-06T15:00:00+00:00")
+        next_run = worker.next_local_occurrence(item, after)
+        self.assertEqual(next_run.isoformat(), "2026-11-07T14:00:00+00:00")
+
+    def test_local_schedule_initializes_next_slot_and_enqueues_once_when_due(self):
+        worker.SCHEDULE_PATH.write_text(json.dumps({
+            "timezone":"Africa/Cairo",
+            "schedules":[{
+                "id":"local-daily","at_local":"09:00","every_days":1,
+                "role":"Tester","task_type":"research","title":"Local daily",
+                "prompt":"Run the local daily task"
+            }]
+        }), encoding="utf-8")
+        with patch.object(worker, "utc_now", return_value=worker.dt.datetime.fromisoformat("2026-11-04T06:00:00+00:00")):
+            worker.enqueue_due_schedules()
+        with worker.connect_db() as db:
+            state = db.execute("SELECT next_run_at FROM schedule_state WHERE schedule_id='local-daily'").fetchone()
+            count_before = db.execute("SELECT COUNT(*) FROM jobs WHERE job_key LIKE 'schedule:local-daily:%'").fetchone()[0]
+        self.assertEqual(state["next_run_at"], "2026-11-04T07:00:00+00:00")
+        self.assertEqual(count_before, 0)
+
+        due_now = worker.dt.datetime.fromisoformat("2026-11-04T07:15:00+00:00")
+        with patch.object(worker, "utc_now", return_value=due_now):
+            worker.enqueue_due_schedules()
+            worker.enqueue_due_schedules()
+        with worker.connect_db() as db:
+            rows = db.execute(
+                "SELECT job_key FROM jobs WHERE job_key LIKE 'schedule:local-daily:%'"
+            ).fetchall()
+            state = db.execute("SELECT next_run_at FROM schedule_state WHERE schedule_id='local-daily'").fetchone()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_key"], "schedule:local-daily:20261104T0900")
+        self.assertEqual(state["next_run_at"], "2026-11-05T07:00:00+00:00")
+
+    def test_local_schedule_catches_up_only_latest_missed_slot_after_downtime(self):
+        worker.SCHEDULE_PATH.write_text(json.dumps({
+            "timezone":"Africa/Cairo",
+            "schedules":[{
+                "id":"local-catchup","at_local":"09:00","every_days":1,
+                "role":"Tester","task_type":"research","title":"Catch-up task",
+                "prompt":"Recover latest missed daily task"
+            }]
+        }), encoding="utf-8")
+        with worker.connect_db() as db:
+            db.execute(
+                "INSERT INTO schedule_state(schedule_id,next_run_at,last_enqueued_at) VALUES(?,?,NULL)",
+                ("local-catchup","2026-11-01T07:00:00+00:00")
+            )
+        now = worker.dt.datetime.fromisoformat("2026-11-04T08:30:00+00:00")
+        with patch.object(worker, "utc_now", return_value=now):
+            worker.enqueue_due_schedules()
+            worker.enqueue_due_schedules()
+        with worker.connect_db() as db:
+            rows = db.execute(
+                "SELECT job_key FROM jobs WHERE job_key LIKE 'schedule:local-catchup:%'"
+            ).fetchall()
+            state = db.execute("SELECT next_run_at FROM schedule_state WHERE schedule_id='local-catchup'").fetchone()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_key"], "schedule:local-catchup:20261104T0900")
+        self.assertEqual(state["next_run_at"], "2026-11-05T07:00:00+00:00")
+
+    def test_invalid_local_time_and_timezone_are_rejected(self):
+        worker.SCHEDULE_PATH.write_text(json.dumps({
+            "timezone":"No/Such_Zone",
+            "schedules":[{
+                "id":"invalid","at_local":"25:99",
+                "role":"Tester","task_type":"research","title":"Invalid",
+                "prompt":"Should not load"
+            }]
+        }), encoding="utf-8")
+        self.assertEqual(worker.load_schedules(), [])
 
     def test_every_configured_schedule_uses_a_supported_task_type(self):
         schedule_path = Path(__file__).resolve().parents[1] / "schedule.json"

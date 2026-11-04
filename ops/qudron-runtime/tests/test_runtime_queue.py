@@ -227,6 +227,17 @@ class RuntimeQueueTests(unittest.TestCase):
         self.assertEqual(row["status"], "completed")
         self.assertEqual(row["result_path"], "/tmp/owned-result.md")
 
+
+    def test_runtime_status_reports_routine_and_cvpen_swarm_caps(self):
+        with patch.object(worker, "SWARM_ENABLED", True), \
+             patch.object(worker, "MAX_SWARM_AGENTS", 5), \
+             patch.object(worker, "MAX_CVPEN_AGENTS", 10), \
+             patch.object(worker, "MAX_PARALLEL_REVIEWS", 8):
+            snapshot = worker.status_snapshot()
+        self.assertEqual(snapshot["max_agents_per_task"], 5)
+        self.assertEqual(snapshot["max_agents_per_cvpen_job"], 10)
+        self.assertEqual(snapshot["max_parallel_reviews"], 8)
+
     def test_sqlite_context_manager_closes_connection(self):
         with worker.connect_db() as db:
             db.execute("SELECT 1").fetchone()

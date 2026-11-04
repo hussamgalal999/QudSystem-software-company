@@ -31,13 +31,14 @@ async function handleTelegram(request:Request,env:Env){
  const text=typeof message?.text==="string"?message.text.trim():"",parts=text.split(/\s+/),command=(parts.shift()||"").split("@")[0].toLowerCase(),argument=parts.join(" ");
  let reply="Unknown command. Send /help.";
  if(command==="/start"||command==="/help")reply="Qudron Cloud pilot\n/status <task-id> — task status\n/task <request> — internal research task\nOnly synthetic/public information is allowed. External publishing and customer messaging are disabled.";
- else if(command==="/task"){
-  const checked=validateIntake({kind:"research",title:"Telegram owner research task",prompt:argument});
+ else if(command==="/task"||command==="/research"||command==="/draft"){
+  const kind=command==="/draft"?"draft":"research",title=kind==="draft"?"Telegram owner draft task":"Telegram owner research task";
+  const checked=validateIntake({kind,title,prompt:argument});
   if(!checked.ok)reply=checked.error;
   else{const n=Number(update.update_id);if(!Number.isSafeInteger(n)||n<1)reply="Invalid Telegram update ID; task was not submitted.";
-   else{const id=await stableId("tg",String(n)),created=await createTask(env,"research","Telegram owner research task",checked.task.prompt,id,"telegram:"+n);
+   else{const id=await stableId("tg",String(n)),created=await createTask(env,kind,title,checked.task.prompt,id,"telegram:"+n);
     if(created.limited)reply="Daily internal task allowance reached. The limit resets at 00:00 UTC.";
-    else reply="Task "+(created.created?"accepted":"already received")+".\nID: "+created.instance.id+"\nUse /status "+created.instance.id;}}
+    else reply="Task "+(created.created?"accepted":"already received")+".\\nID: "+created.instance.id+"\\nYou will receive the reviewed result here when complete.";}}
  }else if(command==="/status"){
   if(!argument||argument.length>100||!/^[A-Za-z0-9._:-]+$/.test(argument))reply="Usage: /status <task-id>";
   else{try{const instance=await env.QUDRON_WORKFLOW.get(argument),s=await instance.status();reply="Task "+argument+"\nStatus: "+s.status+(s.output?"\nResult available in authenticated API.":"");}catch{reply="Task not found.";}}

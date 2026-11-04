@@ -35,6 +35,8 @@ Required values:
 - `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` (or the selected tier profile).
 - `QUDRON_API_TOKEN`: generate a cryptographically random secret of at least 32 bytes.
 - Exact input and output prices for every enabled model profile.
+- At least one positive daily or monthly USD model budget. Model calls fail closed by default when no cap is configured (`QUDRON_REQUIRE_MODEL_BUDGET=true`).
+- Provider-side hard spending limits as a second independent control; local estimates are conservative safeguards, not invoice guarantees.
 - Conservative daily and monthly model budgets.
 - `QUDRON_CVPEN_JOB_BUDGET_USD` only when CVPen generation is being tested; keep CVPen customer workflows disabled during the internal pilot.
 

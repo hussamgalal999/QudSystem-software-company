@@ -238,6 +238,39 @@ class RuntimeQueueTests(unittest.TestCase):
         self.assertEqual(snapshot["max_agents_per_cvpen_job"], 10)
         self.assertEqual(snapshot["max_parallel_reviews"], 8)
 
+
+    def test_global_model_call_slots_enforce_shared_concurrency_cap(self):
+        with patch.object(worker, "MAX_CONCURRENT_MODEL_CALLS", 2), \
+             patch.object(worker, "MODEL_CALL_SLOT_TIMEOUT_SECONDS", 1):
+            first = worker.acquire_model_call_slot("job-a","agent-a")
+            second = worker.acquire_model_call_slot("job-b","agent-b")
+            with self.assertRaises(TimeoutError):
+                worker.acquire_model_call_slot("job-c","agent-c")
+            worker.release_model_call_slot(first)
+            third = worker.acquire_model_call_slot("job-c","agent-c")
+            with worker.connect_db() as db:
+                active = db.execute("SELECT COUNT(*) FROM model_call_slots").fetchone()[0]
+            self.assertEqual(active, 2)
+            worker.release_model_call_slot(second)
+            worker.release_model_call_slot(third)
+        with worker.connect_db() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM model_call_slots").fetchone()[0], 0)
+
+    def test_stale_global_model_call_slots_are_reclaimed(self):
+        stale = (worker.utc_now()-timedelta(minutes=30)).isoformat(timespec="seconds")
+        with worker.connect_db() as db:
+            db.execute(
+                "INSERT INTO model_call_slots(id,job_id,agent_id,lease_until,created_at) VALUES(?,?,?,?,?)",
+                ("expired-slot","old-job","old-agent",stale,stale)
+            )
+        with patch.object(worker, "MAX_CONCURRENT_MODEL_CALLS", 1):
+            slot = worker.acquire_model_call_slot("new-job","new-agent")
+            with worker.connect_db() as db:
+                rows = db.execute("SELECT id FROM model_call_slots").fetchall()
+            self.assertEqual([row["id"] for row in rows], [slot])
+            worker.release_model_call_slot(slot)
+
+
     def test_sqlite_context_manager_closes_connection(self):
         with worker.connect_db() as db:
             db.execute("SELECT 1").fetchone()

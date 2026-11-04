@@ -70,6 +70,16 @@ class RuntimeQueueTests(unittest.TestCase):
             count = db.execute("SELECT COUNT(*) FROM jobs WHERE job_key LIKE 'schedule:one:%'").fetchone()[0]
         self.assertEqual(count, 1)
 
+
+    def test_every_configured_schedule_uses_a_supported_task_type(self):
+        schedule_path = Path(__file__).resolve().parents[1] / "schedule.json"
+        schedules = json.loads(schedule_path.read_text(encoding="utf-8"))["schedules"]
+        unsupported = sorted({
+            item.get("task_type") for item in schedules
+            if item.get("task_type") not in worker.ALLOWED_TASK_TYPES
+        })
+        self.assertEqual(unsupported, [])
+
     def test_memory_is_project_scoped_and_redacted(self):
         worker.remember_event("cvpen","short","job_event",
             "Customer a@example.com called 01012345678. CVPen task complete.")

@@ -21,6 +21,8 @@ The connected Dot is the visible command surface for Qudron, not a second execut
 
 The connected Dot exposes:
 - Qudron service state, registered agents/teams, queue counts and queue capacity.
+- Model-provider candidate catalogue plus a live local gateway model-list check (not a paid inference test).
+- Search across the capability registry for tools, MCP servers, workflows, repositories and research.
 - Model call/token usage and known-cost totals.
 - Job status and completed Markdown report retrieval.
 - An approval-gated tool to submit one supported internal research, analysis, or draft job.

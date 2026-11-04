@@ -11,14 +11,24 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile Python worker
-        run: python -m py_compile ops/qudron-runtime/qudron_worker.py
-      - name: Validate recurring schedule JSON
-        run: python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
+      - name: Compile runtime modules
+        run: python -m py_compile ops/qudron-runtime/*.py
+      - name: Validate runtime JSON configuration
+        run: |
+          python -m json.tool ops/qudron-runtime/schedule.json > /dev/null
+          python -m json.tool ops/qudron-runtime/agent_registry.json > /dev/null
+          python -m json.tool ops/qudron-runtime/service_workflows.json > /dev/null
+      - name: Run unit and safety tests
+        working-directory: ops/qudron-runtime
+        run: python -m unittest discover -s tests -v
       - name: Build container
         run: docker build -t qudron-runtime:ci ops/qudron-runtime

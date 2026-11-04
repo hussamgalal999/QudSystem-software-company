@@ -15,12 +15,14 @@ services:
       FREELM_KEYLESS: ${FREELM_KEYLESS:-auto}
       LLM_API_KEY_FILE: /run/freellm/server.key
       LLM_FAST_API_KEY_FILE: /run/freellm/server.key
+      QUDRON_API_TOKEN_FILE: /run/qudron-auth/api_token
     ports: ["127.0.0.1:8765:8765"]
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
       - ./logs:/app/logs
       - freellm-state:/run/freellm:ro
+      - qudron-auth:/run/qudron-auth
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
       interval: 30s
@@ -46,9 +48,9 @@ services:
       qudron:
         condition: service_healthy
 
-  # Optional free-tier model router. No host port is published: only services
-  # on this Compose network can reach it. It is not enabled unless --profile
-  # free-ai is selected.
+  # Private OpenAI-compatible model router. No host port is published:
+  # only services on this Compose network can reach it. Keyless public routes
+  # are low-limit and must not receive sensitive prompts.
   freellm:
     build:
       context: .
@@ -73,7 +75,7 @@ services:
       FREELM_SERVER_KEY: ${FREELM_SERVER_KEY:-}
     expose: ["4000"]
     volumes:
-      - freellm-state:/root/.cache/freelm
+      - freellm-state:/home/freelm/.cache/freelm
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=5)"]
       interval: 30s
@@ -84,3 +86,5 @@ services:
 volumes:
   freellm-state:
     name: qudron-freellm-state
+  qudron-auth:
+    name: qudron-auth

@@ -59,7 +59,7 @@ export default{async fetch(request:Request,env:Env):Promise<Response>{
   if(created.limited)return json({error:"daily_task_limit_reached",reset:"00:00 UTC"},429);
   return json({taskId:created.instance.id,created:created.created,status:(await created.instance.status()).status},created.created?202:200);
  }
- const match=url.pathname.match(/^\/api\/tasks\\/([A-Za-z0-9._:-]{1,100})$/);
+ const match=url.pathname.match(/^\/api\/tasks\/([A-Za-z0-9._:-]{1,100})$/);
  if(request.method==="GET"&&match){try{const instance=await env.QUDRON_WORKFLOW.get(match[1]),s=await instance.status();return json({taskId:match[1],...s});}catch{return json({error:"task_not_found"},404);}}
  return json({error:"not_found"},404);
 }};

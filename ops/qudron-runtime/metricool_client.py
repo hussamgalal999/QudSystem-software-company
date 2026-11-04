@@ -1,6 +1,6 @@
 """Official Metricool API adapter. Reads analytics and schedules drafts only by default."""
 from __future__ import annotations
-import json, os, urllib.parse, urllib.request, urllib.error
+import csv, io, json, os, urllib.parse, urllib.request, urllib.error
 from typing import Any
 
 BASE="https://app.metricool.com/api"
@@ -29,7 +29,12 @@ class MetricoolClient:
     raw=response.read()
     if not raw:return {}
     content_type=response.headers.get("Content-Type","")
-    return json.loads(raw.decode()) if "json" in content_type.lower() else raw.decode("utf-8",errors="replace")
+    if "json" in content_type.lower():
+     return json.loads(raw.decode())
+    text=raw.decode("utf-8",errors="replace")
+    if "csv" in content_type.lower():
+     return list(csv.DictReader(io.StringIO(text)))
+    return text
   except urllib.error.HTTPError as exc:
    if exc.code in (401,403):raise MetricoolError("Metricool authentication or plan permission failed") from None
    if exc.code==429:raise MetricoolError("Metricool rate limit reached") from None
@@ -40,7 +45,7 @@ class MetricoolClient:
   if not start or not end or start>=end:raise ValueError("A valid start/end date range is required")
   return self.request("GET","/v2/scheduler/posts",{"start":start,"end":end,"timezone":timezone})
  def list_published_posts(self,network:str,start:str,end:str,timezone:str="Africa/Cairo")->Any:
-  if network not in {"facebook","instagram"}:raise ValueError("Published-post analytics currently supports facebook and instagram only")
+  if network not in {"facebook","instagram","youtube"}:raise ValueError("Published-post analytics supports facebook, instagram and youtube")
   if not start or not end or start>=end:raise ValueError("A valid start/end date range is required")
   return self.request("GET",f"/v2/analytics/posts/{network}",{"from":start,"to":end,"timezone":timezone})
  def create_review_draft(self,text:str,publication_date:str,network:str="facebook",timezone:str="Africa/Cairo")->Any:

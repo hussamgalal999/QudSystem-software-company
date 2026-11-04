@@ -424,11 +424,13 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     if daily_budget is None and monthly_budget is None:
         return None
     input_rate, output_rate = profile_cost_rates(profile)
+    profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
+                      "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     if input_rate is None or output_rate is None:
         raise RuntimeError(
             "Qudron model budget is enabled, but exact input/output price rates are missing "
-            f"for profile '{profile}'. Configure {prefix}_INPUT_USD_PER_1M / "
-            f"{prefix}_OUTPUT_USD_PER_1M or default LLM_INPUT_USD_PER_1M / "
+            f"for profile '{profile}'. Configure {profile_prefix}_INPUT_USD_PER_1M / "
+            f"{profile_prefix}_OUTPUT_USD_PER_1M or default LLM_INPUT_USD_PER_1M / "
             "LLM_OUTPUT_USD_PER_1M before making billable requests."
         )
     # Reserve conservatively before the API call: half-byte-per-token input estimate

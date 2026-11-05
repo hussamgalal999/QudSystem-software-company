@@ -61,3 +61,21 @@ Android task execution and task steering can change the state of a real device. 
 **Status:** Accepted for implementation.
 
 The host bridge authenticates Qudron requests with its own bearer token. The spawned Artemis MCP process does not need that token or Qudron runtime credentials. The bridge removes `ARTEMIS_BRIDGE_TOKEN` and all `QUDRON_*` variables from the child environment while preserving Artemis provider configuration and the pinned checkout's `PYTHONPATH`. This reduces accidental secret exposure without preventing Artemis from using its own configured providers.
+
+## ADR-2026-11-05-MODEL-ACCESS-001 — Quality-gated, authorized model access
+
+**Status:** Accepted product constraint; implementation pending.
+
+**Context:** Qudron needs a durable supply of capable model inference without making paid API credentials the default dependency and without filling the system with weak local models merely because they are free.
+
+**Decision:**
+- Admit a model/provider only when it meets the capability threshold for its assigned workload and offers a documented, authorized access path that is free to use or backed by genuinely free compute.
+- Prefer official web/app access, official free inference tiers, research/education grants, and provider-published free compute programs where their terms permit the intended automation. Do not bypass authentication, rate limits, quotas, paywalls, account restrictions, or provider safeguards.
+- Do not scrape private session state, export browser cookies/tokens, or store raw session credentials in repository files. If an official browser workflow is used, the account owner signs in interactively and the session remains in the user's protected browser profile; automation must respect provider terms and access controls.
+- Do not make paid API keys, paid subscriptions, or paid inference a required path for the core product. Optional paid adapters may exist only as disabled, separately approved extensions and must never silently take over.
+- Reject low-capability local models as general-purpose workers. A local model may be admitted only for a bounded task where measured quality, latency and resource use meet that task's acceptance criteria.
+- Maintain a live provider registry with access method, model/version, capability evidence, free quota/compute conditions, concurrency, latency, uptime, last successful probe, and failure/cooldown state. Never label a provider "available" merely because its landing page or model catalogue responds.
+- Route only to providers that pass a workload-specific quality check and a current authorized-access probe. Use fair quota-aware scheduling and failover only to another eligible source; do not manufacture extra quota by account rotation or evasion.
+- Treat the 100-billion-token objective as a capacity target, not an existing entitlement. Report measured usable capacity separately from theoretical provider limits and estimates.
+
+**Consequences:** Qudron's model router must be capability- and policy-aware rather than a generic API-key round-robin. Provider adapters need explicit access modes and health evidence. No model is promoted to production solely because it is free or easy to connect.

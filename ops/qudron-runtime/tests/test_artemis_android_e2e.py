@@ -1,70 +1,128 @@
-"""Opt-in end-to-end test; requires a configured Artemis host and real Android device."""
+"""Opt-in E2E test through Qudron MCP; requires an authorized Android device."""
 import json
 import os
+import re
 import time
 import unittest
 import urllib.request
 
 
-@unittest.skipUnless(os.getenv("QUDRON_ARTEMIS_E2E") == "1", "requires an explicitly enabled Android device")
+@unittest.skipUnless(os.getenv("QUDRON_ARTEMIS_E2E") == "1", "requires explicit owner approval and an authorized Android device")
 class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
-    def bridge_call(self, name, arguments):
-        url = os.environ["ARTEMIS_BRIDGE_URL"].rstrip("/") + "/tools/call"
-        body = json.dumps({"name": name, "arguments": arguments}).encode("utf-8")
+    mcp_url = os.getenv("QUDRON_MCP_URL", "http://127.0.0.1:8765/mcp").rstrip("/")
+    token = os.getenv("QUDRON_API_TOKEN", "")
+
+    def mcp(self, method, params=None, request_id=1):
+        self.assertTrue(self.token, "Set QUDRON_API_TOKEN for the Qudron MCP gateway")
+        body = json.dumps({
+            "jsonrpc": "2.0", "id": request_id, "method": method,
+            "params": params or {},
+        }).encode("utf-8")
         request = urllib.request.Request(
-            url, data=body, method="POST",
+            self.mcp_url, data=body, method="POST",
             headers={
-                "Authorization": "Bearer " + os.environ["ARTEMIS_BRIDGE_TOKEN"],
+                "Authorization": "Bearer " + self.token,
                 "Content-Type": "application/json",
             },
         )
         with urllib.request.urlopen(request, timeout=60) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def test_open_settings_and_verify_battery_percentage(self):
+    @staticmethod
+    def _text(result):
+        return "\\n".join(
+            str(block.get("text", ""))
+            for block in result.get("content", [])
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+
+    @staticmethod
+    def _trace_id(result):
+        structured = result.get("structuredContent") or {}
+        if isinstance(structured, dict) and structured.get("trace_id"):
+            return structured["trace_id"]
+        text = ArtemisAndroidBatteryE2ETests._text(result)
+        try:
+            decoded = json.loads(text)
+        except (TypeError, json.JSONDecodeError):
+            decoded = {}
+        return decoded.get("trace_id") if isinstance(decoded, dict) else None
+
+    def test_open_settings_and_verify_battery_percentage_via_qudron(self):
         device_serial = os.getenv("ARTEMIS_DEVICE_SERIAL", "").strip()
         self.assertTrue(
             device_serial,
             "Set ARTEMIS_DEVICE_SERIAL to the explicitly authorized Android device serial",
         )
-        started = self.bridge_call("mobile_run_task", {
-            "device_serial": device_serial,
-            "task_desc": (
-                "Open Android System Settings, navigate to Battery, read the displayed "
-                "battery percentage, and report the exact percentage. Do not change any setting."
-            ),
-            "model": "Pro",
-            "expected_output_desc": (
-                "Return the observed battery percentage and the UI evidence used to verify it. "
-                "If the percentage is not visible, report that honestly."
-            ),
-            "verification_level": "strict",
-        })
-        trace_id = (started.get("structuredContent") or {}).get("trace_id")
-        if not trace_id:
-            for block in started.get("content", []):
-                if block.get("type") != "text":
-                    continue
-                try:
-                    decoded = json.loads(block.get("text", ""))
-                except (TypeError, json.JSONDecodeError):
-                    continue
-                if isinstance(decoded, dict) and decoded.get("trace_id"):
-                    trace_id = decoded["trace_id"]
-                    break
-        self.assertTrue(trace_id, "Artemis did not return a trace_id in structured or text content")
+        self.assertTrue(
+            os.getenv("ARTEMIS_BRIDGE_URL") and os.getenv("ARTEMIS_BRIDGE_TOKEN"),
+            "Configure the authenticated Artemis host bridge before running this test",
+        )
+
+        initialized = self.mcp("initialize", {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "qudron-artemis-e2e", "version": "1.0"},
+        }, request_id=1)
+        self.assertIn("result", initialized, "Qudron MCP initialization failed")
+
+        started = self.mcp("tools/call", {
+            "name": "qudron_android_run_task",
+            "arguments": {
+                "device_serial": device_serial,
+                "task_desc": (
+                    "Open Android System Settings, navigate to Battery, read the displayed "
+                    "battery percentage, and report the exact percentage. Do not change any setting."
+                ),
+                "model": "Pro",
+                "expected_output_desc": (
+                    "Return the observed battery percentage and the UI evidence used to verify it. "
+                    "If the percentage is not visible, report that honestly."
+                ),
+                "verification_level": "strict",
+            },
+        }, request_id=2)
+        start_result = started.get("result", {})
+        self.assertFalse(start_result.get("isError", False), self._text(start_result))
+        trace_id = self._trace_id(start_result)
+        self.assertTrue(trace_id, "Qudron did not return an Artemis trace_id")
+
         deadline = time.monotonic() + 900
-        status = {}
+        status_result = {}
+        status_text = ""
         while time.monotonic() < deadline:
-            status = self.bridge_call("mobile_manage_task", {
-                "action": "status", "trace_id": trace_id
-            })
-            status_text = json.dumps(status).lower()
-            if any(word in status_text for word in ('"completed"', '"failed"', '"cancelled"')):
+            status = self.mcp("tools/call", {
+                "name": "qudron_android_task_status",
+                "arguments": {"trace_id": trace_id},
+            }, request_id=3)
+            status_result = status.get("result", {})
+            self.assertFalse(status_result.get("isError", False), self._text(status_result))
+            status_text = self._text(status_result).lower()
+            if re.search(r'"(?:status|state)"\\s*:\\s*"completed"', status_text):
                 break
+            if re.search(r'"(?:status|state)"\\s*:\\s*"(?:failed|cancelled|error)"', status_text):
+                self.fail("Artemis task reached a failure state: " + status_text[:2000])
             time.sleep(5)
-        self.assertIn('"completed"', json.dumps(status).lower(), "Android battery task did not complete")
-        summary = self.bridge_call("mobile_inspect_trace", {
-            "action": "view_summary", "trace_id": trace_id
-        })
-        self.assertIn("battery", json.dumps(summary).lower())
+        self.assertRegex(status_text, r'"(?:status|state)"\\s*:\\s*"completed"')
+
+        summary = self.mcp("tools/call", {
+            "name": "qudron_android_inspect_trace",
+            "arguments": {"action": "view_summary", "trace_id": trace_id},
+        }, request_id=4)
+        summary_result = summary.get("result", {})
+        self.assertFalse(summary_result.get("isError", False), self._text(summary_result))
+        summary_text = self._text(summary_result)
+        self.assertRegex(summary_text.lower(), r"battery")
+        percentages = re.findall(r"(?<!\\d)(100|[1-9]?\\d)\\s*%", summary_text)
+        self.assertTrue(
+            percentages,
+            "Trace summary did not contain a verifiable battery percentage: " + summary_text[:2000],
+        )
+        self.assertTrue(
+            any(0 <= int(value) <= 100 for value in percentages),
+            "Reported battery percentage was outside 0-100",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -54,3 +54,10 @@ The physical Android end-to-end test must invoke `qudron_android_run_task`, `qud
 **Status:** Accepted for implementation.
 
 Android task execution and task steering can change the state of a real device. Their Qudron MCP tool annotations must therefore set both `readOnlyHint=false` and `destructiveHint=true`, in addition to requiring owner approval. Status, observation, trace inspection and read-only diagnosis remain read-only. Tool annotations are advisory metadata; authorization and approval policy must still be enforced by the connected MCP client and Qudron runtime.
+
+
+## ADR-2026-11-05-ARTEMIS-008 — Keep Qudron secrets out of Artemis child environment
+
+**Status:** Accepted for implementation.
+
+The host bridge authenticates Qudron requests with its own bearer token. The spawned Artemis MCP process does not need that token or Qudron runtime credentials. The bridge removes `ARTEMIS_BRIDGE_TOKEN` and all `QUDRON_*` variables from the child environment while preserving Artemis provider configuration and the pinned checkout's `PYTHONPATH`. This reduces accidental secret exposure without preventing Artemis from using its own configured providers.

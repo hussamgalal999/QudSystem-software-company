@@ -4,7 +4,7 @@
   "snapshot_date": "2026-11-05",
   "source_branch": "feat/qudron-continuity-memory-registry-2026-11-05",
   "base_branch": "main",
-  "source_commit": "c36a923d28f242fadef34ab96678019220524514",
+  "source_commit": "bd15a49f55aa6035b3def5e16c16e415791d0a63",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -44,7 +44,7 @@
       "area": "Runtime",
       "title": "Bounded role-based producer/reviewer/finalizer orchestration",
       "status": "ci_verified",
-      "priority": "ops/qudron-runtime/swarm_engine.py; tests/test_swarm_engine.py",
+      "priority": "P0",
       "evidence": "Routine and CVPen swarm contract tests are present.",
       "current_state": "Regression suite confirms stage order, independent review fan-out and finalizer inputs.",
       "verification_profile": [
@@ -60,12 +60,12 @@
     {
       "id": "workforce-44",
       "area": "Workforce",
-      "title": "Expand specialist registry to 44 roles and 21 teams",
+      "title": "Maintain the specialist registry with validated role and team coverage",
       "status": "implemented_pending_ci",
       "priority": "P0",
       "evidence": "ops/qudron-runtime/agent_registry.json",
-      "current_state": "44 role IDs and 21 teams now exist on this branch; CI has not yet run for this commit.",
-      "acceptance_criteria": "Validate unique IDs, all team references and team coverage in CI.",
+      "current_state": "The current branch contains 48 role identities across 31 teams; these are configured roles, not live model processes.",
+      "acceptance_criteria": "Validate unique IDs, all team references and coverage in CI; report the exact role/team counts on the tested commit.",
       "verification_profile": [
         "registry_schema_integrity",
         "unique_role_and_team_coverage",

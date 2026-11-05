@@ -66,11 +66,6 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
             device_serial,
             "Set ARTEMIS_DEVICE_SERIAL to the explicitly authorized Android device serial",
         )
-        self.assertTrue(
-            os.getenv("ARTEMIS_BRIDGE_URL") and os.getenv("ARTEMIS_BRIDGE_TOKEN"),
-            "Configure the authenticated Artemis host bridge before running this test",
-        )
-
         initialized = self.mcp("initialize", {
             "protocolVersion": "2025-06-18",
             "capabilities": {},

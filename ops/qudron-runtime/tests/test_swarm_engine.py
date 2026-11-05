@@ -27,6 +27,20 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertEqual(len(registry["teams"]["qudron_core_delivery"]), 5)
         self.assertEqual(len(registry["teams"]["qudron_control_plane"]), 5)
 
+    def test_eight_qudron_waves_assign_all_40_specialists_once(self):
+        registry = load_agent_registry("agent_registry.json")
+        wave_teams = {
+            name: members for name, members in registry["teams"].items()
+            if name.startswith("qudron_wave_")
+        }
+        assigned = [agent_id for members in wave_teams.values() for agent_id in members]
+        self.assertEqual(len(wave_teams), 8)
+        self.assertEqual(len(assigned), 40)
+        self.assertEqual(len(set(assigned)), 40)
+        self.assertEqual({agent["id"] for agent in registry["agents"]}, set(assigned))
+        for members in wave_teams.values():
+            self.assertEqual(len(members), 5)
+
     def test_swarm_is_bounded_and_ordered(self):
         plan = build_swarm_plan("cvpen_cv_creation", max_agents=3)
         self.assertEqual(len(plan), 3)

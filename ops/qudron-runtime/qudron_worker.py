@@ -34,6 +34,7 @@ from deepseek_web import search_web, WebResearchError
 from capability_miner import mine_from_environment
 from capability_registry import search_capabilities as search_capability_registry
 from mcp_gateway import handle_mcp_request, MCPGatewayError
+from continuity_store import ContinuityStore
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -1306,8 +1307,61 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     else:
         max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
 
+    continuity = ContinuityStore(DB_PATH)
+    task_type = str(job["task_type"])
+    # Customer/financial workflows keep no intermediate model output in agent
+    # checkpoints or memories. Their resumable metadata is retained, but content
+    # is re-executed rather than persisted in an extra memory store.
+    sensitive_task = task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }
+
     def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
-        return call_llm(job, agent, instruction, prior, memory_context)
+        agent_id = str(agent["id"])
+        stage = str(agent.get("execution_stage", "execute"))
+        cached = continuity.begin_stage(
+            job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage
+        )
+        if cached is not None:
+            logging.info("Resumed completed agent stage %s/%s for job %s",
+                         agent_id, stage, job["id"])
+            return str(cached["output"])
+
+        personal_memory = continuity.agent_memory_context(
+            project=project, agent_id=agent_id, limit=6
+        )
+        agent_prior = prior
+        if personal_memory:
+            agent_prior = (
+                "PERSISTENT ROLE MEMORY (use as context, verify against current evidence):\n"
+                + personal_memory + "\n\nCURRENT TASK CONTEXT:\n" + prior
+            )
+        try:
+            output = call_llm(job, agent, instruction, agent_prior, memory_context)
+            if not isinstance(output, str) or not output.strip():
+                raise RuntimeError(f"Agent returned empty output: {agent_id}")
+            safe_note = (
+                f"Completed {task_type} stage '{stage}' for job {job['id']} "
+                f"({str(job['title'])[:160]})."
+            )
+            if not sensitive_task:
+                safe_excerpt = redact_sensitive_text(output).strip()[:1200]
+                if safe_excerpt:
+                    safe_note += "\nRedacted outcome excerpt: " + safe_excerpt
+            continuity.complete_stage(
+                job_id=str(job["id"]), project=project, agent_id=agent_id,
+                stage=stage, output=None if sensitive_task else output,
+                memory_note=safe_note,
+            )
+            return output
+        except Exception as exc:
+            continuity.fail_stage(
+                job_id=str(job["id"]), project=project, agent_id=agent_id,
+                stage=stage,
+                error=redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200],
+            )
+            raise
 
     return execute_swarm(
         {"task_type": job["task_type"], "title": job["title"], "prompt": job["prompt"]},
@@ -1443,9 +1497,22 @@ def status_snapshot() -> dict[str, Any]:
         latest = db.execute(
             "SELECT id,title,status,updated_at,error,result_path FROM jobs ORDER BY updated_at DESC LIMIT 20"
         ).fetchall()
+    continuity = ContinuityStore(DB_PATH).snapshot()
+    registry_tasks: dict[str, int] = {}
+    registry_path = APP_DIR / "project_task_registry.json"
+    if registry_path.is_file():
+        try:
+            registry_data = json.loads(registry_path.read_text(encoding="utf-8"))
+            for item in registry_data.get("tasks", []):
+                status = str(item.get("status", "unknown"))
+                registry_tasks[status] = registry_tasks.get(status, 0) + 1
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+            registry_tasks = {"registry_read_error": 1}
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
         "counts": counts, "queue_capacity": queue_capacity_snapshot(), "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
+        "continuity": continuity,
+        "project_task_registry": {"counts_by_status": registry_tasks, "task_count": sum(registry_tasks.values())},
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
         "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,

@@ -141,6 +141,27 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
     },
     {
+        "name": "qudron_get_continuity",
+        "description": "Read persisted agent-stage checkpoints, agent-memory counts, external task states, and recent execution events. This is the durable continuity record, not a claim that every provider is online.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    },
+    {
+        "name": "qudron_get_agent_memory",
+        "description": "Read the sanitized persistent memory for one registered agent in one project. Owner-authorized read only.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "minLength": 1, "maxLength": 120},
+                "project": {"type": "string", "minLength": 1, "maxLength": 80},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 12}
+            },
+            "required": ["agent_id", "project"],
+            "additionalProperties": False
+        },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+    },
+    {
         "name": "qudron_search_capabilities",
         "description": "Search Qudron's registry of tools, MCP servers, models, workflows, agents, repositories and research sources. Discovery status never grants execution permission.",
         "inputSchema": {
@@ -188,6 +209,8 @@ def handle_mcp_request(
     get_models: Callable[[], Any] | None = None,
     search_capabilities: Callable[[str, str | None, int], Any] | None = None,
     enqueue_batch: Callable[[dict[str, Any]], Any] | None = None,
+    get_continuity: Callable[[], Any] | None = None,
+    get_agent_memory: Callable[[str, str, int], Any] | None = None,
 ) -> dict[str, Any] | None:
     """Process one stateless JSON-RPC request. None means a notification."""
     if not isinstance(payload, dict):
@@ -226,7 +249,7 @@ def handle_mcp_request(
             "serverInfo": SERVER_INFO,
             "instructions": (
                 "Qudron provides read-only status/report tools and an approval-gated "
-                "job submission tool. Only internal draft/research job types are enabled."
+                "job submission tool. It also exposes durable per-agent memory and resumable execution state."
             ),
         }
         return {"jsonrpc": "2.0", "id": request_id, "result": result}
@@ -270,6 +293,19 @@ def handle_mcp_request(
             result = get_agents() if get_agents else None
         elif name == "qudron_get_models":
             result = get_models() if get_models else None
+        elif name == "qudron_get_continuity":
+            result = get_continuity() if get_continuity else None
+        elif name == "qudron_get_agent_memory":
+            agent_id = arguments.get("agent_id")
+            project = arguments.get("project")
+            limit = arguments.get("limit", 6)
+            if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id) > 120:
+                raise MCPGatewayError("agent_id must be a non-empty string up to 120 characters")
+            if not isinstance(project, str) or not project.strip() or len(project) > 80:
+                raise MCPGatewayError("project must be a non-empty string up to 80 characters")
+            if type(limit) is not int or not 1 <= limit <= 12:
+                raise MCPGatewayError("limit must be an integer from 1 to 12")
+            result = get_agent_memory(agent_id, project, limit) if get_agent_memory else None
         elif name == "qudron_search_capabilities":
             query = arguments.get("query")
             kind = arguments.get("kind")

@@ -89,7 +89,7 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(NoEligibleCompute):
             await self.fabric.acquire(request(
                 persistent_required=True,
-                allowed_kinds=("remote_ollama", "persistent_gpu_vm"),
+                allowed_kinds=("ephemeral_notebook_gpu",),
             ))
 
     async def test_confidential_data_is_denied_by_default(self):

@@ -43,10 +43,10 @@
       "id": "bounded-swarm",
       "area": "Runtime",
       "title": "Bounded role-based producer/reviewer/finalizer orchestration",
-      "status": "ci_verified",
+      "status": "implemented_pending_ci",
       "priority": "P0",
       "evidence": "Routine and CVPen swarm contract tests are present.",
-      "current_state": "Regression suite confirms stage order, independent review fan-out and finalizer inputs.",
+      "current_state": "The prior test suite covers stage order and concurrent CVPen reviews, but the current full CI run exposed unrelated import failures and this task had no explicit acceptance criteria. It is not considered verified on the current candidate until the repaired full suite passes.",
       "verification_profile": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -55,7 +55,8 @@
         "security_and_authorization",
         "observability",
         "deployment_smoke_and_rollback"
-      ]
+      ],
+      "acceptance_criteria": "Unit and integration tests prove correct producer/reviewer/finalizer stage order, bounded parallel fan-out, independent reviewer inputs, finalizer receives all required evidence, failed workers are surfaced, retries are bounded, and no output is reported as verified without the required reviewer/finalizer evidence."
     },
     {
       "id": "workforce-44",
@@ -1231,8 +1232,8 @@
     }
   ],
   "computed_status_counts": {
-    "ci_verified": 3,
-    "implemented_pending_ci": 6,
+    "ci_verified": 2,
+    "implemented_pending_ci": 7,
     "planned": 11,
     "blocked_owner": 10,
     "target_unmeasured": 2,

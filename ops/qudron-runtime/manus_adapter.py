@@ -160,22 +160,32 @@ class ManusAdapter:
         if start_event_id:
             params["start_event_id"] = start_event_id
         result = self._request("GET", "/v2/task.listMessages?" + urlencode(params))
-        events = result.get("messages", [])
+        messages = result.get("messages", [])
+        if not isinstance(messages, list):
+            raise ManusAPIError("Manus returned an invalid messages collection")
+        latest_message = max(
+            (item for item in messages if isinstance(item, dict)),
+            key=lambda item: int(item.get("timestamp", 0) or 0),
+            default=None,
+        )
+        status_events = [
+            item for item in messages
+            if isinstance(item, dict) and item.get("type") == "status_update"
+            and isinstance(item.get("status_update"), dict)
+        ]
+        latest_status = max(
+            status_events,
+            key=lambda item: int(item.get("timestamp", 0) or 0),
+            default=None,
+        )
         status = "unknown"
-        last_event_id = None
-        for event in events if isinstance(events, list) else []:
-            if not isinstance(event, dict):
-                continue
-            event_id = event.get("id")
-            if isinstance(event_id, str):
-                last_event_id = event_id
-            status_update = event.get("status_update")
-            if event.get("type") == "status_update" and isinstance(status_update, dict):
-                candidate = status_update.get("agent_status")
-                if candidate in {"running", "stopped", "waiting", "error"}:
-                    status = candidate
+        if latest_status:
+            candidate = latest_status["status_update"].get("agent_status")
+            if candidate in {"running", "stopped", "waiting", "error"}:
+                status = candidate
+        last_event_id = latest_message.get("id") if latest_message else None
         normalized = {
-            "task_id": task_id, "status": status, "events": events,
+            "task_id": task_id, "status": status, "events": messages,
             "last_event_id": last_event_id, "next_cursor": result.get("next_cursor"),
             "has_more": bool(result.get("has_more", False)),
         }
@@ -189,11 +199,26 @@ class ManusAdapter:
     def send_message(self, task_id: str, message: str) -> dict[str, Any]:
         if not task_id or not isinstance(message, str) or not message.strip():
             raise ValueError("task_id and a non-empty message are required")
-        return self._request("POST", "/v2/task.sendMessage", {
+        result = self._request("POST", "/v2/task.sendMessage", {
             "task_id": task_id, "message": {"content": message.strip()}
         })
+        if self.store:
+            self.store.update_external_task(
+                provider="manus", external_task_id=task_id, status="running"
+            )
+        return result
 
     def task_detail(self, task_id: str) -> dict[str, Any]:
         if not task_id:
             raise ValueError("task_id is required")
-        return self._request("GET", "/v2/task.detail?" + urlencode({"task_id": task_id}))
+        result = self._request("GET", "/v2/task.detail?" + urlencode({"task_id": task_id}))
+        task = result.get("task", {}) if isinstance(result, dict) else {}
+        if self.store and isinstance(task, dict):
+            status = str(task.get("status", "unknown"))
+            if status == "stopped" and task.get("has_running_background_jobs"):
+                status = "running_background"
+            self.store.update_external_task(
+                provider="manus", external_task_id=task_id,
+                status=status, result=task,
+            )
+        return result

@@ -54,7 +54,7 @@ class ManusAdapterTests(unittest.TestCase):
     def test_list_messages_persists_external_status_and_checkpoint(self):
         response = {
             "ok": True,
-            "events": [
+            "messages": [
                 {"id": "evt-1", "type": "status_update",
                  "status_update": {"agent_status": "running"}}
             ],

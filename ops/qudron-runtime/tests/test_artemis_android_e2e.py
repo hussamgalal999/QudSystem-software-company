@@ -37,11 +37,15 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
 
     @staticmethod
     def _text(result):
-        return "\\n".join(
+        parts = [
             str(block.get("text", ""))
             for block in result.get("content", [])
             if isinstance(block, dict) and block.get("type") == "text"
-        )
+        ]
+        structured = result.get("structuredContent")
+        if structured is not None:
+            parts.append(json.dumps(structured, ensure_ascii=False))
+        return "\n".join(parts)
 
     @staticmethod
     def _trace_id(result):
@@ -104,12 +108,12 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
             status_result = status.get("result", {})
             self.assertFalse(status_result.get("isError", False), self._text(status_result))
             status_text = self._text(status_result).lower()
-            if re.search(r'"(?:status|state)"\\s*:\\s*"completed"', status_text):
+            if re.search(r'"(?:status|state)"\s*:\s*"completed"', status_text):
                 break
-            if re.search(r'"(?:status|state)"\\s*:\\s*"(?:failed|cancelled|error)"', status_text):
+            if re.search(r'"(?:status|state)"\s*:\s*"(?:failed|cancelled|error)"', status_text):
                 self.fail("Artemis task reached a failure state: " + status_text[:2000])
             time.sleep(5)
-        self.assertRegex(status_text, r'"(?:status|state)"\\s*:\\s*"completed"')
+        self.assertRegex(status_text, r'"(?:status|state)"\s*:\s*"completed"')
 
         summary = self.mcp("tools/call", {
             "name": "qudron_android_inspect_trace",
@@ -119,7 +123,7 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
         self.assertFalse(summary_result.get("isError", False), self._text(summary_result))
         summary_text = self._text(summary_result)
         self.assertRegex(summary_text.lower(), r"battery")
-        percentages = re.findall(r"(?<!\\d)(100|[1-9]?\\d)\\s*%", summary_text)
+        percentages = re.findall(r"(?<!\d)(100|[1-9]?\d)\s*%", summary_text)
         self.assertTrue(
             percentages,
             "Trace summary did not contain a verifiable battery percentage: " + summary_text[:2000],

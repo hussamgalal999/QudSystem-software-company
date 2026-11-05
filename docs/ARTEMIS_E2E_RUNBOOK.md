@@ -5,25 +5,26 @@ This test exercises the complete path **Qudron MCP Gateway → authenticated hos
 ## Preconditions
 
 1. Artemis is installed independently on the Android host and checked out at the commit pinned in `artemis_bridge_config.example.json`.
-2. The Artemis host bridge is running with a strong `ARTEMIS_BRIDGE_TOKEN`.
+2. The Artemis host bridge is running with a strong `ARTEMIS_BRIDGE_TOKEN`; that secret remains in the Qudron runtime's private environment and is not needed by the test process.
 3. Qudron is running with `ARTEMIS_BRIDGE_URL` and the matching `ARTEMIS_BRIDGE_TOKEN` configured in its private environment.
 4. The Android owner has explicitly authorized USB debugging and the target serial is known.
-5. The test operator has the Qudron API token (or readable `QUDRON_API_TOKEN_FILE`) for the Qudron MCP endpoint.
-6. Android Platform Tools (`adb`) are installed on the test host.
+5. The test host has Android Platform Tools (`adb`) installed and can reach the authenticated Qudron MCP endpoint.
+6. The test operator can read the Qudron API token from the runtime's secret store or token file.
 
 ## Run
 
-From the Qudron runtime directory, preferably inside the same runtime container/network that can reach the configured bridge:
+Run this on the **Android host (or another test host with ADB installed)**, not inside the minimal Qudron container. If Qudron runs in Docker on the same host, load its API token into a shell variable without printing it:
 
 ```bash
+export QUDRON_API_TOKEN="$(docker exec qudron-runtime cat /run/qudron-auth/api_token)"
 QUDRON_ARTEMIS_E2E=1 \
 ARTEMIS_DEVICE_SERIAL="<authorized-device-serial>" \
 QUDRON_MCP_URL="http://127.0.0.1:8765/mcp" \
-QUDRON_API_TOKEN_FILE="/run/qudron-auth/api_token" \
 python -m unittest tests.test_artemis_android_e2e -v
+unset QUDRON_API_TOKEN
 ```
 
-If running outside the container, set `QUDRON_API_TOKEN` and a reachable `QUDRON_MCP_URL` instead of relying on the container token-file path.
+If Qudron is on another host, set `QUDRON_MCP_URL` to a private/reachable endpoint or SSH tunnel, and set `QUDRON_API_TOKEN` from the approved secret manager. Do not expose the MCP endpoint publicly.
 
 The test initializes the Qudron MCP endpoint, starts `qudron_android_run_task` with the Pro profile and strict verification, polls `qudron_android_task_status`, then inspects the trace through `qudron_android_inspect_trace`. It requires a terminal completed state, a battery percentage associated with battery context in the result/trace, and an exact match against the read-only ADB reference from `adb -s <serial> shell dumpsys battery`.
 

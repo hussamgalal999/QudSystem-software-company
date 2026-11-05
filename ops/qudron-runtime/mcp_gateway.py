@@ -7,6 +7,7 @@ OpenDots can require an owner approval before invoking them.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Callable
 
 PROTOCOL_VERSION = "2025-06-18"

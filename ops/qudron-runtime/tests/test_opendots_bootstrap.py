@@ -177,7 +177,7 @@ class OpenDotsBootstrapTests(unittest.TestCase):
             raise AssertionError(f"Unexpected request: {url}")
 
         with patch.object(bootstrap, "read_secret", side_effect=read_secret), \
-             patch.object(bootstrap, "time.sleep"), \
+             patch.object(bootstrap.time, "sleep"), \
              patch.object(bootstrap, "request_json", side_effect=fake_request):
             self.assertEqual(bootstrap.main(), 0)
 

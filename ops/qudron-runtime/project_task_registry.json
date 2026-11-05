@@ -1217,8 +1217,8 @@
       "title": "Build a unified authorized remote-compute discovery and allocation fabric for strong hosted inference, Ollama-on-remote-GPU, cloud computers, notebooks and browser workers",
       "status": "implemented_pending_ci",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/compute_fabric.py; ops/qudron-runtime/compute_provider_catalog.json; tests/test_compute_fabric.py",
-      "current_state": "Provider-neutral compute admission and lease contract plus a qualification catalog are implemented. Provider discovery, account-specific probes, persistent lease storage, and real provisioning/release adapters remain open; no GPU provider is enabled.",
+      "evidence": "ops/qudron-runtime/compute_fabric.py; ops/qudron-runtime/compute_provider_catalog.json; ops/qudron-runtime/tests/test_compute_fabric.py",
+      "current_state": "Provider-neutral compute admission and lease contract with authorization, health freshness, capability, RAM/VRAM, runtime, quota, data-class and concurrent-lease gates is implemented. Provider discovery, account-specific probes, durable lease recovery, and real provisioning/release adapters remain open; no GPU provider is enabled.",
       "acceptance_criteria": "Discover only official/authorized providers; record exact resource class, GPU/VRAM/RAM/CPU, region, eligibility, free quota, expiry, network, data terms and cost; run a harmless benchmark; provision and release on demand; persist jobs/checkpoints/artifacts; enforce isolation, quotas, budget caps and cancellation; pass restart, security and failure-injection tests; never label a provider free or available without live evidence.",
       "verification_profile": [
         "admission_control",

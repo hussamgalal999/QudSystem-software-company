@@ -171,7 +171,7 @@ ARTEMIS_TOOLS: list[dict[str, Any]] = [
             "verification_level": {"type": "string", "enum": ["off", "final", "checkpoints", "strict"]},
             "explorer_mode": {"type": "string", "enum": ["flash", "pro", "ultra"]}
         }, "required": ["task_desc"], "additionalProperties": False},
-        "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": True}
+        "annotations": {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": True}
     },
     {
         "name": "qudron_android_task_status",
@@ -188,7 +188,7 @@ ARTEMIS_TOOLS: list[dict[str, Any]] = [
             "instruction": {"type": "string", "maxLength": 2000},
             "release_loop": {"type": "boolean"}
         }, "required": ["action", "trace_id"], "additionalProperties": False},
-        "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": True}
+        "annotations": {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": True}
     },
     {
         "name": "qudron_android_get_device_state",

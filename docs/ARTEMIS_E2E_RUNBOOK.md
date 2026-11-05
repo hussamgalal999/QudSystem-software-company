@@ -16,11 +16,12 @@ This test exercises the complete path **Qudron MCP Gateway → authenticated hos
 Run this on the **Android host (or another test host with ADB installed)**, not inside the minimal Qudron container. Run from the Qudron runtime directory and use the Artemis virtual-environment Python so the bridge's MCP/FastAPI test dependencies are available. If Qudron runs in Docker on the same host, load its API token into a shell variable without printing it:
 
 ```bash
+cd /path/to/QudSystem-software-company/ops/qudron-runtime
 export QUDRON_API_TOKEN="$(docker exec qudron-runtime cat /run/qudron-auth/api_token)"
 QUDRON_ARTEMIS_E2E=1 \
 ARTEMIS_DEVICE_SERIAL="<authorized-device-serial>" \
 QUDRON_MCP_URL="http://127.0.0.1:8765/mcp" \
-python -m unittest tests.test_artemis_android_e2e -v
+/path/to/google-artemis/.venv/bin/python -m unittest tests.test_artemis_android_e2e -v
 unset QUDRON_API_TOKEN
 ```
 

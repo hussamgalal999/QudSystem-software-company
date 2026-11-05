@@ -21,13 +21,13 @@ The registry contains **63 tracked tasks** in this snapshot. Status is explicit 
 | Status | Count |
 |---|---:|
 | CI-verified implementation | 2 |
-| Implemented, CI pending | 7 |
+| Implemented, CI pending | 8 |
 | Implemented, live/unverified | 9 |
 | Open pull request | 1 |
 | Candidate provider, not enabled | 3 |
 | Blocked by owner/external setup | 10 |
 | Planned | 11 |
-| Not started | 16 |
+| Not started | 15 |
 | Strategic target, not measured | 2 |
 | Needs owner review | 1 |
 | Pending CI gate | 1 |
@@ -65,6 +65,7 @@ New branch work adds:
 
 - The runtime Docker image now copies all root-level Python modules and JSON registries, including the continuity and agent-fabric modules; CI now checks that key modules import from inside the built image.
 - The continuity store now imports the time module required by its cloud outbox and has an outbox-persistence regression test.
+- A provider-neutral compute admission/lease contract and tests now exist. This is only the control-plane foundation; provider discovery, account probes, durable lease recovery, and real provisioning/release adapters remain unimplemented.
 - The runtime now runs a bounded cloud-memory outbox sync loop when both owner-provisioned URL and token are present. Without those secrets, cloud sync remains disabled; no live cloud deployment is claimed.
 - PR #24 adds the evidence framework, the explicit remote-compute fabric backlog item and the provider qualification catalog. Workflow run #259 executed 204 tests but failed on two import errors and one missing registry acceptance criterion. The import/test/registry fixes are now committed; wait for a new run on the exact updated head SHA before marking the branch CI-verified.
 

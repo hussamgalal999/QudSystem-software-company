@@ -94,3 +94,28 @@ Official references:
 - **Cerebras Free:** an official free API tier is listed, but the public pricing page is old and its free-tier rate limits are described only as lower limits. Treat it as an experimental fallback until a current account quota is checked.
 
 Never use a free route as a reason to send confidential customer data to an endpoint without checking provider-specific terms.
+## Remote compute qualification — official evidence reviewed 2026-11-05
+
+These are task-bounded compute candidates, not confirmed persistent Qudron workers and not free Ollama servers. Their published limits are dynamic and must be rechecked against the signed-in account before each allocation.
+
+| Provider | Documented free resource | Published limit / constraint | Qudron disposition |
+|---|---|---|---|
+| [Kaggle Notebooks](https://www.kaggle.com/docs/notebooks) | Remote notebook CPU/GPU; documented P100 and T4 x2 configurations, 4 CPU cores and about 29 GB RAM on GPU sessions | Notebook sessions up to 12 hours; GPU quota is limited and queued under demand. Kaggle's GPU guidance describes a weekly quota commonly around 30 hours, subject to change. | Candidate for owner-authorized, finite notebook jobs only. Not a 24/7 worker or guaranteed remote Ollama endpoint. |
+| [Hugging Face ZeroGPU](https://huggingface.co/docs/hub/spaces-zerogpu) | On-demand shared NVIDIA RTX Pro 6000 Blackwell; large exposes 48 GB VRAM and xlarge 96 GB | Free accounts: 5 GPU minutes/day; Gradio-only; GPU is dynamically allocated inside GPU-decorated functions. Free personal accounts in good standing may host up to two ZeroGPU Spaces. | Candidate for short inference calls via a Gradio Space, not a persistent Ollama daemon. Quota is far too small to promise continuous company-wide inference. |
+| [Google Colab Free](https://research.google.com/colaboratory/faq.html) | Variable, non-guaranteed hosted GPU/TPU notebook access | Resource limits fluctuate; free runtimes may last up to 12 hours. Managed free runtimes explicitly disallow remote-control/remote-desktop use, distributed computing workers, and containerisation used to bypass restrictions. | Excluded as a Qudron background worker or remote-control host. Use only for owner-driven interactive notebook work within Colab policy. |
+
+### Important architecture consequence
+
+1. Do not try to keep an Ollama daemon alive inside a free notebook if the provider's terms or session model do not permit it.
+2. Separate GPU inference functions (e.g. a Gradio ZeroGPU endpoint) from general-purpose remote computers (notebooks/VMs) and from persistent production hosts.
+3. For each candidate, Qudron must record account owner, official access mode, model/runtime, actual GPU/VRAM, remaining quota, queue wait, execution duration, expiry, data policy, and observed benchmark.
+4. A provider is enabled only after an owner-authorized account probe and a successful harmless live inference. A public demo page is not proof that Qudron has an allocation entitlement.
+5. Use notebook providers only for finite, checkpointed jobs that tolerate interruption. Persist code, inputs, outputs and checkpoints outside the ephemeral notebook before release.
+6. The remote-compute fabric must expose a common task contract while retaining provider-specific policy and capability checks. Never disguise a notebook session as a permanent worker.
+
+### Official references
+
+- Kaggle notebook hardware and session details: https://www.kaggle.com/docs/notebooks
+- Kaggle GPU usage guidance: https://www.kaggle.com/docs/efficient-gpu-usage
+- Hugging Face ZeroGPU quotas and hardware: https://huggingface.co/docs/hub/spaces-zerogpu
+- Colab FAQ and restricted activity/resource limits: https://research.google.com/colaboratory/faq.html

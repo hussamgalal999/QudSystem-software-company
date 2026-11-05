@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "updated_on": "2026-11-05",
+  "policy": {
+    "free_only_default": true,
+    "persistent_worker_requires_explicit_provider_permission": true,
+    "enable_only_after_live_probe": true,
+    "never_bypass_quotas_or_provider_terms": true,
+    "ollama_remote_host_requires_persistent_host_permission": true
+  },
+  "providers": [
+    {
+      "id": "kaggle-notebooks",
+      "name": "Kaggle Notebooks",
+      "kind": "ephemeral_notebook_gpu",
+      "access_mode": "official_account_session",
+      "price_class": "free_compute",
+      "status": "candidate_not_enabled",
+      "documented_resources": {
+        "gpu_options": [
+          "NVIDIA Tesla P100",
+          "NVIDIA T4 x2"
+        ],
+        "gpu_session_cpu_cores": 4,
+        "gpu_session_ram_gb": 29,
+        "session_max_hours": 12,
+        "gpu_weekly_quota_hours": 30
+      },
+      "limits": [
+        "GPU availability may queue under demand",
+        "quota and hardware are subject to change",
+        "not qualified as a persistent daemon or remote Ollama host"
+      ],
+      "allowed_workloads": [
+        "owner-authorized finite notebook jobs",
+        "checkpointed model experiments",
+        "short batch inference if provider terms allow"
+      ],
+      "disallowed_assumptions": [
+        "24/7 worker",
+        "guaranteed GPU availability",
+        "unattended distributed worker",
+        "persistent Ollama endpoint"
+      ],
+      "source_urls": [
+        "https://www.kaggle.com/docs/notebooks",
+        "https://www.kaggle.com/docs/efficient-gpu-usage"
+      ],
+      "live_probe": {
+        "verified": false,
+        "model_id": null,
+        "gpu_name": null,
+        "quota_remaining": null,
+        "latency_ms": null,
+        "last_checked_at": null
+      }
+    },
+    {
+      "id": "huggingface-zerogpu",
+      "name": "Hugging Face Spaces ZeroGPU",
+      "kind": "serverless_gradio_gpu",
+      "access_mode": "official_gradio_space",
+      "price_class": "free_compute",
+      "status": "candidate_not_enabled",
+      "documented_resources": {
+        "gpu": "NVIDIA RTX Pro 6000 Blackwell",
+        "large_vram_gb": 48,
+        "xlarge_vram_gb": 96,
+        "free_account_daily_gpu_minutes": 5,
+        "free_personal_spaces_max": 2
+      },
+      "limits": [
+        "Gradio SDK only",
+        "GPU allocated dynamically inside GPU-decorated functions",
+        "xlarge consumes twice the daily quota",
+        "account eligibility and queue priority apply"
+      ],
+      "allowed_workloads": [
+        "short Gradio-hosted inference calls",
+        "bounded GPU functions"
+      ],
+      "disallowed_assumptions": [
+        "persistent Ollama daemon",
+        "general-purpose SSH/desktop",
+        "unlimited GPU inference"
+      ],
+      "source_urls": [
+        "https://huggingface.co/docs/hub/spaces-zerogpu"
+      ],
+      "live_probe": {
+        "verified": false,
+        "model_id": null,
+        "gpu_name": null,
+        "quota_remaining": null,
+        "latency_ms": null,
+        "last_checked_at": null
+      }
+    },
+    {
+      "id": "google-colab-free",
+      "name": "Google Colab Free",
+      "kind": "interactive_ephemeral_notebook",
+      "access_mode": "official_notebook_session",
+      "price_class": "free_compute",
+      "status": "excluded_for_background_worker",
+      "documented_resources": {
+        "session_max_hours": 12,
+        "gpu_types": "variable and not guaranteed"
+      },
+      "limits": [
+        "dynamic resource limits",
+        "free managed runtimes prohibit remote control and distributed workers",
+        "containerization to circumvent restrictions is prohibited"
+      ],
+      "allowed_workloads": [
+        "owner-driven interactive notebook work within provider policy"
+      ],
+      "disallowed_assumptions": [
+        "Qudron daemon",
+        "remote desktop or SSH worker",
+        "distributed compute agent",
+        "persistent Ollama server"
+      ],
+      "source_urls": [
+        "https://research.google.com/colaboratory/faq.html"
+      ],
+      "live_probe": {
+        "verified": false,
+        "model_id": null,
+        "gpu_name": null,
+        "quota_remaining": null,
+        "latency_ms": null,
+        "last_checked_at": null
+      }
+    }
+  ]
+}

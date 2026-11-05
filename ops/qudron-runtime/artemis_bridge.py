@@ -137,9 +137,58 @@ def _serialize_result(result: Any) -> dict[str, Any]:
     return payload
 
 
+def _validate_tool_arguments(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Enforce the same least-privilege contract even when the bridge is called directly."""
+    allowed_fields = {
+        "mobile_run_task": {
+            "task_desc", "model", "device_serial", "expected_output_desc",
+            "verification_level", "explorer_mode",
+        },
+        "mobile_manage_task": {"action", "trace_id", "instruction", "release_loop"},
+        "mobile_get_device_state": {"view_type", "device_serial"},
+        "mobile_inspect_trace": {
+            "action", "trace_id", "step_number", "query", "step_range", "max_results",
+        },
+        "mobile_diagnose": {"device_serial"},
+    }
+    if name not in allowed_fields or set(arguments) - allowed_fields[name]:
+        raise HTTPException(status_code=400, detail="Invalid Artemis tool arguments")
+    args = dict(arguments)
+    if name == "mobile_run_task":
+        if not isinstance(args.get("task_desc"), str) or not args["task_desc"].strip() or len(args["task_desc"]) > 4000:
+            raise HTTPException(status_code=400, detail="task_desc is required and limited to 4000 characters")
+        if args.get("model", "Flash") not in {"Flash", "Pro"}:
+            raise HTTPException(status_code=400, detail="model must be Flash or Pro")
+        if args.get("verification_level") not in {None, "off", "final", "checkpoints", "strict"}:
+            raise HTTPException(status_code=400, detail="Invalid verification_level")
+        if args.get("explorer_mode") not in {None, "flash", "pro", "ultra"}:
+            raise HTTPException(status_code=400, detail="Invalid explorer_mode")
+    elif name == "mobile_manage_task":
+        if args.get("action") not in {"status", "stop", "inject_instruction"}:
+            raise HTTPException(status_code=400, detail="Unsupported task control action")
+        if not isinstance(args.get("trace_id"), str) or not args["trace_id"].strip():
+            raise HTTPException(status_code=400, detail="trace_id is required")
+        if args["action"] == "inject_instruction" and not args.get("instruction") and not args.get("release_loop", False):
+            raise HTTPException(status_code=400, detail="instruction is required")
+    elif name == "mobile_get_device_state":
+        if args.get("view_type") not in {"screenshot", "hierarchy"}:
+            raise HTTPException(status_code=400, detail="view_type must be screenshot or hierarchy")
+    elif name == "mobile_inspect_trace":
+        if args.get("action") not in {"view_summary", "search", "view_step_screenshots", "view_step_details"}:
+            raise HTTPException(status_code=400, detail="Unsupported trace inspection action")
+        if not isinstance(args.get("trace_id"), str) or not args["trace_id"].strip():
+            raise HTTPException(status_code=400, detail="trace_id is required")
+    elif name == "mobile_diagnose":
+        args = {"attempt_fix": False, "verify_credentials": False, "probe_device": False}
+        if arguments.get("device_serial"):
+            args["device_serial"] = arguments["device_serial"]
+    return args
+
+
 async def call_artemis_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name not in ALLOWED_TOOLS:
         raise HTTPException(status_code=400, detail="Artemis tool is not allowlisted")
+    arguments = _validate_tool_arguments(name, arguments)
     params = _server_parameters()
     timeout = max(5, min(900, int(os.getenv("ARTEMIS_MCP_CALL_TIMEOUT_SECONDS", "120"))))
     try:

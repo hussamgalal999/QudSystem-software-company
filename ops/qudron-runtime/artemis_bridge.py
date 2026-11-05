@@ -95,6 +95,11 @@ def _server_parameters() -> StdioServerParameters:
         if actual != expected_commit:
             raise RuntimeError("Artemis checkout does not match ARTEMIS_EXPECTED_COMMIT")
     env = os.environ.copy()
+    # The MCP child needs Artemis provider settings, not Qudron bridge credentials.
+    env.pop("ARTEMIS_BRIDGE_TOKEN", None)
+    for key in tuple(env):
+        if key.startswith("QUDRON_"):
+            env.pop(key, None)
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
     return StdioServerParameters(command=command, args=args, cwd=str(project_root), env=env)

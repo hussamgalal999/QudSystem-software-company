@@ -241,7 +241,7 @@ def _call_artemis_bridge(tool_name: str, arguments: dict[str, Any]) -> Any:
     timeout = max(5, min(900, int(os.getenv("ARTEMIS_BRIDGE_TIMEOUT_SECONDS", "120"))))
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read(6_000_000).decode("utf-8"))
+            data = json.loads(response.read(7_500_000).decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise MCPGatewayError(f"Artemis bridge returned HTTP {exc.code}") from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:

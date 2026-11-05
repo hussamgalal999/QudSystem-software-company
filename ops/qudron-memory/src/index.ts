@@ -154,6 +154,31 @@ async function appendEvent(body: Record<string, unknown>, env: Env): Promise<Res
   return json({ ok: true, inserted: result.meta.changes > 0, event_id: id });
 }
 
+async function upsertDecision(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const id = requiredString(body, "decision_id", 200);
+  const projectId = requiredString(body, "project_id", 160);
+  const title = requiredString(body, "title", 500);
+  const decision = requiredString(body, "decision", 8000);
+  const actor = requiredString(body, "decided_by", 160);
+  if (!id || !projectId || !title || !decision || !actor)
+    return json({ error: "decision_id_project_id_title_decision_decided_by_required" }, 400);
+  const at = typeof body.decided_at === "string" && !Number.isNaN(Date.parse(body.decided_at))
+    ? new Date(body.decided_at).toISOString() : isoNow();
+  await env.DB.prepare(`INSERT INTO decisions
+    (decision_id,project_id,title,decision,rationale,alternatives_json,constraints_json,status,decided_by,source_ref,decided_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(decision_id) DO UPDATE SET title=excluded.title,decision=excluded.decision,
+    rationale=excluded.rationale,alternatives_json=excluded.alternatives_json,
+    constraints_json=excluded.constraints_json,status=excluded.status,decided_by=excluded.decided_by,
+    source_ref=excluded.source_ref,decided_at=excluded.decided_at`)
+    .bind(id, projectId, title, decision,
+      typeof body.rationale === "string" ? body.rationale.slice(0,8000) : "",
+      jsonField(body,"alternatives",[]), jsonField(body,"constraints",[]),
+      requiredString(body,"status",40) || "active", actor,
+      typeof body.source_ref === "string" ? body.source_ref.slice(0,1000) : "", at).run();
+  return json({ ok: true, decision_id: id, decided_at: at });
+}
+
 async function getContext(url: URL, env: Env): Promise<Response> {
   const projectId = url.searchParams.get("project_id");
   const agentId = url.searchParams.get("agent_id");
@@ -204,6 +229,7 @@ export default {
       if (url.pathname === "/v1/projects") return await upsertProject(body, env);
       if (url.pathname === "/v1/agents") return await upsertAgent(body, env);
       if (url.pathname === "/v1/tasks") return await upsertTask(body, env);
+      if (url.pathname === "/v1/decisions") return await upsertDecision(body, env);
       if (url.pathname === "/v1/events") return await appendEvent(body, env);
       return json({ error: "not_found" }, 404);
     } catch {

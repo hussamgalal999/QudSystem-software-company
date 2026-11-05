@@ -254,6 +254,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", str(_bridge_config().get("bind_host", "0.0.0.0"))),
-        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", str(_bridge_config().get("port", 8766))),
+        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", str(_bridge_config().get("port", 8766)))),
         log_level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "info").lower(),
     )

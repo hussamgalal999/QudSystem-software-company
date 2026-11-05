@@ -10,7 +10,7 @@ This package adds a small Cloudflare Worker + D1 memory service alongside the ex
 - D1 is the queryable operational memory for project/agent/task snapshots and append-only events.
 - Existing local SQLite remains the execution queue and local short-term runtime store; do not replace it or create a competing scheduler.
 - Large artifacts stay in GitHub releases/object storage or the existing reports store. Memory records keep references, hashes, summaries, and provenance, not full binaries.
-- The API is REST first. GraphQL is an optional query facade, not a database or memory engine; introducing it before there is a real multi-client query need adds complexity and tokens without improving persistence.
+- The API is REST first. GraphQL is an optional query facade, not a database or memory engine; introducing it before there is a real multi-client query need adds complexity and tokens without improving persistence. Context retrieval is bounded (maximum 100 task/event rows and 20 conversation notes) to control prompt size and avoid wasting tokens.
 
 ## Memory scopes
 
@@ -22,7 +22,7 @@ This package adds a small Cloudflare Worker + D1 memory service alongside the ex
 6. **Task** — status, dependencies, attempts, lease, provider/model, usage, artifacts and verification.
 7. **Event** — append-only status/decision/observation trail.
 
-Every write includes an event ID, actor, timestamp, scope, and source. Repeated event IDs are idempotent. Snapshots are replaceable projections; events preserve history.
+Every event write includes an event ID, actor, timestamp, scope, and source. Repeated event IDs are idempotent. Conversation notes are distilled records, not raw chat transcripts. Snapshots are replaceable projections; events preserve history.
 
 ## Agent handoff contract
 
@@ -53,6 +53,8 @@ All routes except `GET /health` require `Authorization: Bearer <QUDRON_MEMORY_TO
 - `POST /v1/projects` — upsert a project snapshot.
 - `POST /v1/agents` — upsert an agent snapshot.
 - `POST /v1/tasks` — upsert a task snapshot.
+- `POST /v1/decisions` — persist an approved project decision and its rationale.
+- `POST /v1/conversations` — persist a compact conversation summary, key facts, decisions, and open loops with a source reference; never assume ChatGPT history is automatically accessible.
 - `GET /v1/context?project_id=...&agent_id=...&limit=...` — compact recovery packet.
 
 Payloads are size-limited, JSON-only, and stored as structured JSON. The Worker does not execute tools, models, code, shell commands, or arbitrary GraphQL. It is a memory service, not an execution engine.

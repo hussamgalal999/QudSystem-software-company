@@ -49,6 +49,7 @@ class ComputeProviderDescriptor:
     capabilities: tuple[str, ...] = ()
     accepted_data_classes: tuple[str, ...] = (DataClass.PUBLIC.value,)
     quota_remaining_seconds: int | None = None
+    max_concurrent_leases: int = 1
     endpoint_ref: str | None = None
     terms_url: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -64,6 +65,8 @@ class ComputeProviderDescriptor:
             raise ValueError("max_runtime_seconds cannot be negative")
         if self.quota_remaining_seconds is not None and self.quota_remaining_seconds < 0:
             raise ValueError("quota_remaining_seconds cannot be negative")
+        if self.max_concurrent_leases < 1:
+            raise ValueError("max_concurrent_leases must be >= 1")
 
 
 @dataclass(frozen=True)
@@ -146,6 +149,7 @@ class ComputeFabric:
         self._providers: dict[str, ComputeProviderDescriptor] = {}
         self._adapters: dict[str, ComputeAdapter] = {}
         self._leases: dict[str, tuple[str, ComputeLease]] = {}
+        self._reservations: dict[str, int] = {}
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: ComputeAdapter) -> None:
@@ -161,6 +165,10 @@ class ComputeFabric:
         self._providers[provider.provider_id] = provider
 
     def _eligible(self, provider: ComputeProviderDescriptor, request: ComputeRequest) -> tuple[bool, str]:
+        active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
+        reserved = self._reservations.get(provider.provider_id, 0)
+        if active + reserved >= provider.max_concurrent_leases:
+            return False, "provider_concurrency_limit"
         if not provider.enabled:
             return False, "disabled"
         if not provider.authorized:
@@ -236,6 +244,12 @@ class ComputeFabric:
         failures = []
         for provider in candidates:
             adapter = self._adapters[provider.adapter]
+            async with self._lock:
+                eligible, reason = self._eligible(provider, request)
+                if not eligible:
+                    failures.append(f"{provider.provider_id}:{reason}")
+                    continue
+                self._reservations[provider.provider_id] = self._reservations.get(provider.provider_id, 0) + 1
             try:
                 lease = await asyncio.wait_for(
                     adapter.acquire(provider, request),
@@ -253,6 +267,13 @@ class ComputeFabric:
             except (asyncio.TimeoutError, ComputeProviderUnavailable, ConnectionError) as exc:
                 failures.append(f"{provider.provider_id}:{type(exc).__name__}")
                 continue
+            finally:
+                async with self._lock:
+                    remaining = self._reservations.get(provider.provider_id, 1) - 1
+                    if remaining > 0:
+                        self._reservations[provider.provider_id] = remaining
+                    else:
+                        self._reservations.pop(provider.provider_id, None)
         raise ComputeProviderUnavailable("All eligible compute providers failed: " + ", ".join(failures))
 
     async def release(self, lease: ComputeLease) -> None:

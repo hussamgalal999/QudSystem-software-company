@@ -47,3 +47,10 @@ Qudron stores only its own bridge, adapter, configuration examples, tests and do
 **Status:** Accepted for implementation.
 
 The physical Android end-to-end test must invoke `qudron_android_run_task`, `qudron_android_task_status` and `qudron_android_inspect_trace` through Qudron's authenticated `/mcp` endpoint. It must not bypass Qudron by calling the host bridge directly. The test requires explicit opt-in, an owner-authorized device serial, a completed terminal state and a battery percentage in the inspected trace. The bridge resolves artifact paths from the same configured Artemis checkout used to launch MCP; artifacts outside that checkout or outside the bounded trace/screenshot allowlist are rejected.
+
+
+## ADR-2026-11-05-ARTEMIS-007 — Mark device-changing tools destructive
+
+**Status:** Accepted for implementation.
+
+Android task execution and task steering can change the state of a real device. Their Qudron MCP tool annotations must therefore set both `readOnlyHint=false` and `destructiveHint=true`, in addition to requiring owner approval. Status, observation, trace inspection and read-only diagnosis remain read-only. Tool annotations are advisory metadata; authorization and approval policy must still be enforced by the connected MCP client and Qudron runtime.

@@ -336,6 +336,62 @@
       "platform_engineer",
       "reliability_engineer",
       "security_architect"
+    ],
+    "qudron_wave_01_architecture": [
+      "operations_commander",
+      "strategy_council",
+      "product_manager",
+      "research_analyst",
+      "evidence_checker"
+    ],
+    "qudron_wave_02_runtime_models": [
+      "software_engineer",
+      "reliability_engineer",
+      "qa_engineer",
+      "data_analyst",
+      "model_provider_engineer"
+    ],
+    "qudron_wave_03_security_governance": [
+      "security_architect",
+      "privacy_qa",
+      "compliance_reviewer",
+      "policy_checker",
+      "fact_checker"
+    ],
+    "qudron_wave_04_opendots_experience": [
+      "opendots_integration_engineer",
+      "customer_success",
+      "localization_specialist",
+      "language_qa",
+      "brand_quality"
+    ],
+    "qudron_wave_05_platform_release": [
+      "platform_engineer",
+      "technical_seo",
+      "creative_qa",
+      "video_producer",
+      "seo_strategist"
+    ],
+    "qudron_wave_06_market_commercial": [
+      "brand_strategist",
+      "copywriter",
+      "market_research",
+      "sales_qualifier",
+      "finance_ops"
+    ],
+    "qudron_wave_07_cvpen_product": [
+      "career_strategist",
+      "cv_writer",
+      "ats_specialist",
+      "cv_qa",
+      "cv_grammar_editor"
+    ],
+    "qudron_wave_08_quality_payment": [
+      "cv_role_match_reviewer",
+      "cv_achievement_reviewer",
+      "cv_readability_reviewer",
+      "cv_privacy_reviewer",
+      "payment_verifier"
     ]
   }
 }

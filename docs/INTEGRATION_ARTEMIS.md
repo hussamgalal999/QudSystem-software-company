@@ -132,10 +132,11 @@ The bridge file is maintained in Qudron, not copied into the Artemis repository.
 Example environment (Linux/macOS):
 
 ~~~bash
-export ARTEMIS_MCP_COMMAND="/absolute/path/to/artemis/.venv/bin/python"
-export ARTEMIS_MCP_ARGS_JSON='["-m","mcp_server"]'
-export ARTEMIS_MCP_CWD="/absolute/path/to/artemis"
-export ARTEMIS_EXPECTED_COMMIT="351ca8422f7b5b54e80a9c1ce03a222e02415b6b"
+cp /path/to/QudSystem-software-company/ops/qudron-runtime/artemis_bridge_config.example.json /path/to/artemis_bridge_config.json
+# Edit mcp.command, mcp.cwd, and bind_host in the copied JSON file.
+export ARTEMIS_BRIDGE_CONFIG="/path/to/artemis_bridge_config.json"
+# Optional environment overrides: ARTEMIS_MCP_COMMAND, ARTEMIS_MCP_ARGS_JSON,
+# ARTEMIS_MCP_CWD, ARTEMIS_EXPECTED_COMMIT, ARTEMIS_BRIDGE_BIND_HOST, ARTEMIS_BRIDGE_PORT.
 export ARTEMIS_BRIDGE_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
 export ARTEMIS_BRIDGE_BIND_HOST="0.0.0.0"
 export ARTEMIS_BRIDGE_PORT="8766"
@@ -182,7 +183,7 @@ tests/test_artemis_android_e2e.py is an opt-in test. It submits the task:
 Run it only after the bridge is deployed, the phone is authorized, and the owner has approved the operation:
 
 ~~~bash
-QUDRON_ARTEMIS_E2E=1 python -m unittest tests.test_artemis_android_e2e -v
+ARTEMIS_DEVICE_SERIAL="<authorized-device-serial>" QUDRON_ARTEMIS_E2E=1 python -m unittest tests.test_artemis_android_e2e -v
 ~~~
 
 This repository change does not claim that a physical-device run has passed. The test must be run on the actual Android host and its returned trace must be reviewed.

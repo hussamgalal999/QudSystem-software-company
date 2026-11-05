@@ -16,7 +16,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from policy import approval_resource, verify_approval
+from .policy import approval_resource, verify_approval
 
 
 MUTATING_ACTIONS = {

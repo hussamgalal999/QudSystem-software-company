@@ -1,0 +1,53 @@
+name: Deploy Qudron Cloud Memory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qudron-memory-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check required deployment configuration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUDRON_MEMORY_TOKEN: ${{ secrets.QUDRON_MEMORY_TOKEN }}
+          QUDRON_MEMORY_D1_DATABASE_ID: ${{ vars.QUDRON_MEMORY_D1_DATABASE_ID }}
+        run: |
+          missing=()
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing+=("CLOUDFLARE_API_TOKEN")
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
+          [ -n "$QUDRON_MEMORY_TOKEN" ] || missing+=("QUDRON_MEMORY_TOKEN")
+          [ -n "$QUDRON_MEMORY_D1_DATABASE_ID" ] || missing+=("QUDRON_MEMORY_D1_DATABASE_ID")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error title=Memory deployment blocked::Required Cloudflare configuration is missing."
+            printf 'Missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+      - name: Install, migrate, typecheck and deploy
+        working-directory: ops/qudron-memory
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUDRON_MEMORY_TOKEN: ${{ secrets.QUDRON_MEMORY_TOKEN }}
+          QUDRON_MEMORY_D1_DATABASE_ID: ${{ vars.QUDRON_MEMORY_D1_DATABASE_ID }}
+        run: |
+          npm install --no-audit --no-fund
+          sed -i "s/REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID/$QUDRON_MEMORY_D1_DATABASE_ID/" wrangler.toml
+          npm run typecheck
+          npm run build
+          npx wrangler d1 migrations apply qudron-memory --remote
+          npx wrangler deploy
+          printf '%s' "$QUDRON_MEMORY_TOKEN" | npx wrangler secret put QUDRON_MEMORY_TOKEN
+          {
+            echo "## Qudron Cloud Memory deployment"
+            echo ""
+            echo "Worker deployment and D1 migration commands completed. Run authenticated health, write/read, restart and restore checks before declaring memory live."
+          } >> "$GITHUB_STEP_SUMMARY"

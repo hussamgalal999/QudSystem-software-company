@@ -25,7 +25,9 @@ class ArtemisMCPIntegrationTests(unittest.TestCase):
     def test_android_tools_are_registered_with_correct_approval_hints(self):
         tools = {item["name"]: item for item in ARTEMIS_TOOLS}
         self.assertFalse(tools["qudron_android_run_task"]["annotations"]["readOnlyHint"])
+        self.assertTrue(tools["qudron_android_run_task"]["annotations"]["destructiveHint"])
         self.assertFalse(tools["qudron_android_task_control"]["annotations"]["readOnlyHint"])
+        self.assertTrue(tools["qudron_android_task_control"]["annotations"]["destructiveHint"])
         self.assertTrue(tools["qudron_android_task_status"]["annotations"]["readOnlyHint"])
         self.assertTrue(tools["qudron_android_get_device_state"]["annotations"]["readOnlyHint"])
         self.assertTrue(tools["qudron_android_inspect_trace"]["annotations"]["readOnlyHint"])

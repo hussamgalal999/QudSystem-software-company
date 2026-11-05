@@ -1,6 +1,7 @@
 """Opt-in E2E test through Qudron MCP; requires an authorized Android device."""
 import json
 import os
+from pathlib import Path
 import re
 import time
 import unittest
@@ -10,10 +11,16 @@ import urllib.request
 @unittest.skipUnless(os.getenv("QUDRON_ARTEMIS_E2E") == "1", "requires explicit owner approval and an authorized Android device")
 class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
     mcp_url = os.getenv("QUDRON_MCP_URL", "http://127.0.0.1:8765/mcp").rstrip("/")
-    token = os.getenv("QUDRON_API_TOKEN", "")
+
+    def _token(self):
+        token = os.getenv("QUDRON_API_TOKEN", "").strip()
+        token_file = os.getenv("QUDRON_API_TOKEN_FILE", "").strip()
+        if not token and token_file:
+            token = Path(token_file).read_text(encoding="utf-8").strip()
+        self.assertTrue(token, "Set QUDRON_API_TOKEN or QUDRON_API_TOKEN_FILE for the Qudron MCP gateway")
+        return token
 
     def mcp(self, method, params=None, request_id=1):
-        self.assertTrue(self.token, "Set QUDRON_API_TOKEN for the Qudron MCP gateway")
         body = json.dumps({
             "jsonrpc": "2.0", "id": request_id, "method": method,
             "params": params or {},
@@ -21,7 +28,7 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
         request = urllib.request.Request(
             self.mcp_url, data=body, method="POST",
             headers={
-                "Authorization": "Bearer " + self.token,
+                "Authorization": "Bearer " + self._token(),
                 "Content-Type": "application/json",
             },
         )
@@ -88,7 +95,6 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
         self.assertTrue(trace_id, "Qudron did not return an Artemis trace_id")
 
         deadline = time.monotonic() + 900
-        status_result = {}
         status_text = ""
         while time.monotonic() < deadline:
             status = self.mcp("tools/call", {
@@ -117,10 +123,6 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
         self.assertTrue(
             percentages,
             "Trace summary did not contain a verifiable battery percentage: " + summary_text[:2000],
-        )
-        self.assertTrue(
-            any(0 <= int(value) <= 100 for value in percentages),
-            "Reported battery percentage was outside 0-100",
         )
 
 

@@ -1,0 +1,22 @@
+{
+  "service": "qudron-artemis-mcp-bridge",
+  "bind_host": "0.0.0.0",
+  "port": 8766,
+  "mcp": {
+    "command": "/absolute/path/to/artemis/.venv/bin/python",
+    "args": ["-m", "mcp_server"],
+    "cwd": "/absolute/path/to/google-artemis"
+  },
+  "allowed_tools": [
+    "mobile_run_task",
+    "mobile_manage_task",
+    "mobile_get_device_state",
+    "mobile_inspect_trace",
+    "mobile_diagnose"
+  ],
+  "security": {
+    "bearer_token_required": true,
+    "firewall_restrict_to_qudron_private_network": true,
+    "never_expose_directly_to_public_internet": true
+  }
+}

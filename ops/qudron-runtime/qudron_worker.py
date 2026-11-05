@@ -35,6 +35,7 @@ from capability_miner import mine_from_environment
 from capability_registry import search_capabilities as search_capability_registry
 from mcp_gateway import handle_mcp_request, MCPGatewayError
 from continuity_store import ContinuityStore
+from cloud_memory_adapter import flush_from_environment
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -1720,6 +1721,24 @@ class HealthHandler(BaseHTTPRequestHandler):
         return
 
 
+def cloud_memory_sync_loop() -> None:
+    """Replicate sanitized continuity events when the owner provisions cloud memory."""
+    store = ContinuityStore(DB_PATH)
+    interval = max(10, min(300, int(os.getenv("QUDRON_MEMORY_SYNC_INTERVAL_SECONDS", "30"))))
+    while not STOP.is_set():
+        try:
+            result = flush_from_environment(store)
+            if result.get("enabled") and (result.get("sent", 0) or result.get("failed", 0)):
+                logging.info(
+                    "Cloud memory outbox: sent=%s failed=%s pending=%s",
+                    result.get("sent", 0), result.get("failed", 0), result.get("pending", 0),
+                )
+        except Exception as exc:
+            # Never log request headers, tokens, or payloads.
+            logging.warning("Cloud memory sync deferred: %s", type(exc).__name__)
+        STOP.wait(interval)
+
+
 def run() -> None:
     global AGENT_REGISTRY, API_TOKEN
     setup_logging()
@@ -1742,6 +1761,7 @@ def run() -> None:
     signal.signal(signal.SIGTERM, handle_signal)
     health = ThreadingHTTPServer(("0.0.0.0", HEALTH_PORT), HealthHandler)
     threading.Thread(target=health.serve_forever, name="health", daemon=True).start()
+    threading.Thread(target=cloud_memory_sync_loop, name="cloud-memory-sync", daemon=True).start()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="agent") as pool:
         futures = [pool.submit(worker_loop) for _ in range(WORKERS)]

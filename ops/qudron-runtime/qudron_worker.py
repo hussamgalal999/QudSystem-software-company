@@ -1661,6 +1661,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 get_models=mcp_get_models,
                 search_capabilities=mcp_search_capabilities,
                 enqueue_batch=enqueue_api_batch,
+                get_continuity=lambda: ContinuityStore(DB_PATH).snapshot(),
+                get_agent_memory=lambda agent_id, project, limit: ContinuityStore(DB_PATH).agent_memory_context(
+                    agent_id=agent_id, project=project, limit=limit
+                ),
             )
         except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
             self._send_json(400, {"error": "invalid_mcp_request"})

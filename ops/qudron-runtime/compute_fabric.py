@@ -8,7 +8,10 @@ persistent machines by default.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+import json
+from pathlib import Path
+import sqlite3
 import time
 from typing import Any, Protocol, runtime_checkable
 import uuid
@@ -109,6 +112,274 @@ class ComputeLease:
             raise ValueError("expires_at must be a positive epoch timestamp")
 
 
+class SQLiteComputeLeaseStore:
+    """Durable, cross-process lease ledger for compute resources.
+
+    Active and release-pending leases continue consuming provider capacity
+    after a Qudron restart. Reservations expire only after a bounded timeout;
+    a timed-out provider call therefore cannot immediately free capacity when
+    its remote allocation outcome is unknown.
+    """
+
+    ACTIVE_STATES = ("active", "release_pending")
+
+    def __init__(self, database_path: str | Path):
+        self.database_path = Path(database_path)
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_schema()
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA busy_timeout=30000")
+        db.execute("PRAGMA journal_mode=WAL")
+        return db
+
+    def _ensure_schema(self) -> None:
+        db = self._connect()
+        try:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS compute_leases (
+                    lease_id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL UNIQUE,
+                    provider_id TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,
+                    expires_at REAL NOT NULL,
+                    endpoint_ref TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    state TEXT NOT NULL CHECK(state IN ('active','release_pending')),
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_compute_leases_provider_state
+                    ON compute_leases(provider_id, state, expires_at);
+                CREATE TABLE IF NOT EXISTS compute_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL UNIQUE,
+                    provider_id TEXT NOT NULL,
+                    expires_at REAL NOT NULL,
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_compute_reservations_provider_expiry
+                    ON compute_reservations(provider_id, expires_at);
+            """)
+        finally:
+            db.close()
+
+    @staticmethod
+    def _to_lease(row: sqlite3.Row) -> ComputeLease:
+        try:
+            metadata = json.loads(row["metadata_json"] or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        return ComputeLease(
+            provider_id=row["provider_id"],
+            lease_id=row["lease_id"],
+            resource_id=row["resource_id"],
+            expires_at=float(row["expires_at"]),
+            endpoint_ref=row["endpoint_ref"],
+            metadata=metadata if isinstance(metadata, dict) else {},
+        )
+
+    def find_request(self, request_id: str) -> tuple[str, ComputeLease] | None:
+        db = self._connect()
+        try:
+            row = db.execute(
+                "SELECT * FROM compute_leases WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            return (row["state"], self._to_lease(row)) if row else None
+        finally:
+            db.close()
+
+    def get_lease(self, lease_id: str) -> tuple[str, ComputeLease] | None:
+        db = self._connect()
+        try:
+            row = db.execute(
+                "SELECT * FROM compute_leases WHERE lease_id=?",
+                (lease_id,),
+            ).fetchone()
+            return (row["state"], self._to_lease(row)) if row else None
+        finally:
+            db.close()
+
+    def leases(self) -> list[tuple[str, ComputeLease]]:
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT * FROM compute_leases ORDER BY created_at, lease_id"
+            ).fetchall()
+            return [(row["state"], self._to_lease(row)) for row in rows]
+        finally:
+            db.close()
+
+    def active_count(self, provider_id: str, now: float | None = None) -> int:
+        current = time.time() if now is None else now
+        db = self._connect()
+        try:
+            lease_count = db.execute(
+                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?)",
+                (provider_id, *self.ACTIVE_STATES),
+            ).fetchone()[0]
+            reservation_count = db.execute(
+                "SELECT COUNT(*) FROM compute_reservations WHERE provider_id=? AND expires_at>?",
+                (provider_id, current),
+            ).fetchone()[0]
+            return int(lease_count) + int(reservation_count)
+        finally:
+            db.close()
+
+    def reserve(
+        self,
+        provider_id: str,
+        request_id: str,
+        max_concurrent_leases: int,
+        ttl_seconds: int,
+    ) -> str | None:
+        """Atomically reserve one provider slot across multiple Qudron processes."""
+        now = time.time()
+        reservation_id = uuid.uuid4().hex
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "DELETE FROM compute_reservations WHERE expires_at<=?",
+                (now,),
+            )
+            existing_lease = db.execute(
+                "SELECT 1 FROM compute_leases WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            existing_reservation = db.execute(
+                "SELECT 1 FROM compute_reservations WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if existing_lease or existing_reservation:
+                db.commit()
+                return None
+            active = db.execute(
+                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?)",
+                (provider_id, *self.ACTIVE_STATES),
+            ).fetchone()[0]
+            reserved = db.execute(
+                "SELECT COUNT(*) FROM compute_reservations WHERE provider_id=? AND expires_at>?",
+                (provider_id, now),
+            ).fetchone()[0]
+            if int(active) + int(reserved) >= max_concurrent_leases:
+                db.commit()
+                return None
+            db.execute(
+                "INSERT INTO compute_reservations VALUES(?,?,?,?,?)",
+                (reservation_id, request_id, provider_id, now + ttl_seconds, now),
+            )
+            db.commit()
+            return reservation_id
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def save_lease(
+        self,
+        reservation_id: str | None,
+        request_id: str,
+        lease: ComputeLease,
+        state: str = "active",
+    ) -> None:
+        if state not in self.ACTIVE_STATES:
+            raise ValueError("Unsupported compute lease state")
+        now = time.time()
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT lease_id FROM compute_leases WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if row and row["lease_id"] != lease.lease_id:
+                raise ComputeFabricError("Request already owns a different compute lease")
+            by_id = db.execute(
+                "SELECT request_id FROM compute_leases WHERE lease_id=?",
+                (lease.lease_id,),
+            ).fetchone()
+            if by_id and by_id["request_id"] != request_id:
+                raise ComputeFabricError("Compute lease ID is already owned by another request")
+            db.execute(
+                """INSERT INTO compute_leases
+                   (lease_id,request_id,provider_id,resource_id,expires_at,endpoint_ref,
+                    metadata_json,state,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(lease_id) DO UPDATE SET
+                     state=excluded.state, updated_at=excluded.updated_at""",
+                (
+                    lease.lease_id, request_id, lease.provider_id, lease.resource_id,
+                    lease.expires_at, lease.endpoint_ref,
+                    json.dumps(lease.metadata, ensure_ascii=False, default=str),
+                    state, now, now,
+                ),
+            )
+            if reservation_id:
+                db.execute(
+                    "DELETE FROM compute_reservations WHERE reservation_id=?",
+                    (reservation_id,),
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def cancel_reservation(self, reservation_id: str | None) -> None:
+        if not reservation_id:
+            return
+        db = self._connect()
+        try:
+            db.execute(
+                "DELETE FROM compute_reservations WHERE reservation_id=?",
+                (reservation_id,),
+            )
+        finally:
+            db.close()
+
+    def mark_release_pending(self, lease_id: str) -> None:
+        db = self._connect()
+        try:
+            db.execute(
+                "UPDATE compute_leases SET state='release_pending',updated_at=? WHERE lease_id=?",
+                (time.time(), lease_id),
+            )
+        finally:
+            db.close()
+
+    def delete_lease(self, lease_id: str) -> None:
+        db = self._connect()
+        try:
+            db.execute("DELETE FROM compute_leases WHERE lease_id=?", (lease_id,))
+        finally:
+            db.close()
+
+    def snapshot(self) -> dict[str, int]:
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT state,COUNT(*) AS amount FROM compute_leases GROUP BY state"
+            ).fetchall()
+            counts = {row["state"]: int(row["amount"]) for row in rows}
+            reservations = db.execute(
+                "SELECT COUNT(*) FROM compute_reservations WHERE expires_at>?",
+                (time.time(),),
+            ).fetchone()[0]
+            return {
+                "active_leases": counts.get("active", 0),
+                "release_pending": counts.get("release_pending", 0),
+                "reservations": int(reservations),
+            }
+        finally:
+            db.close()
+
+
 @runtime_checkable
 class ComputeAdapter(Protocol):
     async def acquire(
@@ -144,12 +415,20 @@ class ComputeFabricPolicy:
 class ComputeFabric:
     """Qualify and allocate only explicitly authorized, recently probed resources."""
 
-    def __init__(self, policy: ComputeFabricPolicy | None = None):
+    def __init__(
+        self,
+        policy: ComputeFabricPolicy | None = None,
+        lease_store: SQLiteComputeLeaseStore | None = None,
+    ):
         self.policy = policy or ComputeFabricPolicy()
+        self.lease_store = lease_store
         self._providers: dict[str, ComputeProviderDescriptor] = {}
         self._adapters: dict[str, ComputeAdapter] = {}
         self._leases: dict[str, tuple[str, ComputeLease]] = {}
         self._reservations: dict[str, int] = {}
+        if self.lease_store:
+            for _, lease in self.lease_store.leases():
+                self._leases[lease.lease_id] = (lease.provider_id, lease)
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: ComputeAdapter) -> None:
@@ -165,8 +444,12 @@ class ComputeFabric:
         self._providers[provider.provider_id] = provider
 
     def _eligible(self, provider: ComputeProviderDescriptor, request: ComputeRequest) -> tuple[bool, str]:
-        active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
-        reserved = self._reservations.get(provider.provider_id, 0)
+        if self.lease_store:
+            active = self.lease_store.active_count(provider.provider_id)
+            reserved = 0
+        else:
+            active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
+            reserved = self._reservations.get(provider.provider_id, 0)
         if active + reserved >= provider.max_concurrent_leases:
             return False, "provider_concurrency_limit"
         if not provider.enabled:
@@ -236,6 +519,22 @@ class ComputeFabric:
         return reasons
 
     async def acquire(self, request: ComputeRequest) -> ComputeLease:
+        # The same logical request is idempotent across process restarts when
+        # a durable lease store is configured.
+        if self.lease_store:
+            prior = self.lease_store.find_request(request.request_id)
+            if prior:
+                state, existing_lease = prior
+                if state == "active" and existing_lease.expires_at > time.time():
+                    self._leases[existing_lease.lease_id] = (
+                        existing_lease.provider_id, existing_lease
+                    )
+                    return existing_lease
+                raise ComputeProviderUnavailable(
+                    f"Request {request.request_id} already has a {state} or expired lease; "
+                    "reconcile it before retrying"
+                )
+
         candidates = self.eligible_providers(request)
         if not candidates:
             raise NoEligibleCompute(
@@ -244,53 +543,147 @@ class ComputeFabric:
         failures = []
         for provider in candidates:
             adapter = self._adapters[provider.adapter]
-            async with self._lock:
-                eligible, reason = self._eligible(provider, request)
-                if not eligible:
-                    failures.append(f"{provider.provider_id}:{reason}")
+            reservation_id = None
+            locally_reserved = False
+            if self.lease_store:
+                reservation_id = self.lease_store.reserve(
+                    provider.provider_id,
+                    request.request_id,
+                    provider.max_concurrent_leases,
+                    max(300, self.policy.request_timeout_seconds * 2),
+                )
+                if not reservation_id:
+                    failures.append(f"{provider.provider_id}:capacity_or_duplicate_request")
                     continue
-                self._reservations[provider.provider_id] = self._reservations.get(provider.provider_id, 0) + 1
+            else:
+                async with self._lock:
+                    eligible, reason = self._eligible(provider, request)
+                    if not eligible:
+                        failures.append(f"{provider.provider_id}:{reason}")
+                        continue
+                    self._reservations[provider.provider_id] = (
+                        self._reservations.get(provider.provider_id, 0) + 1
+                    )
+                    locally_reserved = True
+
+            lease: ComputeLease | None = None
             try:
                 lease = await asyncio.wait_for(
                     adapter.acquire(provider, request),
                     timeout=self.policy.request_timeout_seconds,
                 )
+                # A provider allocation is a real resource. Persist it before
+                # exposing it to callers or releasing the reservation.
                 if lease.provider_id != provider.provider_id:
                     raise ComputeFabricError("Adapter returned a mismatched provider identity")
                 if lease.expires_at <= time.time():
                     raise ComputeFabricError("Adapter returned an already-expired compute lease")
+                if lease.lease_id in self._leases:
+                    raise ComputeFabricError("Duplicate active compute lease ID")
+                if self.lease_store:
+                    self.lease_store.save_lease(
+                        reservation_id, request.request_id, lease, state="active"
+                    )
                 async with self._lock:
-                    if lease.lease_id in self._leases:
-                        raise ComputeFabricError("Duplicate active compute lease ID")
                     self._leases[lease.lease_id] = (provider.provider_id, lease)
                 return lease
-            except (asyncio.TimeoutError, ComputeProviderUnavailable, ConnectionError) as exc:
+            except Exception as exc:
                 failures.append(f"{provider.provider_id}:{type(exc).__name__}")
+                if lease is not None:
+                    # Never silently forget a resource that may have been
+                    # allocated. Keep it occupying capacity until release is
+                    # confirmed, even when the adapter returned bad metadata.
+                    cleanup_lease = (
+                        lease if lease.provider_id == provider.provider_id
+                        else replace(lease, provider_id=provider.provider_id)
+                    )
+                    persisted = False
+                    if self.lease_store:
+                        try:
+                            self.lease_store.save_lease(
+                                reservation_id, request.request_id,
+                                cleanup_lease, state="release_pending",
+                            )
+                            self._leases[cleanup_lease.lease_id] = (
+                                provider.provider_id, cleanup_lease
+                            )
+                            persisted = True
+                        except Exception:
+                            # If persistence itself failed, still attempt
+                            # immediate cleanup; do not report success.
+                            pass
+                    try:
+                        await asyncio.wait_for(
+                            adapter.release(provider, cleanup_lease),
+                            timeout=self.policy.request_timeout_seconds,
+                        )
+                        if persisted and self.lease_store:
+                            self.lease_store.delete_lease(cleanup_lease.lease_id)
+                        self._leases.pop(cleanup_lease.lease_id, None)
+                    except Exception:
+                        # A failed release remains durable and consumes a
+                        # provider slot; operators can retry it explicitly.
+                        if not self.lease_store:
+                            self._leases[cleanup_lease.lease_id] = (
+                                provider.provider_id, cleanup_lease
+                            )
+                elif self.lease_store:
+                    # On timeout, the remote side may have allocated a
+                    # resource before the response was lost. Keep the bounded
+                    # reservation until expiry to avoid immediate overbooking.
+                    if not isinstance(exc, asyncio.TimeoutError):
+                        self.lease_store.cancel_reservation(reservation_id)
                 continue
             finally:
-                async with self._lock:
-                    remaining = self._reservations.get(provider.provider_id, 1) - 1
-                    if remaining > 0:
-                        self._reservations[provider.provider_id] = remaining
-                    else:
-                        self._reservations.pop(provider.provider_id, None)
-        raise ComputeProviderUnavailable("All eligible compute providers failed: " + ", ".join(failures))
+                if self.lease_store:
+                    # No-op after commit; removes reservations after clean
+                    # failures. Timeout reservations expire on their own.
+                    if lease is not None:
+                        self.lease_store.cancel_reservation(reservation_id)
+                elif locally_reserved:
+                    async with self._lock:
+                        remaining = self._reservations.get(provider.provider_id, 1) - 1
+                        if remaining > 0:
+                            self._reservations[provider.provider_id] = remaining
+                        else:
+                            self._reservations.pop(provider.provider_id, None)
+        raise ComputeProviderUnavailable(
+            "All eligible compute providers failed: " + ", ".join(failures)
+        )
 
     async def release(self, lease: ComputeLease) -> None:
-        async with self._lock:
-            stored = self._leases.get(lease.lease_id)
-            if not stored or stored[0] != lease.provider_id or stored[1] != lease:
-                raise ComputeFabricError("Unknown or mismatched compute lease")
-            provider = self._providers[lease.provider_id]
-            adapter = self._adapters[provider.adapter]
+        stored = self._leases.get(lease.lease_id)
+        if not stored and self.lease_store:
+            persisted = self.lease_store.get_lease(lease.lease_id)
+            if persisted:
+                state, persisted_lease = persisted
+                stored = (persisted_lease.provider_id, persisted_lease)
+                self._leases[lease.lease_id] = stored
+        if not stored or stored[0] != lease.provider_id or stored[1] != lease:
+            raise ComputeFabricError("Unknown or mismatched compute lease")
+        provider = self._providers.get(lease.provider_id)
+        if not provider:
+            raise ComputeProviderUnavailable(
+                f"Provider {lease.provider_id} is not registered for lease recovery"
+            )
+        adapter = self._adapters[provider.adapter]
+        if self.lease_store:
+            self.lease_store.mark_release_pending(lease.lease_id)
+        # Keep the lease in both stores until provider release is confirmed.
         await asyncio.wait_for(
             adapter.release(provider, lease),
             timeout=self.policy.request_timeout_seconds,
         )
-        async with self._lock:
-            self._leases.pop(lease.lease_id, None)
+        if self.lease_store:
+            self.lease_store.delete_lease(lease.lease_id)
+        self._leases.pop(lease.lease_id, None)
 
     def snapshot(self) -> dict[str, Any]:
+        persisted = self.lease_store.snapshot() if self.lease_store else {
+            "active_leases": len(self._leases),
+            "release_pending": 0,
+            "reservations": sum(self._reservations.values()),
+        }
         return {
             "providers": [
                 {
@@ -307,5 +700,5 @@ class ComputeFabric:
                 }
                 for p in self._providers.values()
             ],
-            "active_leases": len(self._leases),
+            **persisted,
         }

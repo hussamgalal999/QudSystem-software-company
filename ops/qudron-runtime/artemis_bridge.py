@@ -14,8 +14,7 @@ import logging
 import mimetypes
 import os
 from pathlib import Path
-import shlex
-import sys
+import subprocess
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
@@ -61,6 +60,17 @@ def _server_parameters() -> StdioServerParameters:
     project_root = Path(cwd).resolve()
     if not project_root.is_dir():
         raise RuntimeError("ARTEMIS_MCP_CWD must point to an existing Artemis checkout")
+    expected_commit = os.getenv("ARTEMIS_EXPECTED_COMMIT", "").strip()
+    if expected_commit:
+        try:
+            actual_commit = subprocess.run(
+                ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+                check=True, capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError("Could not verify the pinned Artemis checkout") from exc
+        if actual_commit != expected_commit:
+            raise RuntimeError("Artemis checkout does not match ARTEMIS_EXPECTED_COMMIT")
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     return StdioServerParameters(command=command, args=args, cwd=str(project_root), env=env)

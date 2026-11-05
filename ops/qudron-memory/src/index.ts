@@ -179,6 +179,20 @@ async function upsertDecision(body: Record<string, unknown>, env: Env): Promise<
   return json({ ok: true, decision_id: id, decided_at: at });
 }
 
+async function upsertConversationNote(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const id = requiredString(body, "note_id", 200);
+  const projectId = requiredString(body, "project_id", 160);
+  const conversationId = requiredString(body, "conversation_id", 200);
+  const summary = requiredString(body, "summary", 8000);
+  const actor = requiredString(body, "updated_by", 160);
+  if (!id || !projectId || !conversationId || !summary || !actor)
+    return json({ error: "note_id_project_id_conversation_id_summary_updated_by_required" }, 400);
+  const at = typeof body.occurred_at === "string" && !Number.isNaN(Date.parse(body.occurred_at))
+    ? new Date(body.occurred_at).toISOString() : isoNow();
+  await env.DB.prepare("INSERT INTO conversation_notes (note_id,project_id,conversation_id,source_ref,summary,key_facts_json,decisions_json,open_loops_json,updated_by,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(note_id) DO UPDATE SET source_ref=excluded.source_ref,summary=excluded.summary,key_facts_json=excluded.key_facts_json,decisions_json=excluded.decisions_json,open_loops_json=excluded.open_loops_json,updated_by=excluded.updated_by,occurred_at=excluded.occurred_at")
+    .bind(id, projectId, conversationId, typeof body.source_ref === "string" ? body.source_ref.slice(0,1000) : "", summary, jsonField(body,"key_facts",[]), jsonField(body,"decisions",[]), jsonField(body,"open_loops",[]), actor, at).run();
+  return json({ ok: true, note_id: id, occurred_at: at });
+}
 async function getContext(url: URL, env: Env): Promise<Response> {
   const projectId = url.searchParams.get("project_id");
   const agentId = url.searchParams.get("agent_id");
@@ -204,6 +218,10 @@ async function getContext(url: URL, env: Env): Promise<Response> {
     ? await env.DB.prepare("SELECT * FROM decisions WHERE project_id=? AND status='active' ORDER BY decided_at DESC LIMIT ?")
       .bind(projectId, limit).all()
     : { results: [] };
+  const conversationNotes = projectId
+    ? await env.DB.prepare("SELECT * FROM conversation_notes WHERE project_id=? ORDER BY occurred_at DESC LIMIT ?")
+      .bind(projectId, Math.min(20, limit)).all()
+    : { results: [] };
   return json({
     schema_version: env.MEMORY_SCHEMA_VERSION || "1",
     generated_at: isoNow(),
@@ -211,6 +229,7 @@ async function getContext(url: URL, env: Env): Promise<Response> {
     tasks: tasks.results || [],
     recent_events: events.results || [],
     active_decisions: decisions.results || [],
+    conversation_notes: conversationNotes.results || [],
     note: "Context is a bounded recovery packet, not a claim that every historical conversation has been imported."
   });
 }
@@ -230,6 +249,7 @@ export default {
       if (url.pathname === "/v1/agents") return await upsertAgent(body, env);
       if (url.pathname === "/v1/tasks") return await upsertTask(body, env);
       if (url.pathname === "/v1/decisions") return await upsertDecision(body, env);
+      if (url.pathname === "/v1/conversations") return await upsertConversationNote(body, env);
       if (url.pathname === "/v1/events") return await appendEvent(body, env);
       return json({ error: "not_found" }, 404);
     } catch {

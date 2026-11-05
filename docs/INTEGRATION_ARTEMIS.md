@@ -188,6 +188,8 @@ ARTEMIS_DEVICE_SERIAL="<authorized-device-serial>" QUDRON_ARTEMIS_E2E=1 python -
 
 This repository change does not claim that a physical-device run has passed. The test must be run on the actual Android host and its returned trace must be reviewed.
 
+For the exact host-side command, token handling, and ADB cross-check for the physical-device test, see [ARTEMIS_E2E_RUNBOOK.md](./ARTEMIS_E2E_RUNBOOK.md).
+
 ## 6. Limitations and risks
 
 - The Android host must remain online and have an authorized device attached.

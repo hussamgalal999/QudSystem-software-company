@@ -67,7 +67,7 @@ New branch work adds:
 - The continuity store now imports the time module required by its cloud outbox and has an outbox-persistence regression test.
 - A provider-neutral compute admission/lease contract and tests now exist. This is only the control-plane foundation; provider discovery, account probes, durable lease recovery, and real provisioning/release adapters remain unimplemented.
 - The runtime now runs a bounded cloud-memory outbox sync loop when both owner-provisioned URL and token are present. Without those secrets, cloud sync remains disabled; no live cloud deployment is claimed.
-- PR #24 adds the evidence framework, the explicit remote-compute fabric backlog item and the provider qualification catalog. Workflow run #259 executed 204 tests but failed on two import errors and one missing registry acceptance criterion. The import/test/registry fixes are now committed; wait for a new run on the exact updated head SHA before marking the branch CI-verified.
+- PR #24 adds the evidence framework, the explicit remote-compute fabric backlog item and the provider qualification catalog. Workflow run #259 executed 204 tests but failed on two import errors and one missing registry acceptance criterion. Those fixes are committed. Workflow run #262 on the next head passed the 204-test suite, runtime image build, container import smoke test and FreeLLM sidecar image build; Compose validation was still running at last observation. The later compute-fabric commits were added after run #262 started, so a fresh run on the exact latest head is still required.
 
 ## External integrations — honest current state
 

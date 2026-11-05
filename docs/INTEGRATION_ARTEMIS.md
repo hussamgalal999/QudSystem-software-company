@@ -112,6 +112,7 @@ Use a computer that has the physical Android device connected (or a supported em
 ~~~bash
 git clone https://github.com/google/artemis.git
 cd artemis
+git checkout 351ca8422f7b5b54e80a9c1ce03a222e02415b6b
 ./start.sh
 ~~~
 
@@ -134,6 +135,7 @@ Example environment (Linux/macOS):
 export ARTEMIS_MCP_COMMAND="/absolute/path/to/artemis/.venv/bin/python"
 export ARTEMIS_MCP_ARGS_JSON='["-m","mcp_server"]'
 export ARTEMIS_MCP_CWD="/absolute/path/to/artemis"
+export ARTEMIS_EXPECTED_COMMIT="351ca8422f7b5b54e80a9c1ce03a222e02415b6b"
 export ARTEMIS_BRIDGE_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
 export ARTEMIS_BRIDGE_BIND_HOST="0.0.0.0"
 export ARTEMIS_BRIDGE_PORT="8766"

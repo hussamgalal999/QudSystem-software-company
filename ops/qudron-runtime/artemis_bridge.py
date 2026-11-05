@@ -1,8 +1,7 @@
-"""Authenticated host-side bridge from Qudron HTTP to the upstream Artemis MCP server.
+"""Authenticated host-side bridge from Qudron HTTP to upstream Artemis MCP.
 
-Run this process on the computer that owns the Android device and the Artemis
-installation. It starts the official Artemis MCP server over stdio per request;
-Artemis remains an independent upstream process and is never vendored here.
+Run on the Android host. Artemis remains independently installed and is invoked
+through its official stdio MCP server; no Artemis source is copied into Qudron.
 """
 from __future__ import annotations
 
@@ -16,6 +15,7 @@ import os
 from pathlib import Path
 import subprocess
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,11 +25,8 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 LOG = logging.getLogger("qudron.artemis_bridge")
 ALLOWED_TOOLS = {
-    "mobile_run_task",
-    "mobile_manage_task",
-    "mobile_get_device_state",
-    "mobile_inspect_trace",
-    "mobile_diagnose",
+    "mobile_run_task", "mobile_manage_task", "mobile_get_device_state",
+    "mobile_inspect_trace", "mobile_diagnose",
 }
 MAX_ARTIFACT_BYTES = 5 * 1024 * 1024
 
@@ -41,7 +38,6 @@ class ToolCall(BaseModel):
 
 
 def _bridge_config() -> dict[str, Any]:
-    """Load the optional non-secret JSON config; environment values override it."""
     config_path = os.getenv("ARTEMIS_BRIDGE_CONFIG", "").strip()
     if not config_path:
         return {}
@@ -54,8 +50,23 @@ def _bridge_config() -> dict[str, Any]:
     return value
 
 
-def _server_parameters() -> StdioServerParameters:
+def _artemis_project_root() -> Path:
+    """Resolve cwd consistently from environment overrides or the JSON config."""
     mcp_config = _bridge_config().get("mcp", {})
+    if not isinstance(mcp_config, dict):
+        raise RuntimeError("The mcp section in Artemis bridge config must be an object")
+    cwd = os.getenv("ARTEMIS_MCP_CWD", "").strip() or str(mcp_config.get("cwd", "")).strip()
+    if not cwd:
+        raise RuntimeError("Set ARTEMIS_MCP_CWD or mcp.cwd in ARTEMIS_BRIDGE_CONFIG")
+    root = Path(cwd).expanduser().resolve()
+    if not root.is_dir():
+        raise RuntimeError("The configured Artemis working directory must exist")
+    return root
+
+
+def _server_parameters() -> StdioServerParameters:
+    config = _bridge_config()
+    mcp_config = config.get("mcp", {})
     if not isinstance(mcp_config, dict):
         raise RuntimeError("The mcp section in Artemis bridge config must be an object")
     command = os.getenv("ARTEMIS_MCP_COMMAND", "").strip() or str(mcp_config.get("command", "")).strip()
@@ -71,54 +82,54 @@ def _server_parameters() -> StdioServerParameters:
         args = mcp_config.get("args", ["-m", "mcp_server"])
     if not isinstance(args, list) or not all(isinstance(item, str) for item in args):
         raise RuntimeError("Artemis MCP args must be an array of strings")
-    cwd = os.getenv("ARTEMIS_MCP_CWD", "").strip() or str(mcp_config.get("cwd", "")).strip()
-    if not cwd:
-        raise RuntimeError("Set ARTEMIS_MCP_CWD or mcp.cwd in ARTEMIS_BRIDGE_CONFIG")
-    project_root = Path(cwd).resolve()
-    if not project_root.is_dir():
-        raise RuntimeError("The configured Artemis working directory must exist")
+    project_root = _artemis_project_root()
     expected_commit = os.getenv("ARTEMIS_EXPECTED_COMMIT", "").strip() or str(mcp_config.get("expected_commit", "")).strip()
     if expected_commit:
         try:
-            actual_commit = subprocess.run(
+            actual = subprocess.run(
                 ["git", "-C", str(project_root), "rev-parse", "HEAD"],
                 check=True, capture_output=True, text=True, timeout=5,
             ).stdout.strip()
         except (OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError("Could not verify the pinned Artemis checkout") from exc
-        if actual_commit != expected_commit:
+        if actual != expected_commit:
             raise RuntimeError("Artemis checkout does not match ARTEMIS_EXPECTED_COMMIT")
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
     return StdioServerParameters(command=command, args=args, cwd=str(project_root), env=env)
 
 
 def _safe_artifact(path_text: str) -> dict[str, Any] | None:
-    """Convert only known Artemis screenshot artifacts into bounded MCP image blocks."""
-    if not path_text.startswith("file://"):
-        return None
-    from urllib.parse import unquote, urlparse
-
+    """Return only bounded image artifacts located inside the configured Artemis tree."""
     parsed = urlparse(path_text)
-    candidate = Path(unquote(parsed.path)).resolve()
-    project_root = Path(_required_env("ARTEMIS_MCP_CWD")).resolve()
+    if parsed.scheme != "file" or parsed.netloc not in {"", "localhost"}:
+        return None
+    try:
+        project_root = _artemis_project_root()
+        candidate = Path(unquote(parsed.path)).resolve()
+    except (RuntimeError, OSError, ValueError):
+        return None
     traces_root = (project_root / "traces").resolve()
-    in_project = candidate.is_relative_to(project_root)
     in_traces = candidate.is_relative_to(traces_root)
-    known_live_capture = candidate.name.startswith("live_screenshot_") and candidate.suffix.lower() in {".jpg", ".jpeg", ".png"}
-    if not (in_traces or (in_project and known_live_capture)) or not candidate.is_file():
+    live_capture = (
+        candidate.is_relative_to(project_root)
+        and candidate.name.startswith("live_screenshot_")
+        and candidate.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    )
+    if not (in_traces or live_capture) or not candidate.is_file():
         return None
-    size = candidate.stat().st_size
-    if size < 1 or size > MAX_ARTIFACT_BYTES:
+    try:
+        size = candidate.stat().st_size
+        if size < 1 or size > MAX_ARTIFACT_BYTES:
+            return None
+        mime = mimetypes.guess_type(candidate.name)[0] or "image/jpeg"
+        if mime not in {"image/jpeg", "image/png", "image/webp"}:
+            return None
+        return {"type": "image", "mimeType": mime,
+                "data": base64.b64encode(candidate.read_bytes()).decode("ascii")}
+    except OSError:
         return None
-    mime_type = mimetypes.guess_type(candidate.name)[0] or "image/jpeg"
-    if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
-        return None
-    return {
-        "type": "image",
-        "mimeType": mime_type,
-        "data": base64.b64encode(candidate.read_bytes()).decode("ascii"),
-    }
 
 
 def _serialize_result(result: Any) -> dict[str, Any]:
@@ -130,15 +141,17 @@ def _serialize_result(result: Any) -> dict[str, Any]:
             block = item.dict(by_alias=True)
         else:
             block = {"type": "text", "text": str(item)}
+        if not isinstance(block, dict):
+            continue
         if block.get("type") == "text":
-            artifact = _safe_artifact(str(block.get("text", "")))
-            content.append(artifact or {"type": "text", "text": str(block.get("text", ""))[:20000]})
+            text = str(block.get("text", ""))
+            artifact = _safe_artifact(text)
+            content.append(artifact or {"type": "text", "text": text[:20000]})
         elif block.get("type") == "image":
-            content.append({
-                "type": "image",
-                "mimeType": block.get("mimeType", "image/png"),
-                "data": str(block.get("data", ""))[:MAX_ARTIFACT_BYTES * 2],
-            })
+            mime = block.get("mimeType", "image/png")
+            data = str(block.get("data", ""))
+            if mime in {"image/jpeg", "image/png", "image/webp"} and len(data) <= 7_000_000:
+                content.append({"type": "image", "mimeType": mime, "data": data})
         else:
             content.append({"type": "text", "text": json.dumps(block, ensure_ascii=False)[:20000]})
     payload: dict[str, Any] = {
@@ -155,20 +168,14 @@ def _serialize_result(result: Any) -> dict[str, Any]:
 
 
 def _validate_tool_arguments(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Enforce the same least-privilege contract even when the bridge is called directly."""
-    allowed_fields = {
-        "mobile_run_task": {
-            "task_desc", "model", "device_serial", "expected_output_desc",
-            "verification_level", "explorer_mode",
-        },
+    allowed = {
+        "mobile_run_task": {"task_desc", "model", "device_serial", "expected_output_desc", "verification_level", "explorer_mode"},
         "mobile_manage_task": {"action", "trace_id", "instruction", "release_loop"},
         "mobile_get_device_state": {"view_type", "device_serial"},
-        "mobile_inspect_trace": {
-            "action", "trace_id", "step_number", "query", "step_range", "max_results",
-        },
+        "mobile_inspect_trace": {"action", "trace_id", "step_number", "query", "step_range", "max_results"},
         "mobile_diagnose": {"device_serial"},
     }
-    if name not in allowed_fields or set(arguments) - allowed_fields[name]:
+    if name not in allowed or set(arguments) - allowed[name]:
         raise HTTPException(status_code=400, detail="Invalid Artemis tool arguments")
     args = dict(arguments)
     if name == "mobile_run_task":
@@ -212,10 +219,7 @@ async def call_artemis_tool(name: str, arguments: dict[str, Any]) -> dict[str, A
         async with stdio_client(params) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 await asyncio.wait_for(session.initialize(), timeout=timeout)
-                result = await asyncio.wait_for(
-                    session.call_tool(name, arguments=arguments),
-                    timeout=timeout,
-                )
+                result = await asyncio.wait_for(session.call_tool(name, arguments=arguments), timeout=timeout)
                 return _serialize_result(result)
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Artemis MCP call timed out") from exc
@@ -226,21 +230,22 @@ async def call_artemis_tool(name: str, arguments: dict[str, Any]) -> dict[str, A
         raise HTTPException(status_code=502, detail="Artemis MCP call failed; inspect host-side bridge logs") from exc
 
 
-app = FastAPI(title="Qudron Artemis MCP Bridge", version="0.1.0")
+app = FastAPI(title="Qudron Artemis MCP Bridge", version="0.1.1")
 
 
 def _authorize(authorization: str | None) -> None:
     expected = os.getenv("ARTEMIS_BRIDGE_TOKEN", "")
+    supplied = authorization or ""
     if not expected:
         raise HTTPException(status_code=503, detail="Bridge token is not configured")
-    supplied = authorization or ""
     if not supplied.startswith("Bearer ") or not hmac.compare_digest(supplied[7:], expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"service": "qudron-artemis-mcp-bridge", "status": "ready"}
+    # Liveness only; Artemis/device readiness is checked via mobile_diagnose.
+    return {"service": "qudron-artemis-mcp-bridge", "status": "alive"}
 
 
 @app.post("/tools/call")
@@ -251,9 +256,10 @@ async def tools_call(payload: ToolCall, authorization: str | None = Header(defau
 
 if __name__ == "__main__":
     logging.basicConfig(level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "INFO"))
+    config = _bridge_config()
     uvicorn.run(
         app,
-        host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", str(_bridge_config().get("bind_host", "0.0.0.0"))),
-        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", str(_bridge_config().get("port", 8766)))),
+        host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", str(config.get("bind_host", "0.0.0.0"))),
+        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", str(config.get("port", 8766)))),
         log_level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "info").lower(),
     )

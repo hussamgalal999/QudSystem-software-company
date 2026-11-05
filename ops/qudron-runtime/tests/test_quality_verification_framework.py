@@ -59,7 +59,7 @@ class QualityVerificationFrameworkTests(unittest.TestCase):
         task = next(task for task in self.tasks if task["id"] == "remote-compute-fabric")
         self.assertEqual(task["area"], "Capacity")
         self.assertEqual(task["priority"], "P0")
-        self.assertEqual(task["status"], "not_started")
+        self.assertEqual(task["status"], "implemented_pending_ci")
         self.assertIn("Ollama", task["title"])
         self.assertIn("live evidence", task["acceptance_criteria"].lower())
 

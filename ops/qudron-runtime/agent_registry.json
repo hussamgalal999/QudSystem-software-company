@@ -216,6 +216,54 @@
       "name": "CV Privacy Reviewer",
       "profile": "reasoning",
       "responsibilities": "Flag unnecessary national IDs, full addresses, sensitive disclosures and excess personal data while preserving contact information genuinely needed for applications."
+    },
+    {
+      "id": "security_test_analyst",
+      "name": "Authorized Security Test Analyst",
+      "profile": "reasoning",
+      "responsibilities": "Plan and document authorized security tests against owner-controlled devices, apps, repositories and explicitly scoped targets; collect evidence and recommend responsible disclosure without exploiting third-party systems."
+    },
+    {
+      "id": "mobile_operator",
+      "name": "Android Device Operations Specialist",
+      "profile": "balanced",
+      "responsibilities": "Execute owner-approved Android workflows through Artemis; delegate application tasks, inspect state, preserve traces and report exact outcomes."
+    },
+    {
+      "id": "android_security_researcher",
+      "name": "Android Application Security Researcher",
+      "profile": "reasoning",
+      "responsibilities": "Assess owner-authorized Android applications for permission, storage, network, component and input-validation weaknesses; produce safe reproduction evidence and disclosure-ready reports."
+    },
+    {
+      "id": "model_access_scout",
+      "name": "Authorized Model Access Scout",
+      "profile": "reasoning",
+      "responsibilities": "Discover and continuously verify high-capability model access paths that are explicitly permitted, genuinely free or backed by free compute; measure quotas, latency, quality and terms without bypassing limits."
+    },
+    {
+      "id": "external_swarm_orchestrator",
+      "name": "External Agent Swarm Orchestrator",
+      "profile": "reasoning",
+      "responsibilities": "Dispatch and supervise tasks to approved external agents and browser-based services; persist task references, checkpoints, memory, provenance and failover state."
+    },
+    {
+      "id": "manus_task_operator",
+      "name": "Manus Task Operator",
+      "profile": "balanced",
+      "responsibilities": "Create, monitor and continue authorized Manus API v2 tasks; preserve task IDs, messages, completion evidence and owner confirmation requirements."
+    },
+    {
+      "id": "cloud_platform_engineer",
+      "name": "Cloud Platform & Reliability Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Design and verify deployment, observability, backups, restore, isolation, capacity limits and secure service operation across approved hosting platforms."
+    },
+    {
+      "id": "continuity_librarian",
+      "name": "Agent Memory & Continuity Librarian",
+      "profile": "reasoning",
+      "responsibilities": "Maintain project and role-specific memory, task history, stage checkpoints, resume instructions and durable cross-session state while minimizing sensitive data."
     }
   ],
   "teams": {
@@ -297,6 +345,36 @@
     "incident_triage": [
       "reliability_engineer",
       "qa_engineer",
+      "evidence_checker"
+    ],
+    "android_device_operations": [
+      "mobile_operator",
+      "reliability_engineer",
+      "evidence_checker"
+    ],
+    "authorized_android_security_review": [
+      "android_security_researcher",
+      "security_test_analyst",
+      "compliance_reviewer"
+    ],
+    "provider_access_discovery": [
+      "model_access_scout",
+      "strategy_council",
+      "evidence_checker"
+    ],
+    "external_agent_dispatch": [
+      "external_swarm_orchestrator",
+      "manus_task_operator",
+      "reliability_engineer"
+    ],
+    "platform_operations": [
+      "cloud_platform_engineer",
+      "software_engineer",
+      "reliability_engineer"
+    ],
+    "memory_and_continuity_review": [
+      "continuity_librarian",
+      "privacy_qa",
       "evidence_checker"
     ]
   }

@@ -103,6 +103,13 @@ The bridge does not expose arbitrary shell commands. mobile_diagnose is restrict
 
 The bridge converts only bounded screenshot files under the Artemis checkout/traces directory to MCP image blocks. Arbitrary host paths are never read or returned as file contents.
 
+### Logcat, screenshots and device evidence
+
+- **Screenshots:** `mobile_get_device_state(view_type="screenshot")` and `mobile_inspect_trace` may return Artemis file-URI artifacts. The bridge converts only bounded screenshots located inside the configured Artemis checkout into MCP image blocks.
+- **Logcat:** ask a Pro task to collect bounded Android logs for the relevant time window (for example, a bounded `logcat -d` capture) and include the relevant excerpts in its report. Artemis uses its internal mobile command/log utilities for this; Qudron does not expose an unrestricted host shell or a general-purpose ADB command tool.
+- **Execution state:** use `mobile_manage_task(action="status")` through the Qudron status tool; inspect the trace for per-step actions and evidence. Do not treat the initial task-accepted response as completion.
+- **scrcpy/video:** Artemis may use its supported screen mirroring/recording path for visual workflows. Qudron does not manage a separate scrcpy process; it receives only the evidence returned through the approved Artemis MCP tools.
+
 ## 4. Installation and operation
 
 ### A. Prepare the Android host

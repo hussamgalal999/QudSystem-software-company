@@ -1,0 +1,183 @@
+"""Authenticated host-side bridge from Qudron HTTP to the upstream Artemis MCP server.
+
+Run this process on the computer that owns the Android device and the Artemis
+installation. It starts the official Artemis MCP server over stdio per request;
+Artemis remains an independent upstream process and is never vendored here.
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import hmac
+import json
+import logging
+import mimetypes
+import os
+from pathlib import Path
+import shlex
+import sys
+from typing import Any
+
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+import uvicorn
+from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
+
+LOG = logging.getLogger("qudron.artemis_bridge")
+ALLOWED_TOOLS = {
+    "mobile_run_task",
+    "mobile_manage_task",
+    "mobile_get_device_state",
+    "mobile_inspect_trace",
+    "mobile_diagnose",
+}
+MAX_ARTIFACT_BYTES = 5 * 1024 * 1024
+
+
+class ToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=80)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise RuntimeError(f"Required environment variable is not configured: {name}")
+    return value
+
+
+def _server_parameters() -> StdioServerParameters:
+    command = _required_env("ARTEMIS_MCP_COMMAND")
+    raw_args = os.getenv("ARTEMIS_MCP_ARGS_JSON", '["-m","mcp_server"]')
+    try:
+        args = json.loads(raw_args)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("ARTEMIS_MCP_ARGS_JSON must be a JSON array") from exc
+    if not isinstance(args, list) or not all(isinstance(item, str) for item in args):
+        raise RuntimeError("ARTEMIS_MCP_ARGS_JSON must contain only strings")
+    cwd = _required_env("ARTEMIS_MCP_CWD")
+    project_root = Path(cwd).resolve()
+    if not project_root.is_dir():
+        raise RuntimeError("ARTEMIS_MCP_CWD must point to an existing Artemis checkout")
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    return StdioServerParameters(command=command, args=args, cwd=str(project_root), env=env)
+
+
+def _safe_artifact(path_text: str) -> dict[str, Any] | None:
+    """Convert only known Artemis screenshot artifacts into bounded MCP image blocks."""
+    if not path_text.startswith("file://"):
+        return None
+    from urllib.parse import unquote, urlparse
+
+    parsed = urlparse(path_text)
+    candidate = Path(unquote(parsed.path)).resolve()
+    project_root = Path(_required_env("ARTEMIS_MCP_CWD")).resolve()
+    traces_root = (project_root / "traces").resolve()
+    in_project = candidate.is_relative_to(project_root)
+    in_traces = candidate.is_relative_to(traces_root)
+    known_live_capture = candidate.name.startswith("live_screenshot_") and candidate.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    if not (in_traces or (in_project and known_live_capture)) or not candidate.is_file():
+        return None
+    size = candidate.stat().st_size
+    if size < 1 or size > MAX_ARTIFACT_BYTES:
+        return None
+    mime_type = mimetypes.guess_type(candidate.name)[0] or "image/jpeg"
+    if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+        return None
+    return {
+        "type": "image",
+        "mimeType": mime_type,
+        "data": base64.b64encode(candidate.read_bytes()).decode("ascii"),
+    }
+
+
+def _serialize_result(result: Any) -> dict[str, Any]:
+    content: list[dict[str, Any]] = []
+    for item in getattr(result, "content", []) or []:
+        if hasattr(item, "model_dump"):
+            block = item.model_dump(mode="json", by_alias=True)
+        elif hasattr(item, "dict"):
+            block = item.dict(by_alias=True)
+        else:
+            block = {"type": "text", "text": str(item)}
+        if block.get("type") == "text":
+            artifact = _safe_artifact(str(block.get("text", "")))
+            content.append(artifact or {"type": "text", "text": str(block.get("text", ""))[:20000]})
+        elif block.get("type") == "image":
+            content.append({
+                "type": "image",
+                "mimeType": block.get("mimeType", "image/png"),
+                "data": str(block.get("data", ""))[:MAX_ARTIFACT_BYTES * 2],
+            })
+        else:
+            content.append({"type": "text", "text": json.dumps(block, ensure_ascii=False)[:20000]})
+    payload: dict[str, Any] = {
+        "content": content or [{"type": "text", "text": "Artemis returned no content."}],
+        "isError": bool(getattr(result, "isError", False)),
+    }
+    structured = getattr(result, "structuredContent", None)
+    if structured is not None:
+        try:
+            payload["structuredContent"] = structured.model_dump(mode="json") if hasattr(structured, "model_dump") else structured
+        except Exception:
+            payload["structuredContent"] = str(structured)[:20000]
+    return payload
+
+
+async def call_artemis_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name not in ALLOWED_TOOLS:
+        raise HTTPException(status_code=400, detail="Artemis tool is not allowlisted")
+    params = _server_parameters()
+    timeout = max(5, min(900, int(os.getenv("ARTEMIS_MCP_CALL_TIMEOUT_SECONDS", "120"))))
+    try:
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await asyncio.wait_for(session.initialize(), timeout=timeout)
+                result = await asyncio.wait_for(
+                    session.call_tool(name, arguments=arguments),
+                    timeout=timeout,
+                )
+                return _serialize_result(result)
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Artemis MCP call timed out") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        LOG.exception("Artemis MCP call failed")
+        raise HTTPException(status_code=502, detail="Artemis MCP call failed; inspect host-side bridge logs") from exc
+
+
+app = FastAPI(title="Qudron Artemis MCP Bridge", version="0.1.0")
+
+
+def _authorize(authorization: str | None) -> None:
+    expected = os.getenv("ARTEMIS_BRIDGE_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Bridge token is not configured")
+    supplied = authorization or ""
+    if not supplied.startswith("Bearer ") or not hmac.compare_digest(supplied[7:], expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"service": "qudron-artemis-mcp-bridge", "status": "ready"}
+
+
+@app.post("/tools/call")
+async def tools_call(payload: ToolCall, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    _authorize(authorization)
+    return await call_artemis_tool(payload.name, payload.arguments)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "INFO"))
+    uvicorn.run(
+        app,
+        host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", "0.0.0.0"),
+        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", "8766")),
+        log_level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "info").lower(),
+    )

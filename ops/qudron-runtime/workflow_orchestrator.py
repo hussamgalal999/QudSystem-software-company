@@ -8,6 +8,7 @@ other. The scheduler executes only the nodes and adapters explicitly supplied.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -171,8 +172,19 @@ class WorkflowStore:
         db.execute("PRAGMA journal_mode=WAL")
         return db
 
+    @contextmanager
+    def connection(self):
+        db = self.connect()
+        try:
+            yield db
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
     def _schema(self) -> None:
-        with self.connect() as db:
+        with self.connection() as db:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS workflow_runs(
               workflow_id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
@@ -484,6 +496,8 @@ class WorkflowOrchestrator:
             made_progress = False
 
             for row in rows:
+                if len(running) >= min(definition.max_parallel, self.max_global_parallel):
+                    break
                 node_id = row["node_id"]
                 if node_id in active_ids or row["status"] != "queued":
                     continue

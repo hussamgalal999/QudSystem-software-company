@@ -1,10 +1,12 @@
 import time
 import unittest
+import tempfile
+from pathlib import Path
 
 from agent_protocol import DataClass
 from compute_fabric import (
     ComputeFabric, ComputeLease, ComputeProviderDescriptor, ComputeRequest,
-    NoEligibleCompute,
+    NoEligibleCompute, SQLiteComputeLeaseStore,
 )
 
 
@@ -123,6 +125,109 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
                 resource_id=lease.resource_id, expires_at=lease.expires_at,
             ))
         await self.fabric.release(lease)
+
+
+    async def test_sqlite_lease_survives_restart_and_blocks_provider_capacity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "compute-leases.sqlite3"
+            fabric_one = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            adapter_one = FakeComputeAdapter()
+            fabric_one.register_adapter("fake", adapter_one)
+            fabric_one.register_provider(provider(max_concurrent_leases=1))
+            lease = await fabric_one.acquire(request())
+
+            fabric_two = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            adapter_two = FakeComputeAdapter()
+            fabric_two.register_adapter("fake", adapter_two)
+            fabric_two.register_provider(provider(max_concurrent_leases=1))
+            with self.assertRaises(NoEligibleCompute):
+                await fabric_two.acquire(request(request_id="compute-after-restart"))
+
+            self.assertEqual(fabric_two.snapshot()["active_leases"], 1)
+            await fabric_two.release(lease)
+            self.assertEqual(fabric_two.snapshot()["active_leases"], 0)
+            next_lease = await fabric_two.acquire(
+                request(request_id="compute-after-release")
+            )
+            self.assertEqual(next_lease.provider_id, "kaggle")
+            await fabric_two.release(next_lease)
+
+    async def test_same_request_id_reuses_persisted_lease_without_second_allocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "compute-leases.sqlite3"
+            first = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            first_adapter = FakeComputeAdapter()
+            first.register_adapter("fake", first_adapter)
+            first.register_provider(provider())
+            lease_one = await first.acquire(request())
+
+            second = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            second_adapter = FakeComputeAdapter()
+            second.register_adapter("fake", second_adapter)
+            second.register_provider(provider())
+            lease_two = await second.acquire(request())
+
+            self.assertEqual(lease_one, lease_two)
+            self.assertEqual(second_adapter.acquired, [])
+            await second.release(lease_two)
+
+    async def test_failed_release_is_persisted_and_keeps_provider_capacity_reserved(self):
+        class FailingReleaseAdapter(FakeComputeAdapter):
+            async def release(self, provider_descriptor, lease):
+                raise RuntimeError("remote release confirmation unavailable")
+
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "compute-leases.sqlite3"
+            first = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            failing = FailingReleaseAdapter()
+            first.register_adapter("fake", failing)
+            first.register_provider(provider(max_concurrent_leases=1))
+            lease = await first.acquire(request())
+            with self.assertRaises(RuntimeError):
+                await first.release(lease)
+
+            self.assertEqual(first.snapshot()["release_pending"], 1)
+            second = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            adapter = FakeComputeAdapter()
+            second.register_adapter("fake", adapter)
+            second.register_provider(provider(max_concurrent_leases=1))
+            with self.assertRaises(NoEligibleCompute):
+                await second.acquire(request(request_id="blocked-by-pending-release"))
+
+            await second.release(lease)
+            self.assertEqual(second.snapshot()["release_pending"], 0)
+            next_lease = await second.acquire(
+                request(request_id="after-release-reconciled")
+            )
+            await second.release(next_lease)
+
+    async def test_two_fabric_instances_share_atomic_provider_lease_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "compute-leases.sqlite3"
+            first = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            first_adapter = FakeComputeAdapter()
+            first.register_adapter("fake", first_adapter)
+            first.register_provider(provider(max_concurrent_leases=1))
+
+            second = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            second_adapter = FakeComputeAdapter()
+            second.register_adapter("fake", second_adapter)
+            second.register_provider(provider(max_concurrent_leases=1))
+
+            results = await asyncio.gather(
+                first.acquire(request(request_id="parallel-one")),
+                second.acquire(request(request_id="parallel-two")),
+                return_exceptions=True,
+            )
+            leases = [item for item in results if isinstance(item, ComputeLease)]
+            errors = [item for item in results if isinstance(item, Exception)]
+            self.assertEqual(len(leases), 1)
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(
+                SQLiteComputeLeaseStore(database).active_count("kaggle"), 1
+            )
+            owner = first if first_adapter.acquired else second
+            await owner.release(leases[0])
 
 
 if __name__ == "__main__":

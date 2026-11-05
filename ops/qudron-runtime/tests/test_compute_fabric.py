@@ -72,6 +72,16 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.fabric.snapshot()["active_leases"], 0)
         self.assertEqual(self.adapter.released, [("kaggle", "lease-kaggle")])
 
+    async def test_provider_concurrency_cap_blocks_second_active_lease(self):
+        self.fabric.register_provider(provider(max_concurrent_leases=1))
+        first = await self.fabric.acquire(request())
+        with self.assertRaises(NoEligibleCompute):
+            await self.fabric.acquire(request(request_id="compute-2"))
+        await self.fabric.release(first)
+        second = await self.fabric.acquire(request(request_id="compute-3"))
+        self.assertEqual(second.provider_id, "kaggle")
+        await self.fabric.release(second)
+
     async def test_unverified_or_unauthorized_provider_is_never_eligible(self):
         self.fabric.register_provider(provider("unverified", last_verified_at=None))
         self.fabric.register_provider(provider("unauthorized", authorized=False))

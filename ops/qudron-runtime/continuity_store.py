@@ -101,7 +101,121 @@ class ContinuityStore:
             );
             CREATE INDEX IF NOT EXISTS idx_external_tasks_local_job
               ON external_agent_tasks(local_job_id, updated_at DESC);
+            CREATE TABLE IF NOT EXISTS cloud_outbox (
+              outbox_id TEXT PRIMARY KEY, endpoint TEXT NOT NULL,
+              payload_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+              attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at REAL NOT NULL,
+              last_error TEXT, created_at TEXT NOT NULL, sent_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_cloud_outbox_pending
+              ON cloud_outbox(status,next_attempt_at,created_at);
             """)
+
+    @staticmethod
+    def _queue_cloud(
+        db: sqlite3.Connection, outbox_id: str, endpoint: str,
+        payload: dict[str, Any], now: str,
+    ) -> None:
+        if endpoint not in {"/v1/events", "/v1/agents", "/v1/tasks", "/v1/conversations"}:
+            raise ValueError("Unsupported cloud memory endpoint")
+        db.execute(
+            """INSERT OR IGNORE INTO cloud_outbox
+               (outbox_id,endpoint,payload_json,status,attempts,next_attempt_at,last_error,created_at,sent_at)
+               VALUES(?,?,?,'pending',0,?,NULL,?,NULL)""",
+            (outbox_id, endpoint, json.dumps(payload, ensure_ascii=False), time.time(), now),
+        )
+
+    def _queue_event(
+        self, db: sqlite3.Connection, *, project: str, job_id: str | None,
+        agent_id: str | None, event_type: str, detail: str, now: str,
+    ) -> str:
+        event_id = uuid.uuid4().hex
+        db.execute(
+            "INSERT INTO continuity_events VALUES(?,?,?,?,?,?,?)",
+            (event_id, job_id, project, agent_id, event_type, detail[:500], now),
+        )
+        self._queue_cloud(
+            db, event_id, "/v1/events",
+            {
+                "event_id": event_id,
+                "scope": "agent" if agent_id else "project",
+                "scope_id": agent_id or project,
+                "project_id": project,
+                "agent_id": agent_id,
+                "task_id": job_id,
+                "event_type": event_type,
+                "actor": agent_id or "qudron-runtime",
+                "summary": detail[:1000] or event_type,
+                "details": {"source": "qudron-local-runtime"},
+                "occurred_at": now,
+            },
+            now,
+        )
+        return event_id
+
+    def _queue_agent_snapshot(
+        self, db: sqlite3.Connection, *, project: str, agent_id: str,
+        status: str, task_id: str | None, next_action: str, now: str,
+    ) -> None:
+        # D1 uses one stable key per project/role pair so parallel project
+        # instances do not overwrite each other's checkpoint summaries.
+        scoped_id = f"{project}/{agent_id}"
+        self._queue_cloud(
+            db, uuid.uuid4().hex, "/v1/agents",
+            {
+                "agent_id": scoped_id, "project_id": project, "role": agent_id,
+                "status": status, "current_task_id": task_id,
+                "checkpoint": {"updated_at": now},
+                "last_verified_output": {},
+                "blockers": [next_action] if status == "blocked" and next_action else [],
+                "next_action": next_action,
+                "updated_by": "qudron-runtime",
+            },
+            now,
+        )
+
+    def pending_cloud_outbox(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(200, int(limit)))
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT * FROM cloud_outbox WHERE status='pending' AND next_attempt_at<=?
+                   ORDER BY created_at LIMIT ?""",
+                (time.time(), limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_cloud_outbox_sent(self, outbox_id: str) -> None:
+        now = _now()
+        with self.connect() as db:
+            db.execute(
+                "UPDATE cloud_outbox SET status='sent',sent_at=?,last_error=NULL WHERE outbox_id=?",
+                (now, outbox_id),
+            )
+
+    def mark_cloud_outbox_failed(self, outbox_id: str, error: str) -> None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT attempts FROM cloud_outbox WHERE outbox_id=?", (outbox_id,)
+            ).fetchone()
+            if not row:
+                return
+            attempts = int(row["attempts"]) + 1
+            status = "dead_letter" if attempts >= 12 else "pending"
+            delay = min(3600, 5 * (2 ** min(attempts - 1, 9)))
+            db.execute(
+                """UPDATE cloud_outbox SET status=?,attempts=?,next_attempt_at=?,last_error=?
+                   WHERE outbox_id=?""",
+                (status, attempts, time.time() + delay, error[:500], outbox_id),
+            )
+
+    def cloud_outbox_snapshot(self) -> dict[str, int]:
+        with self.connect() as db:
+            return {
+                str(row["status"]): int(row["total"])
+                for row in db.execute(
+                    "SELECT status,COUNT(*) AS total FROM cloud_outbox GROUP BY status"
+                )
+            }
 
     def begin_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str
@@ -115,10 +229,13 @@ class ContinuityStore:
                 (job_id, agent_id, stage),
             ).fetchone()
             if row and row["status"] == "completed" and row["output"] is not None:
-                db.execute(
-                    "INSERT INTO continuity_events VALUES(?,?,?,?,?,?,?)",
-                    (uuid.uuid4().hex, job_id, project, agent_id, "stage_resumed_from_checkpoint",
-                     stage, now),
+                self._queue_event(
+                    db, project=project, job_id=job_id, agent_id=agent_id,
+                    event_type="stage_resumed_from_checkpoint", detail=stage, now=now,
+                )
+                self._queue_agent_snapshot(
+                    db, project=project, agent_id=agent_id, status="running",
+                    task_id=job_id, next_action=f"Resume completed checkpoint: {stage}", now=now,
                 )
                 return {"output": str(row["output"]), "attempts": int(row["attempts"])}
             attempts = (int(row["attempts"]) + 1) if row else 1
@@ -130,10 +247,14 @@ class ContinuityStore:
                      status='running',attempts=excluded.attempts,error=NULL,updated_at=excluded.updated_at""",
                 (job_id, project, agent_id, stage, "running", attempts, now, now),
             )
-            db.execute(
-                "INSERT INTO continuity_events VALUES(?,?,?,?,?,?,?)",
-                (uuid.uuid4().hex, job_id, project, agent_id,
-                 "stage_started" if attempts == 1 else "stage_retried", stage, now),
+            event_type = "stage_started" if attempts == 1 else "stage_retried"
+            self._queue_event(
+                db, project=project, job_id=job_id, agent_id=agent_id,
+                event_type=event_type, detail=stage, now=now,
+            )
+            self._queue_agent_snapshot(
+                db, project=project, agent_id=agent_id, status="running",
+                task_id=job_id, next_action=f"Execute stage: {stage}", now=now,
             )
         return None
 
@@ -150,9 +271,13 @@ class ContinuityStore:
                    WHERE job_id=? AND agent_id=? AND stage=?""",
                 (output[:24000] if output is not None else None, now, job_id, agent_id, stage),
             )
-            db.execute(
-                "INSERT INTO continuity_events VALUES(?,?,?,?,?,?,?)",
-                (uuid.uuid4().hex, job_id, project, agent_id, "stage_completed", stage, now),
+            self._queue_event(
+                db, project=project, job_id=job_id, agent_id=agent_id,
+                event_type="stage_completed", detail=stage, now=now,
+            )
+            self._queue_agent_snapshot(
+                db, project=project, agent_id=agent_id, status="idle",
+                task_id=None, next_action="Await next assigned task.", now=now,
             )
             if memory_note and memory_note.strip():
                 expires = (
@@ -177,10 +302,13 @@ class ContinuityStore:
                    WHERE job_id=? AND agent_id=? AND stage=?""",
                 (error[:1200], now, job_id, agent_id, stage),
             )
-            db.execute(
-                "INSERT INTO continuity_events VALUES(?,?,?,?,?,?,?)",
-                (uuid.uuid4().hex, job_id, project, agent_id, "stage_failed",
-                 error[:500], now),
+            self._queue_event(
+                db, project=project, job_id=job_id, agent_id=agent_id,
+                event_type="stage_failed", detail=error[:500], now=now,
+            )
+            self._queue_agent_snapshot(
+                db, project=project, agent_id=agent_id, status="blocked",
+                task_id=job_id, next_action=error[:1000], now=now,
             )
 
     def remember(
@@ -190,7 +318,11 @@ class ContinuityStore:
     ) -> None:
         if scope not in {"short", "long"}:
             raise ValueError("scope must be short or long")
-        note = content.strip()[:2500]
+        try:
+            from swarm_engine import redact_sensitive_text
+            note = redact_sensitive_text(content).strip()[:2500]
+        except Exception:
+            note = content.strip()[:2500]
         if not note:
             return
         now = _now()
@@ -204,6 +336,10 @@ class ContinuityStore:
                    (id,project,agent_id,scope,category,content,created_at,expires_at)
                    VALUES(?,?,?,?,?,?,?,?)""",
                 (uuid.uuid4().hex, project, agent_id, scope, category, note, now, expires),
+            )
+            self._queue_event(
+                db, project=project, job_id=None, agent_id=agent_id,
+                event_type="agent_memory_saved", detail=f"{scope}/{category} memory updated.", now=now,
             )
 
     def agent_memory_context(self, *, project: str, agent_id: str, limit: int = 6) -> str:
@@ -298,5 +434,6 @@ class ContinuityStore:
             "agent_stage_counts": stage_counts,
             "saved_agent_memories": memory_count,
             "external_task_counts": external_counts,
+            "cloud_outbox_counts": self.cloud_outbox_snapshot(),
             "latest_events": [dict(row) for row in latest],
         }

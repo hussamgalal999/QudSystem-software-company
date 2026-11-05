@@ -567,6 +567,7 @@ class ComputeFabric:
                     locally_reserved = True
 
             lease: ComputeLease | None = None
+            reservation_resolved = False
             try:
                 lease = await asyncio.wait_for(
                     adapter.acquire(provider, request),
@@ -584,6 +585,7 @@ class ComputeFabric:
                     self.lease_store.save_lease(
                         reservation_id, request.request_id, lease, state="active"
                     )
+                    reservation_resolved = True
                 async with self._lock:
                     self._leases[lease.lease_id] = (provider.provider_id, lease)
                 return lease
@@ -608,6 +610,7 @@ class ComputeFabric:
                                 provider.provider_id, cleanup_lease
                             )
                             persisted = True
+                            reservation_resolved = True
                         except Exception:
                             # If persistence itself failed, still attempt
                             # immediate cleanup; do not report success.
@@ -620,26 +623,27 @@ class ComputeFabric:
                         if persisted and self.lease_store:
                             self.lease_store.delete_lease(cleanup_lease.lease_id)
                         self._leases.pop(cleanup_lease.lease_id, None)
+                        reservation_resolved = True
                     except Exception:
-                        # A failed release remains durable and consumes a
-                        # provider slot; operators can retry it explicitly.
-                        if not self.lease_store:
-                            self._leases[cleanup_lease.lease_id] = (
-                                provider.provider_id, cleanup_lease
-                            )
+                        # Preserve an in-process blocker even if the durable
+                        # write failed; a durable reservation remains until
+                        # expiry and protects other Qudron processes.
+                        self._leases[cleanup_lease.lease_id] = (
+                            provider.provider_id, cleanup_lease
+                        )
                 elif self.lease_store:
                     # On timeout, the remote side may have allocated a
                     # resource before the response was lost. Keep the bounded
                     # reservation until expiry to avoid immediate overbooking.
                     if not isinstance(exc, asyncio.TimeoutError):
                         self.lease_store.cancel_reservation(reservation_id)
+                        reservation_resolved = True
                 continue
             finally:
-                if self.lease_store:
-                    # No-op after commit; removes reservations after clean
-                    # failures. Timeout reservations expire on their own.
-                    if lease is not None:
-                        self.lease_store.cancel_reservation(reservation_id)
+                if self.lease_store and reservation_id and reservation_resolved:
+                    # No-op after commit; removes a reservation after clean
+                    # failure or successful compensating release.
+                    self.lease_store.cancel_reservation(reservation_id)
                 elif locally_reserved:
                     async with self._lock:
                         remaining = self._reservations.get(provider.provider_id, 1) - 1

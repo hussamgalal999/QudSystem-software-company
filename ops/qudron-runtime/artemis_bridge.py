@@ -40,27 +40,44 @@ class ToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
-def _required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Required environment variable is not configured: {name}")
+def _bridge_config() -> dict[str, Any]:
+    """Load the optional non-secret JSON config; environment values override it."""
+    config_path = os.getenv("ARTEMIS_BRIDGE_CONFIG", "").strip()
+    if not config_path:
+        return {}
+    try:
+        value = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("ARTEMIS_BRIDGE_CONFIG could not be read as JSON") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError("ARTEMIS_BRIDGE_CONFIG must contain a JSON object")
     return value
 
 
 def _server_parameters() -> StdioServerParameters:
-    command = _required_env("ARTEMIS_MCP_COMMAND")
-    raw_args = os.getenv("ARTEMIS_MCP_ARGS_JSON", '["-m","mcp_server"]')
-    try:
-        args = json.loads(raw_args)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("ARTEMIS_MCP_ARGS_JSON must be a JSON array") from exc
+    mcp_config = _bridge_config().get("mcp", {})
+    if not isinstance(mcp_config, dict):
+        raise RuntimeError("The mcp section in Artemis bridge config must be an object")
+    command = os.getenv("ARTEMIS_MCP_COMMAND", "").strip() or str(mcp_config.get("command", "")).strip()
+    if not command:
+        raise RuntimeError("Set ARTEMIS_MCP_COMMAND or mcp.command in ARTEMIS_BRIDGE_CONFIG")
+    raw_args = os.getenv("ARTEMIS_MCP_ARGS_JSON", "").strip()
+    if raw_args:
+        try:
+            args = json.loads(raw_args)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("ARTEMIS_MCP_ARGS_JSON must be a JSON array") from exc
+    else:
+        args = mcp_config.get("args", ["-m", "mcp_server"])
     if not isinstance(args, list) or not all(isinstance(item, str) for item in args):
-        raise RuntimeError("ARTEMIS_MCP_ARGS_JSON must contain only strings")
-    cwd = _required_env("ARTEMIS_MCP_CWD")
+        raise RuntimeError("Artemis MCP args must be an array of strings")
+    cwd = os.getenv("ARTEMIS_MCP_CWD", "").strip() or str(mcp_config.get("cwd", "")).strip()
+    if not cwd:
+        raise RuntimeError("Set ARTEMIS_MCP_CWD or mcp.cwd in ARTEMIS_BRIDGE_CONFIG")
     project_root = Path(cwd).resolve()
     if not project_root.is_dir():
-        raise RuntimeError("ARTEMIS_MCP_CWD must point to an existing Artemis checkout")
-    expected_commit = os.getenv("ARTEMIS_EXPECTED_COMMIT", "").strip()
+        raise RuntimeError("The configured Artemis working directory must exist")
+    expected_commit = os.getenv("ARTEMIS_EXPECTED_COMMIT", "").strip() or str(mcp_config.get("expected_commit", "")).strip()
     if expected_commit:
         try:
             actual_commit = subprocess.run(
@@ -236,7 +253,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "INFO"))
     uvicorn.run(
         app,
-        host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", "0.0.0.0"),
-        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", "8766")),
+        host=os.getenv("ARTEMIS_BRIDGE_BIND_HOST", str(_bridge_config().get("bind_host", "0.0.0.0"))),
+        port=int(os.getenv("ARTEMIS_BRIDGE_PORT", str(_bridge_config().get("port", 8766))),
         log_level=os.getenv("ARTEMIS_BRIDGE_LOG_LEVEL", "info").lower(),
     )

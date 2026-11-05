@@ -13,7 +13,7 @@ This test exercises the complete path **Qudron MCP Gateway → authenticated hos
 
 ## Run
 
-Run this on the **Android host (or another test host with ADB installed)**, not inside the minimal Qudron container. If Qudron runs in Docker on the same host, load its API token into a shell variable without printing it:
+Run this on the **Android host (or another test host with ADB installed)**, not inside the minimal Qudron container. Run from the Qudron runtime directory and use the Artemis virtual-environment Python so the bridge's MCP/FastAPI test dependencies are available. If Qudron runs in Docker on the same host, load its API token into a shell variable without printing it:
 
 ```bash
 export QUDRON_API_TOKEN="$(docker exec qudron-runtime cat /run/qudron-auth/api_token)"

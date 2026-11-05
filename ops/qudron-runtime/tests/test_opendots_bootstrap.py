@@ -95,7 +95,7 @@ class OpenDotsBootstrapTests(unittest.TestCase):
                 if url.endswith("/api/spaces/space-1/pages"):
                     if method == "GET":
                         return []
-                    return {"id": f"page-{sum(1 for item in calls if item[0].endswith('/pages') and item[1] == 'POST')}"}
+                    return {"id": f"page-{sum(1 for item in calls if item[0].endswith('/pages') and item[2] == 'POST')}"}
                 if url.endswith("/api/dots/dot-1/connections"):
                     if method == "GET":
                         return []

@@ -45,7 +45,7 @@ jobs:
         run: docker build -t qudron-runtime:ci ops/qudron-runtime
       - name: Verify container contains importable runtime modules
         run: |
-          docker run --rm --entrypoint python qudron-runtime:ci -c "import qudron_worker, continuity_store, agent_fabric, agent_protocol, workflow_orchestrator, manus_adapter"
+          docker run --rm --entrypoint python qudron-runtime:ci -c "import qudron_worker, continuity_store, agent_fabric, agent_protocol, workflow_orchestrator, manus_adapter, compute_fabric"
       - name: Build pinned FreeLLM sidecar image
         run: docker build -f ops/qudron-runtime/Dockerfile.freellm -t qudron-freellm:ci ops/qudron-runtime
       - name: Validate optional Compose profile

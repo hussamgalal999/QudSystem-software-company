@@ -63,6 +63,18 @@ class QualityVerificationFrameworkTests(unittest.TestCase):
         self.assertIn("Ollama", task["title"])
         self.assertIn("live evidence", task["acceptance_criteria"].lower())
 
+    def test_remote_compute_catalog_never_enables_unprobed_providers(self):
+        catalog_path = ROOT / "compute_provider_catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        self.assertTrue(catalog["policy"]["enable_only_after_live_probe"])
+        for provider in catalog["providers"]:
+            with self.subTest(provider=provider["id"]):
+                self.assertFalse(provider["live_probe"]["verified"])
+                self.assertIn(provider["status"], {
+                    "candidate_not_enabled", "excluded_for_background_worker"
+                })
+                self.assertTrue(provider["source_urls"])
+
     def test_workforce_count_is_not_misrepresented_as_live_agents(self):
         task = next(task for task in self.tasks if task["id"] == "workforce-44")
         self.assertIn("48 role identities", task["current_state"])

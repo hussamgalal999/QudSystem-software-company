@@ -43,7 +43,7 @@ These counts are the status distribution, not a weighted percentage and not a cl
 
 ## Workforce and concurrency
 
-- The branch registry now contains **48 specialist role identities across 31 teams**. These are configured identities, not active workers or model sessions. These are configured role identities, not 44 humans, processes or live model sessions.
+- The branch registry now contains **48 specialist role identities across 31 teams**. These are configured identities, not active workers or model sessions.
 - Routine swarm execution is intentionally bounded; the existing runtime defaults to five specialist stages for routine work and a separate ten-role CVPen workflow. Existing shared model-call slots impose a global concurrency ceiling.
 - The 10,000-worker goal is a **logical capacity target**. A measured scheduler, admission controller, provider quota plan and load test are still required before claiming that scale.
 - 100 billion tokens is a **capacity objective**, not a current free entitlement. Only verified provider quotas and successful inference measurements count toward it.
@@ -60,6 +60,13 @@ New branch work adds:
 - An OpenDots bootstrap page tree for dashboard, tasks, specialist workforce, memory/resume, external agents, model supply, Android operations, portfolio, integrations and governance.
 
 **Important:** these code additions are not yet CI-verified, deployed or connected to live accounts on this snapshot. The current branch must pass CI and be reviewed before merge. The OpenDots pages are created only when the optional OpenDots stack/bootstrap is actually run.
+
+## Latest engineering corrections on the active branch
+
+- The runtime Docker image now copies all root-level Python modules and JSON registries, including the continuity and agent-fabric modules; CI now checks that key modules import from inside the built image.
+- The continuity store now imports the time module required by its cloud outbox and has an outbox-persistence regression test.
+- The runtime now runs a bounded cloud-memory outbox sync loop when both owner-provisioned URL and token are present. Without those secrets, cloud sync remains disabled; no live cloud deployment is claimed.
+- PR #24 adds the evidence framework, the explicit remote-compute fabric backlog item and the provider qualification catalog. Its latest Actions run has not yet been observed; do not mark it CI-verified until a run completes on the exact head SHA.
 
 ## External integrations — honest current state
 
@@ -80,7 +87,7 @@ New branch work adds:
 
 ## Next execution order
 
-1. Pass CI for the continuity branch; repair all failures; verify 44 role/team references, agent memory, checkpoint-resume, MCP and OpenDots page provisioning tests.
+1. Pass CI for the continuity branch; repair all failures; verify 48 role identities across 31 teams, agent memory, checkpoint-resume, MCP and OpenDots page provisioning tests.
 2. Open and review a dedicated PR for the continuity branch. Do not merge automatically.
 3. Complete Artemis PR #22 review separately; then authorize the phone and run physical-device E2E.
 4. Provision OpenDots only on an owner-approved host; connect its Intelligence service; run the bootstrap and verify that the subpages exist.

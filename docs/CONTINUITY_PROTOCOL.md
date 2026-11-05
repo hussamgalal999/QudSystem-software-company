@@ -70,7 +70,7 @@ The bootstrap provisions one Qudron Command Room and its page hierarchy. It crea
 
 At the beginning of a new conversation about Qudron:
 1. Read docs/QUDRON_PROJECT_STATE.md.
-2. Read ops/qudron-runtime/project_task_registry.json and count tasks by status.
+2. Read docs/QUALITY_VERIFICATION_FRAMEWORK.md and ops/qudron-runtime/project_task_registry.json; count tasks by status and inspect each task's specialty verification profile.
 3. Read docs/CONTINUITY_PROTOCOL.md and docs/DECISIONS.md.
 4. Fetch current main SHA, all open Qudron PRs and their latest head SHAs.
 5. Fetch the latest Actions run/jobs for each active PR; distinguish green CI from deployment/live access.
@@ -82,6 +82,8 @@ At the beginning of a new conversation about Qudron:
 A new ChatGPT chat can recover durable repository state when it reads the GitHub repository. It does not automatically inherit every prior chat transcript or the live SQLite database on an external Qudron host. Runtime-to-GitHub sanitized state synchronization still needs an authorized least-privilege GitHub connection; until that is installed, use the runtime MCP continuity tools for live state and commit periodic sanitized project snapshots to GitHub.
 
 ## 7. Completion rule
+
+Use the specialty-specific gates in `docs/QUALITY_VERIFICATION_FRAMEWORK.md`. Distinguish CI, integration, live, operational and independent acceptance evidence. Blocked and not-run checks are not passes. Never mark a task complete from a mock test, code presence, provider catalogue entry, or a skipped workflow.
 
 A task is complete only when:
 - Its acceptance criteria pass.

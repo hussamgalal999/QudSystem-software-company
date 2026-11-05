@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import time
 import unittest
 import urllib.request
@@ -121,12 +122,31 @@ class ArtemisAndroidBatteryE2ETests(unittest.TestCase):
         }, request_id=4)
         summary_result = summary.get("result", {})
         self.assertFalse(summary_result.get("isError", False), self._text(summary_result))
-        summary_text = self._text(summary_result)
-        self.assertRegex(summary_text.lower(), r"battery")
-        percentages = re.findall(r"(?<!\d)(100|[1-9]?\d)\s*%", summary_text)
+        evidence_text = status_text + "\n" + self._text(summary_result)
+        self.assertIn("battery", evidence_text.lower())
+
+        reported_values = []
+        for match in re.finditer(r"(?<!\d)(100|[1-9]?\d)\s*%", evidence_text, re.IGNORECASE):
+            context = evidence_text[max(0, match.start() - 100):match.end() + 100].lower()
+            if "battery" in context:
+                reported_values.append(int(match.group(1)))
         self.assertTrue(
-            percentages,
-            "Trace summary did not contain a verifiable battery percentage: " + summary_text[:2000],
+            reported_values,
+            "Qudron/Artemis trace did not contain a battery percentage with nearby battery context",
+        )
+
+        adb = subprocess.run(
+            ["adb", "-s", device_serial, "shell", "dumpsys", "battery"],
+            check=True, capture_output=True, text=True, timeout=20,
+        )
+        adb_match = re.search(r"(?m)^\s*level:\s*(\d+)\s*$", adb.stdout)
+        self.assertIsNotNone(adb_match, "ADB dumpsys battery did not expose a numeric level")
+        actual_level = int(adb_match.group(1))
+        self.assertTrue(0 <= actual_level <= 100, "ADB battery level is outside 0-100")
+        self.assertIn(
+            actual_level,
+            reported_values,
+            f"Artemis reported {reported_values}; ADB reference level is {actual_level}%",
         )
 
 

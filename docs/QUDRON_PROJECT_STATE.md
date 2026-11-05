@@ -16,7 +16,7 @@
 
 ## Current measured inventory
 
-The registry contains **62 tracked tasks** in this snapshot. Status is explicit and evidence-based:
+The registry contains **63 tracked tasks** in this snapshot. Status is explicit and evidence-based:
 
 | Status | Count |
 |---|---:|
@@ -27,17 +27,23 @@ The registry contains **62 tracked tasks** in this snapshot. Status is explicit 
 | Candidate provider, not enabled | 3 |
 | Blocked by owner/external setup | 10 |
 | Planned | 11 |
-| Not started | 15 |
+| Not started | 16 |
 | Strategic target, not measured | 2 |
 | Needs owner review | 1 |
 | Pending CI gate | 1 |
-| **Total** | **62** |
+| **Total** | **63** |
 
-These counts are the status distribution, not a weighted percentage and not a claim that the 62 tasks are all production-ready. The registry's acceptance criteria define what counts as completion.
+These counts are the status distribution, not a weighted percentage and not a claim that the 63 tasks are all production-ready. Each task now has a specialty-specific verification profile in `ops/qudron-runtime/project_task_registry.json`. See `docs/QUALITY_VERIFICATION_FRAMEWORK.md` for maturity levels, evidence records, scoring, and release gates.
+
+## Verification and quality scoring
+
+- Each backlog item has a specialty-specific verification profile; CI, integration, live, operational and independent acceptance are separate maturity levels.
+- Blocked and not-run checks are never counted as passes. A missing credential cannot block unrelated code work, but it also cannot be reported as a live integration.
+- The remote-compute fabric is now an explicit P0 task covering authorized remote GPU/CPU providers, remote Ollama, cloud computers, notebooks and browser workers. No free high-performance GPU is claimed until measured.
 
 ## Workforce and concurrency
 
-- The branch registry now contains **44 specialist roles across 21 teams**. These are configured role identities, not 44 humans, processes or live model sessions.
+- The branch registry now contains **48 specialist role identities across 31 teams**. These are configured identities, not active workers or model sessions. These are configured role identities, not 44 humans, processes or live model sessions.
 - Routine swarm execution is intentionally bounded; the existing runtime defaults to five specialist stages for routine work and a separate ten-role CVPen workflow. Existing shared model-call slots impose a global concurrency ceiling.
 - The 10,000-worker goal is a **logical capacity target**. A measured scheduler, admission controller, provider quota plan and load test are still required before claiming that scale.
 - 100 billion tokens is a **capacity objective**, not a current free entitlement. Only verified provider quotas and successful inference measurements count toward it.

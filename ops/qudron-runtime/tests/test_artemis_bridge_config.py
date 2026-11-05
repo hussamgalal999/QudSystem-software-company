@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from artemis_bridge import _artemis_project_root, _safe_artifact
+from artemis_bridge import _artemis_project_root, _safe_artifact, _server_parameters
 
 
 class ArtemisBridgeConfigTests(unittest.TestCase):
@@ -38,6 +38,19 @@ class ArtemisBridgeConfigTests(unittest.TestCase):
         outside = Path(self.temp.name) / "private.png"
         outside.write_bytes(b"must-not-leak")
         self.assertIsNone(_safe_artifact(outside.as_uri()))
+
+    def test_mcp_child_does_not_inherit_qudron_or_bridge_secrets(self):
+        with patch.dict(os.environ, {
+            "ARTEMIS_MCP_COMMAND": "python",
+            "ARTEMIS_MCP_CWD": str(self.root),
+            "ARTEMIS_BRIDGE_TOKEN": "bridge-secret-test-value",
+            "QUDRON_API_TOKEN": "qudron-secret-test-value",
+            "QUDRON_MEMORY_TOKEN": "memory-secret-test-value",
+        }):
+            params = _server_parameters()
+        self.assertNotIn("ARTEMIS_BRIDGE_TOKEN", params.env)
+        self.assertNotIn("QUDRON_API_TOKEN", params.env)
+        self.assertNotIn("QUDRON_MEMORY_TOKEN", params.env)
 
 
 if __name__ == "__main__":

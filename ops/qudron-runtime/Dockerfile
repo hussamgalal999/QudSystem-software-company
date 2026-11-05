@@ -6,7 +6,10 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
-COPY qudron_worker.py telegram_gateway.py swarm_engine.py payment_guard.py github_inventory.py metricool_client.py vision_adapter.py deepseek_web.py capability_registry.py capability_miner.py mcp_gateway.py schedule.json agent_registry.json service_workflows.json ./
+# Keep every runtime adapter/module and its JSON registry in the image. In particular,
+# qudron_worker imports continuity_store at startup; an explicit legacy file list
+# silently omitted the new continuity and agent-fabric modules.
+COPY *.py *.json ./
 RUN mkdir -p /app/data /app/reports /app/logs
 EXPOSE 8765
 CMD ["python", "-u", "qudron_worker.py"]

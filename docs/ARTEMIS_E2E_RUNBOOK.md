@@ -9,6 +9,7 @@ This test exercises the complete path **Qudron MCP Gateway → authenticated hos
 3. Qudron is running with `ARTEMIS_BRIDGE_URL` and the matching `ARTEMIS_BRIDGE_TOKEN` configured in its private environment.
 4. The Android owner has explicitly authorized USB debugging and the target serial is known.
 5. The test operator has the Qudron API token (or readable `QUDRON_API_TOKEN_FILE`) for the Qudron MCP endpoint.
+6. Android Platform Tools (`adb`) are installed on the test host.
 
 ## Run
 
@@ -24,7 +25,7 @@ python -m unittest tests.test_artemis_android_e2e -v
 
 If running outside the container, set `QUDRON_API_TOKEN` and a reachable `QUDRON_MCP_URL` instead of relying on the container token-file path.
 
-The test initializes the Qudron MCP endpoint, starts `qudron_android_run_task` with the Pro profile and strict verification, polls `qudron_android_task_status`, then inspects the trace through `qudron_android_inspect_trace`. It requires a terminal completed state and a battery percentage from 0 through 100 in the trace summary.
+The test initializes the Qudron MCP endpoint, starts `qudron_android_run_task` with the Pro profile and strict verification, polls `qudron_android_task_status`, then inspects the trace through `qudron_android_inspect_trace`. It requires a terminal completed state, a battery percentage associated with battery context in the result/trace, and an exact match against the read-only ADB reference from `adb -s <serial> shell dumpsys battery`.
 
 ## Interpretation
 

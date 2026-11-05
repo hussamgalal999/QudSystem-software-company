@@ -14,6 +14,15 @@ class ContinuityStoreTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_stage_events_are_queued_for_cloud_sync(self):
+        self.store.begin_stage(
+            job_id="job-outbox", project="qudron", agent_id="qa_engineer", stage="verify"
+        )
+        rows = self.store.pending_cloud_outbox()
+        self.assertTrue(rows)
+        self.assertTrue(any(row["endpoint"] == "/v1/events" for row in rows))
+        self.assertTrue(all(row["status"] == "pending" for row in rows))
+
     def test_agent_memories_are_durable_and_isolated_by_agent_and_project(self):
         self.store.remember(
             project="qudron", agent_id="security_analyst",

@@ -41,3 +41,9 @@ A submitted task is not a completed task. Qudron must retain the Artemis trace I
 **Status:** Accepted for implementation.
 
 Qudron stores only its own bridge, adapter, configuration examples, tests and documentation. Artemis remains an external dependency pinned and upgraded independently.
+
+## ADR-2026-11-05-ARTEMIS-006 — Verify the full path through Qudron MCP
+
+**Status:** Accepted for implementation.
+
+The physical Android end-to-end test must invoke `qudron_android_run_task`, `qudron_android_task_status` and `qudron_android_inspect_trace` through Qudron's authenticated `/mcp` endpoint. It must not bypass Qudron by calling the host bridge directly. The test requires explicit opt-in, an owner-authorized device serial, a completed terminal state and a battery percentage in the inspected trace. The bridge resolves artifact paths from the same configured Artemis checkout used to launch MCP; artifacts outside that checkout or outside the bounded trace/screenshot allowlist are rejected.

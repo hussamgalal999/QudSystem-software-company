@@ -34,7 +34,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             execution_mode=ExecutionMode.SEQUENTIAL,
         )
 
-    def test_a2a_submit_and_poll(self):
+    async def test_a2a_submit_and_poll(self):
         agent = AgentDescriptor(
             agent_id="a2a-research", display_name="Research Agent",
             provider_id="remote-a2a", adapter="a2a",
@@ -65,7 +65,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception):
             adapter._base(agent)
 
-    def test_mcp_tool_adapter_uses_explicit_tool_name(self):
+    async def test_mcp_tool_adapter_uses_explicit_tool_name(self):
         agent = AgentDescriptor(
             agent_id="qudron-mcp", display_name="Qudron MCP Worker",
             provider_id="qudron-local", adapter="mcp",

@@ -153,14 +153,14 @@ class ManusAdapter:
             raise ValueError("task_id is required")
         if order not in {"asc", "desc"}:
             raise ValueError("order must be asc or desc")
-        limit = max(1, min(100, int(limit)))
+        limit = max(1, min(200, int(limit)))
         params: dict[str, Any] = {"task_id": task_id, "order": order, "limit": limit}
         if verbose:
             params["verbose"] = "true"
         if start_event_id:
             params["start_event_id"] = start_event_id
         result = self._request("GET", "/v2/task.listMessages?" + urlencode(params))
-        events = result.get("events", [])
+        events = result.get("messages", [])
         status = "unknown"
         last_event_id = None
         for event in events if isinstance(events, list) else []:
@@ -174,7 +174,11 @@ class ManusAdapter:
                 candidate = status_update.get("agent_status")
                 if candidate in {"running", "stopped", "waiting", "error"}:
                     status = candidate
-        normalized = {"task_id": task_id, "status": status, "events": events, "last_event_id": last_event_id}
+        normalized = {
+            "task_id": task_id, "status": status, "events": events,
+            "last_event_id": last_event_id, "next_cursor": result.get("next_cursor"),
+            "has_more": bool(result.get("has_more", False)),
+        }
         if self.store:
             self.store.update_external_task(
                 provider="manus", external_task_id=task_id, status=status,

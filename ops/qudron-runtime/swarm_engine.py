@@ -85,15 +85,16 @@ def load_agent_registry(path: str | Path | None = None) -> dict[str, Any]:
     return raw
 
 def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
-                     max_agents: int = 3) -> list[dict[str, Any]]:
-    if max_agents < 1:
+                     max_agents: int | None = None) -> list[dict[str, Any]]:
+    """Plan every role in the selected team unless a task-scoped cap is supplied."""
+    if max_agents is not None and max_agents < 1:
         raise ValueError("max_agents must be >= 1")
     registry = registry or DEFAULT_AGENT_REGISTRY
     by_id = {agent["id"]: agent for agent in registry["agents"]}
     team = registry["teams"].get(task_type) or registry["teams"].get("research")
     if not team:
         raise ValueError(f"No agents configured for task type: {task_type}")
-    selected = team[:max_agents]
+    selected = team if max_agents is None else team[:max_agents]
     plan = [dict(by_id[agent_id]) for agent_id in selected]
     for index, agent in enumerate(plan):
         if index == 0:
@@ -106,9 +107,9 @@ def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
 
 def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], str, str], str],
                   registry: dict[str, Any] | None = None, memory_context: str = "",
-                  max_agents: int = 3, max_context_chars: int = 12000,
+                  max_agents: int | None = None, max_context_chars: int = 12000,
                   max_parallel_reviews: int = 8) -> str:
-    """Run a producer, bounded independent review swarm in parallel, then a finalizer."""
+    """Run the complete configured team with resource-bounded parallel reviews."""
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
     producer = next((agent for agent in plan if agent["execution_stage"] == "produce"), None)
     reviewers = [agent for agent in plan if agent["execution_stage"] == "review"]

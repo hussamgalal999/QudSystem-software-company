@@ -6,7 +6,7 @@ from pathlib import Path
 
 from agent_protocol import DataClass
 from compute_fabric import (
-    ComputeFabric, ComputeLease, ComputeProviderDescriptor, ComputeRequest,
+    ComputeFabric, ComputeFabricError, ComputeLease, ComputeProviderDescriptor, ComputeRequest,
     ComputeProviderUnavailable, NoEligibleCompute, SQLiteComputeLeaseStore,
 )
 

@@ -180,8 +180,7 @@ def context_packet_to_text(packet: dict[str, Any], *, max_chars: int = 8000) -> 
             "decided_at", "source_ref",
         ), 20),
         "conversation_notes": records(packet.get("conversation_notes"), (
-            "summary", "key_facts_json", "decisions_json", "open_loops_json",
-            "source_ref", "occurred_at",
+            "summary", "source_ref", "occurred_at",
         ), 10),
     }
     selected = {key: value for key, value in selected.items() if value}

@@ -91,6 +91,41 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(acquisitions), 2)
         self.assertEqual(self.store.rows("wf-retry-lease")[0]["status"], "succeeded")
 
+    async def test_start_node_atomically_claims_queued_node_once(self):
+        node = WorkflowNode("claim", "Claim", "Run once.")
+        definition = WorkflowDefinition(
+            "wf-claim-once", "qudron", "idem-claim-once",
+            ExecutionMode.SEQUENTIAL, (node,),
+        )
+        self.store.create(definition)
+        first = self.store.start_node("wf-claim-once", "claim")
+        second = self.store.start_node("wf-claim-once", "claim")
+        self.assertEqual(first, 1)
+        self.assertIsNone(second)
+
+    async def test_stale_attempt_cannot_finish_or_retry_newer_attempt(self):
+        node = WorkflowNode("fenced", "Fenced", "Retry safely.", max_attempts=2)
+        definition = WorkflowDefinition(
+            "wf-fenced", "qudron", "idem-fenced",
+            ExecutionMode.SEQUENTIAL, (node,),
+        )
+        self.store.create(definition)
+        first = self.store.start_node("wf-fenced", "fenced")
+        self.assertEqual(first, 1)
+        self.assertTrue(self.store.retry_node("wf-fenced", "fenced", "retry", first))
+        second = self.store.start_node("wf-fenced", "fenced")
+        self.assertEqual(second, 2)
+        stale_finish = self.store.finish_node(
+            "wf-fenced", "fenced", NodeExecutionResult("succeeded", "stale"), first
+        )
+        stale_retry = self.store.retry_node("wf-fenced", "fenced", "stale error", first)
+        self.assertFalse(stale_finish)
+        self.assertFalse(stale_retry)
+        self.assertEqual(self.store.rows("wf-fenced")[0]["status"], "running")
+        self.assertTrue(self.store.finish_node(
+            "wf-fenced", "fenced", NodeExecutionResult("succeeded", "current"), second
+        ))
+
     async def test_sequential_mode_creates_dependency_chain(self):
         nodes = expand_execution_mode(
             ExecutionMode.SEQUENTIAL,

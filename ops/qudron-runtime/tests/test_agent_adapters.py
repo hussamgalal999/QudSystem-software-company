@@ -192,7 +192,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             result = {"protocolVersion": adapter.protocol_version} if payload["method"] == "initialize" else {}
             headers = {"Mcp-Session-Id": "session-123"} if payload["method"] == "initialize" else {}
             return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result}, headers)
-        with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
+        with patch("mcp_agent_adapter.open_credential_request", side_effect=fake_urlopen):
             adapter._request_sync(descriptor, "initialize", {"protocolVersion": adapter.protocol_version})
             adapter._request_sync(descriptor, "notifications/initialized", {}, notification=True)
             adapter._request_sync(descriptor, "tools/list", {})
@@ -224,7 +224,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
                 "isError": False,
             }
             return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result})
-        with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
+        with patch("mcp_agent_adapter.open_credential_request", side_effect=fake_urlopen):
             handle = await MCPToolAgentAdapter().submit(agent, self.task)
         self.assertEqual(handle.remote_task_id, "remote-async-1")
         self.assertEqual(handle.status, TaskStatus.QUEUED)
@@ -255,7 +255,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
                 "isError": False,
             }
             return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result})
-        with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
+        with patch("mcp_agent_adapter.open_credential_request", side_effect=fake_urlopen):
             handle = await MCPToolAgentAdapter().submit(agent, self.task)
         self.assertEqual(handle.remote_task_id, "remote-job-1")
         self.assertEqual([c["method"] for c in calls], ["initialize", "notifications/initialized", "tools/call"])

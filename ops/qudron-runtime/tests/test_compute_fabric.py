@@ -222,6 +222,17 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(lease.metadata["reserved_runtime_seconds"], 400)
             await first.release(lease)
 
+    def test_expired_persisted_leases_do_not_consume_provider_capacity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SQLiteComputeLeaseStore(Path(directory) / "expired.sqlite3")
+            expired = ComputeLease(
+                provider_id="kaggle", lease_id="expired-lease",
+                resource_id="gpu-old", expires_at=time.time() - 10,
+            )
+            store.save_lease(None, "expired-request", expired)
+            self.assertEqual(store.active_count("kaggle"), 0)
+            self.assertEqual(store.snapshot()["active_leases"], 0)
+
     async def test_sqlite_lease_survives_restart_and_blocks_provider_capacity(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "compute-leases.sqlite3"

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 
 from endpoint_security import is_allowed_credential_endpoint
 import time
@@ -29,14 +30,24 @@ class MCPToolAgentAdapter:
     def __init__(self, *, protocol_version: str = "2025-06-18", timeout_seconds: int = 45):
         self.protocol_version = protocol_version
         self.timeout_seconds = max(5, min(180, timeout_seconds))
+        self._sessions: dict[str, str] = {}
+        self._session_lock = threading.Lock()
 
     def _request_sync(
-        self, agent: AgentDescriptor, method: str, params: dict[str, Any] | None = None
+        self, agent: AgentDescriptor, method: str, params: dict[str, Any] | None = None,
+        *, notification: bool = False,
     ) -> dict[str, Any]:
         endpoint = (agent.endpoint_ref or "").strip()
         if not is_allowed_credential_endpoint(endpoint):
             raise MCPAdapterError("MCP endpoint must use HTTPS or an exact loopback HTTP endpoint")
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        with self._session_lock:
+            session_id = self._sessions.get(endpoint)
+        if session_id:
+            headers["Mcp-Session-Id"] = session_id
         token_env = str(agent.metadata.get("token_env", "")).strip()
         if token_env:
             token = os.getenv(token_env, "").strip()
@@ -45,19 +56,26 @@ class MCPToolAgentAdapter:
             headers["Authorization"] = f"Bearer {token}"
         payload = {
             "jsonrpc": "2.0",
-            "id": str(uuid.uuid4()),
             "method": method,
             "params": params or {},
         }
+        if not notification:
+            payload["id"] = str(uuid.uuid4())
         request = Request(
             endpoint, data=json.dumps(payload).encode("utf-8"),
             headers=headers, method="POST",
         )
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
+                response_session = response.headers.get("Mcp-Session-Id")
+                if response_session:
+                    with self._session_lock:
+                        self._sessions[endpoint] = str(response_session)
                 raw = response.read(1_000_001)
                 if len(raw) > 1_000_000:
                     raise MCPAdapterError("MCP response exceeded 1 MB safety limit")
+                if not raw and notification:
+                    return {}
                 result = json.loads(raw.decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise MCPAdapterError(f"MCP request failed: {type(exc).__name__}") from exc
@@ -90,13 +108,18 @@ class MCPToolAgentAdapter:
         tool_name = str(agent.metadata.get("submit_tool", "")).strip()
         if not tool_name:
             raise MCPAdapterError("MCP agent descriptor is missing its explicit submit_tool")
-        await asyncio.to_thread(
+        initialized = await asyncio.to_thread(
             self._request_sync, agent, "initialize",
             {
                 "protocolVersion": self.protocol_version,
                 "capabilities": {},
                 "clientInfo": {"name": "qudron-agent-fabric", "version": "0.1.0"},
             },
+        )
+        if not isinstance(initialized, dict) or not initialized.get("protocolVersion"):
+            raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
+        await asyncio.to_thread(
+            self._request_sync, agent, "notifications/initialized", {}, notification=True
         )
         args = {
             "title": task.title,

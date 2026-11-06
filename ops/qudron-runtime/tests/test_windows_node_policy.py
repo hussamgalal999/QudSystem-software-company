@@ -185,11 +185,12 @@ class WindowsNodePolicyTests(unittest.TestCase):
             "idempotency_key": "idem-invalid-type-text",
             "action": "windows.type_text",
             "parameters": {
-                "process_id": 123, "automation_id": "search-box",
-                "control_type": "Edit", "text": "literal text",
+                "process_id": 123, "window_title": "Notepad",
+                "automation_id": "search-box", "control_type": "Edit", "text": "literal text",
             },
         }
         for changes in (
+            {"window_title": ""},
             {"automation_id": ""},
             {"automation_id": ["not", "a", "string"]},
             {"control_type": "Button"},

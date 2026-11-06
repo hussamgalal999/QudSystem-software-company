@@ -61,6 +61,48 @@ class WindowsNodePolicyTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["result"]["windows"][0]["process_id"], 123)
 
+
+    def test_inspect_window_is_read_only_and_does_not_require_approval(self):
+        result = self.node.execute({
+            "task_id": "task-inspect", "idempotency_key": "idem-inspect",
+            "action": "windows.inspect_window",
+            "parameters": {"process_id": 123},
+        })
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["result"]["title"], "Notepad")
+        self.assertEqual(self.automation.invocations, [])
+
+    def test_invoke_control_requires_and_consumes_exact_approval(self):
+        params = {
+            "process_id": 123, "window_title": "Notepad",
+            "automation_id": "search-box", "control_type": "Edit",
+        }
+        with self.assertRaises(WindowsNodeError):
+            self.node.execute({
+                "task_id": "task-invoke-denied", "idempotency_key": "idem-invoke-denied",
+                "action": "windows.invoke_control", "parameters": params,
+            })
+        approval = self.approval(
+            "windows.invoke_control", params, "nonce-invoke-00000001"
+        )
+        payload = {
+            "task_id": "task-invoke", "idempotency_key": "idem-invoke",
+            "action": "windows.invoke_control", "parameters": params,
+            "approval": approval,
+        }
+        result = self.node.execute(payload)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            self.automation.invocations,
+            [("invoke", 123, "Notepad", "search-box", "Edit")],
+        )
+        with self.assertRaises(WindowsNodeError):
+            self.node.execute({
+                **payload,
+                "task_id": "task-invoke-replay",
+                "idempotency_key": "idem-invoke-replay",
+            })
+
     def test_write_action_requires_signed_approval(self):
         params = {"app_alias": "notepad"}
         with self.assertRaises(WindowsNodeError):

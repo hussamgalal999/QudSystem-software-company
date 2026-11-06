@@ -69,6 +69,7 @@ class MetricoolClient:
    content_brand=content_brand,
    brand_id=self.blog_id,
    destination_id=destination_id,
+   network=network,
    approved_brand_destinations=_load_owner_approved_brand_destinations(),
   )
   payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network}],"draft":True,"autoPublish":False}
@@ -126,6 +127,7 @@ def validate_brand_destination(
  content_brand:str|None,
  brand_id:str|None,
  destination_id:str|None,
+ network:str,
  approved_brand_destinations:dict[str,dict[str,str]]|None,
 )->None:
  """Require an explicit brand -> Metricool blog -> destination allowlist.
@@ -147,9 +149,14 @@ def validate_brand_destination(
   raise MetricoolError("No owner-approved Metricool brand/destination mapping exists")
  expected_blog=str(binding.get("brand_id") or "").strip()
  expected_destination=str(binding.get("destination_id") or "").strip()
- if not expected_blog or not expected_destination:
-  raise MetricoolError("Approved Metricool mapping must include both brand_id and destination_id")
+ expected_network=str(binding.get("network") or "").strip().lower()
+ if not expected_blog or not expected_destination or not expected_network:
+  raise MetricoolError("Approved Metricool mapping must include brand_id, destination_id and network")
  if not str(brand_id or "").strip() or not str(destination_id or "").strip():
   raise MetricoolError("Metricool brand and destination IDs are required")
- if str(brand_id).strip()!=expected_blog or str(destination_id).strip()!=expected_destination:
-  raise MetricoolError("Metricool brand/destination does not match the approved content-brand mapping")
+ if (
+  str(brand_id).strip()!=expected_blog
+  or str(destination_id).strip()!=expected_destination
+  or str(network or "").strip().lower()!=expected_network
+ ):
+  raise MetricoolError("Metricool brand/destination/network does not match the approved content-brand mapping")

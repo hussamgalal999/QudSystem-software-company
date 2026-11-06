@@ -222,6 +222,20 @@ The included FreeLLM sidecar is the default OpenAI-compatible gateway when `LLM_
 
 When no provider keys are configured, `FREELM_KEYLESS=auto` selects only documented anonymous/free routes. To force official provider keys only, set `FREELM_KEYLESS=0`. Add keys via the host secret manager (not Git) when available. The router handles provider/model discovery and failover; Qudron still records call/token usage and maintains its own budget/concurrency gates.
 
+## Continuous model-provider access and recovery
+
+Qudron keeps a provider access radar for owner-configured routes. The runtime probes the read-only model catalogue endpoint (GET `/models`) on a bounded interval, checks that the configured model is actually advertised, records latency/failures in the shared SQLite database, and applies a persistent circuit breaker after authentication, quota, network or server errors. A provider returning to health is re-tested and may re-enter the route chain.
+
+The inference path can use an owner-approved ordered fallback chain through `QUDRON_PROVIDER_ROUTES_JSON`. Each route must declare its profile, exact endpoint/model, protocol, price class, accepted data classes, and an environment-variable reference to its key. The raw key is never placed in JSON, status responses or logs. The currently implemented execution chain accepts OpenAI Chat Completions routes; providers requiring Anthropic Messages, Gemini GenerateContent or OpenAI Responses need their respective adapter before they can be activated through this chain.
+
+For DeepSeek V4.1 Flash, the official API model ID is `deepseek-flash` (currently served as V4.1-Flash-1017), using `https://api.deepseek.com`. The current official peak cache-miss input rate is $0.30 per 1M tokens and output is $1.20 per 1M tokens; off-peak and cache-hit prices differ. The example in `.env.example` is commented out and must be revalidated against the official pricing page and the owner's account before enabling it.
+
+**No silent privilege or spend escalation:** a fallback is eligible only when explicitly enabled and owner-approved. Paid routes need exact input/output prices and the same local per-task/daily/monthly budget controls. Verified free routes require an explicit owner attestation; an endpoint is never treated as free merely because it responds. The runtime never scrapes browser cookies, borrows another user's subscription, evades rate limits, or silently changes a blocked paid route to a paid alternative.
+
+Provider data classes default to `public,internal`. Customer CVs, support cases and payment workflows are classified as confidential and will not be sent to a route until `QUDRON_PROVIDER_DATA_CLASSES` and the route's own `accepted_data_classes` explicitly permit it. Anonymous FreeLLM remains public-only and never receives Qudron's private memory.
+
+The health probe is deliberately read-only: it proves that the catalogue endpoint is reachable and advertises a model, not that an inference request succeeds or that quota/billing is available. A successful inference, usage record and real account entitlement remain distinct verification steps.
+
 ## Batch task intake and capacity
 
 - `POST /jobs` remains available for one job.

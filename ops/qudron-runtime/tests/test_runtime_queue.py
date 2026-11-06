@@ -230,10 +230,10 @@ class RuntimeQueueTests(unittest.TestCase):
 
     def test_runtime_status_reports_dynamic_task_admission_and_shared_call_limits(self):
         with patch.object(worker, "SWARM_ENABLED", True), \
-             patch.object(worker, "MAX_AGENT_INSTANCES_PER_TASK", 10_000), \
+             patch.object(worker, "MAX_ROLE_ASSIGNMENTS_PER_TASK", 10_000), \
              patch.object(worker, "MAX_PARALLEL_REVIEWS", 16):
             snapshot = worker.status_snapshot()
-        self.assertEqual(snapshot["max_agent_instances_per_task"], 10_000)
+        self.assertEqual(snapshot["max_role_assignments_per_task"], 10_000)
         self.assertEqual(snapshot["max_agents_per_task"], 10_000)
         self.assertEqual(snapshot["max_agents_per_cvpen_job"], 10_000)
         self.assertEqual(snapshot["max_parallel_reviews"], 16)

@@ -1,6 +1,7 @@
 import unittest
 
 from urllib.request import Request
+from unittest.mock import patch
 
 from endpoint_security import (
     RejectCredentialRedirectHandler, is_allowed_credential_endpoint,
@@ -29,6 +30,8 @@ class CredentialEndpointPolicyTests(unittest.TestCase):
             "http://localhost.evil.test/mcp",
             "http://localhost.attacker.example/mcp",
             "http://127.0.0.1.evil.test/mcp",
+            "http://127.0.0.1%.attacker.example/mcp",
+            "http://[::1%25eth0]:8765/mcp",
             "http://192.168.1.10:8765/mcp",
             "http://user:pass@127.0.0.1:8765/mcp",
             "file:///etc/passwd",
@@ -53,6 +56,15 @@ class CredentialRedirectPolicyTests(unittest.TestCase):
         request = Request("http://remote.example/v1/tasks")
         with self.assertRaisesRegex(ValueError, "endpoint is not allowed"):
             open_credential_request(request, timeout=2)
+
+
+    def test_plain_http_credential_request_bypasses_environment_proxy(self):
+        request = Request("http://127.0.0.1:8765/mcp")
+        with patch("endpoint_security.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = object()
+            open_credential_request(request, timeout=2)
+        proxy_handler = build_opener.call_args.args[0]
+        self.assertEqual(proxy_handler.proxies, {})
 
 
 if __name__ == "__main__":

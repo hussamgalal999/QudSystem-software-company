@@ -179,6 +179,31 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(handle.remote_task_id, "remote-1")
 
+
+    def test_mcp_streamable_http_event_stream_response_is_parsed(self):
+        adapter = MCPToolAgentAdapter()
+        descriptor = AgentDescriptor(
+            agent_id="mcp-sse", display_name="MCP SSE",
+            provider_id="mcp-provider", adapter="mcp",
+            endpoint_ref="https://mcp.example.com/mcp",
+        )
+
+        class EventStreamResponse:
+            headers = {"Content-Type": "text/event-stream"}
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return None
+            def read(self, _limit=-1):
+                return (
+                    b'event: message\\n'
+                    b'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"SSE result"}]}}\\n\\n'
+                )
+
+        with patch("mcp_agent_adapter.open_credential_request", return_value=EventStreamResponse()):
+            result = adapter._request_sync(descriptor, "tools/list")
+        self.assertEqual(result["content"][0]["text"], "SSE result")
+
     def test_mcp_session_id_is_reused_after_initialize(self):
         adapter = MCPToolAgentAdapter()
         descriptor = AgentDescriptor(

@@ -28,7 +28,7 @@ class MetricoolClient:
   if body is not None:headers["Content-Type"]="application/json"
   req=Request(url,data=body,headers=headers,method=method.upper())
   try:
-   with open_credential_request(req,timeout=30) as response:
+   with open_credential_request(req,timeout=30,endpoint_validated=True) as response:
     raw=response.read()
     if not raw:return {}
     content_type=response.headers.get("Content-Type","")

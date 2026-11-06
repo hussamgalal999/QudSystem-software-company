@@ -18,6 +18,7 @@ import uuid
 from typing import Any, Awaitable, Callable, Iterable
 
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
+from approval_service import ApprovalService
 
 
 class WorkflowError(RuntimeError):
@@ -160,7 +161,13 @@ def expand_execution_mode(
 
 
 class WorkflowStore:
-    def __init__(self, database_path: str | Path):
+    def __init__(
+        self,
+        database_path: str | Path,
+        *,
+        approval_service: ApprovalService | None = None,
+    ):
+        self.approval_service = approval_service
         self.path = Path(database_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._schema()
@@ -246,7 +253,9 @@ class WorkflowStore:
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,'queued',?,?,?)""",
                     (definition.workflow_id, node.node_id, node.title, node.instruction,
                      json.dumps(node.dependencies), node.assigned_agent_id, json.dumps(claims),
-                     int(node.requires_approval), node.approved_by, int(node.retry_safe),
+                     int(node.requires_approval),
+                     None if node.requires_approval else node.approved_by,
+                     int(node.retry_safe),
                      node.max_attempts, int(node.persist_output),
                      json.dumps(node.metadata, ensure_ascii=False), now, now),
                 )
@@ -319,14 +328,21 @@ class WorkflowStore:
                 (owner_key,),
             )
 
-    def approve_node(self, workflow_id: str, node_id: str, approver: str) -> None:
-        if not approver.strip():
-            raise ValueError("approver is required")
+    def approve_node(self, workflow_id: str, node_id: str, approval_token: str) -> None:
+        if self.approval_service is None:
+            raise WorkflowError("Authenticated approval service is not configured")
+        approval = self.approval_service.verify_and_consume(
+            approval_token,
+            action="workflow.node.approve",
+            resource_id=f"{workflow_id}/{node_id}",
+        )
+        if not approval:
+            raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
         with self.connect() as db:
             changed = db.execute(
                 """UPDATE workflow_nodes SET approved_by=?,status='queued',updated_at=?
                    WHERE workflow_id=? AND node_id=? AND requires_approval=1""",
-                (approver[:160], time.time(), workflow_id, node_id),
+                (str(approval["approved_by"])[:160], time.time(), workflow_id, node_id),
             ).rowcount
         if changed != 1:
             raise WorkflowError("Approval target was not found or does not require approval")

@@ -78,6 +78,8 @@ class ManusAdapterTests(unittest.TestCase):
         self.assertEqual(result["last_event_id"], "evt-1")
         self.assertIn("Private contact jane@example.com", json.dumps(result))
         stored = self.store.external_task(provider="manus", external_task_id="task-abc")
+        self.assertEqual(stored["status"], "running")
+        self.assertEqual(stored["last_event_id"], "evt-1")
         persisted = json.loads(stored["result_json"])
         self.assertEqual(persisted["events"][0]["id"], "evt-1")
         self.assertNotIn("message", persisted["events"][0])
@@ -139,7 +141,7 @@ class ManusAdapterTests(unittest.TestCase):
         with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "false"}, clear=False):
             with self.assertRaises(ManusAPIError):
                 ManusAdapter.from_environment(self.store)
-        with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "true", "MANUS_API_KEY": ""}, clear=False):
+        with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "true", "QUDRON_MANUS_CREDENTIAL_TYPE": "api_key", "MANUS_API_KEY": "", "MANUS_OAUTH_TOKEN": ""}, clear=False):
             with self.assertRaises(ManusAPIError):
                 ManusAdapter.from_environment(self.store)
 

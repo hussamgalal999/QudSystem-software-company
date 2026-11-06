@@ -174,6 +174,20 @@ def init_db() -> None:
           profile TEXT NOT NULL, reserved_cost_usd REAL NOT NULL,
           created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS llm_call_attempts (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+          profile TEXT NOT NULL, provider_id TEXT NOT NULL, model TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'in_flight',
+          billing_state TEXT NOT NULL DEFAULT 'pending',
+          estimated_cost_usd REAL, reported_cost_usd REAL,
+          error_class TEXT, started_at TEXT NOT NULL, finished_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_started
+          ON llm_call_attempts(started_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_job
+          ON llm_call_attempts(job_id, started_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_billing
+          ON llm_call_attempts(billing_state, started_at);
         CREATE INDEX IF NOT EXISTS idx_llm_reservations_created
           ON llm_usage_reservations(created_at);
         CREATE TABLE IF NOT EXISTS model_call_slots (
@@ -1087,6 +1101,15 @@ def reserve_model_budget(
         reservation_cutoff = (
             now - dt.timedelta(seconds=max(600, LLM_TIMEOUT * 3))
         ).isoformat(timespec="seconds")
+        # Recover attempts interrupted after the request may have reached the provider.
+        # They remain an uncertain-cost exposure until reconciled, not a fabricated $0.
+        db.execute(
+            """UPDATE llm_call_attempts
+               SET status='interrupted', billing_state='unknown',
+                   error_class='worker_interrupted', finished_at=?
+               WHERE status='in_flight' AND started_at<?""",
+            (stamp, reservation_cutoff),
+        )
         db.execute(
             "DELETE FROM llm_usage_reservations WHERE created_at<?",
             (reservation_cutoff,),
@@ -1100,7 +1123,12 @@ def reserve_model_budget(
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE job_id=?",
                 (job_id,),
             ).fetchone()[0]
-            if float(job_spent or 0) + float(job_reserved or 0) + estimated_cost > cvpen_job_budget:
+            job_uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE job_id=? AND billing_state='unknown'""",
+                (job_id,),
+            ).fetchone()[0]
+            if float(job_spent or 0) + float(job_reserved or 0) + float(job_uncertain or 0) + estimated_cost > cvpen_job_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"CVPen per-order model budget reached for job {job_id}; "
@@ -1116,7 +1144,12 @@ def reserve_model_budget(
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
                 (day,),
             ).fetchone()[0]
-            if float(spent or 0) + float(reserved or 0) + estimated_cost > daily_budget:
+            uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE created_at LIKE ? AND billing_state='unknown'""",
+                (day,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > daily_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"Qudron daily model budget reached; estimated call cost {estimated_cost:.6f} USD "
@@ -1132,7 +1165,12 @@ def reserve_model_budget(
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
                 (month,),
             ).fetchone()[0]
-            if float(spent or 0) + float(reserved or 0) + estimated_cost > monthly_budget:
+            uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE created_at LIKE ? AND billing_state='unknown'""",
+                (month,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > monthly_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"Qudron monthly model budget reached; estimated call cost {estimated_cost:.6f} USD "
@@ -1205,6 +1243,58 @@ def record_model_usage(
         if reservation_id:
             db.execute("DELETE FROM llm_usage_reservations WHERE id=?", (reservation_id,))
         db.commit()
+    return cost_usd
+
+
+def start_model_call_attempt(
+    job_id: str, agent_id: str, profile: str, provider_id: str,
+    model: str, reservation_id: str | None,
+) -> str:
+    """Persist a safe model-call attempt before network I/O; never stores prompts or secrets."""
+    attempt_id = uuid.uuid4().hex
+    stamp = iso_now()
+    with connect_db() as db:
+        estimated = None
+        if reservation_id:
+            reservation = db.execute(
+                "SELECT reserved_cost_usd FROM llm_usage_reservations WHERE id=?",
+                (reservation_id,),
+            ).fetchone()
+            if reservation is not None:
+                estimated = float(reservation["reserved_cost_usd"])
+        db.execute(
+            """INSERT INTO llm_call_attempts
+               (id,job_id,agent_id,profile,provider_id,model,status,billing_state,
+                estimated_cost_usd,started_at)
+               VALUES(?,?,?,?,?,?,'in_flight','pending',?,?)""",
+            (attempt_id, job_id, agent_id, profile, provider_id[:120], model[:160], estimated, stamp),
+        )
+    return attempt_id
+
+
+def finish_model_call_attempt(
+    attempt_id: str | None, *, status: str, billing_state: str,
+    error_class: str | None = None, reported_cost_usd: float | None = None,
+) -> None:
+    """Close an attempt using a bounded status, safe error label and explicit billing certainty."""
+    if not attempt_id:
+        return
+    if status not in {"succeeded", "failed", "rejected", "interrupted"}:
+        raise ValueError("Unsupported model attempt status")
+    if billing_state not in {"reported", "estimated", "unknown", "not_charged"}:
+        raise ValueError("Unsupported model attempt billing state")
+    if reported_cost_usd is not None and (
+        not math.isfinite(float(reported_cost_usd)) or float(reported_cost_usd) < 0
+    ):
+        raise ValueError("reported_cost_usd must be finite and non-negative")
+    safe_error = re.sub(r"[^A-Za-z0-9_.:-]", "_", str(error_class or ""))[:80] or None
+    with connect_db() as db:
+        db.execute(
+            """UPDATE llm_call_attempts
+               SET status=?,billing_state=?,error_class=?,reported_cost_usd=?,finished_at=?
+               WHERE id=? AND status='in_flight'""",
+            (status, billing_state, safe_error, reported_cost_usd, iso_now(), attempt_id),
+        )
 
 
 def release_model_budget_reservation(reservation_id: str | None) -> None:

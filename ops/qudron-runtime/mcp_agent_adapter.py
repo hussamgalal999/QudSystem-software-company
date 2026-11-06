@@ -11,11 +11,11 @@ import json
 import os
 import threading
 
-from endpoint_security import is_allowed_credential_endpoint
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 import uuid
 
 from agent_protocol import AgentDescriptor, AgentTaskHandle, AgentTaskResult, TaskEnvelope, TaskStatus
@@ -66,7 +66,7 @@ class MCPToolAgentAdapter:
             headers=headers, method="POST",
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
+            with open_credential_request(request, timeout=self.timeout_seconds) as response:
                 response_session = response.headers.get("Mcp-Session-Id")
                 if response_session:
                     with self._session_lock:

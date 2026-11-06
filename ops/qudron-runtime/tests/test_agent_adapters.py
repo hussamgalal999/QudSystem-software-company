@@ -143,6 +143,37 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             "https://agent.example.com/tenant/agent/.well-known/agent-card.json",
         )
 
+    async def test_mcp_submit_completes_initialize_handshake_before_tools_call(self):
+        adapter = MCPToolAgentAdapter()
+        descriptor = AgentDescriptor(
+            agent_id="mcp-agent", display_name="MCP Agent",
+            provider_id="mcp-provider", adapter="mcp",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="mcp_authorized",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="https://mcp.example.com/mcp",
+            metadata={"submit_tool": "submit_task", "status_tool": "get_status"},
+        )
+        calls = []
+        def fake_request(agent_descriptor, method, params=None, *, notification=False):
+            calls.append((method, notification))
+            if method == "initialize":
+                return {"protocolVersion": adapter.protocol_version}
+            if method == "tools/call":
+                return {"content": [{"type": "text", "text": json.dumps({"job_id": "remote-1"})}]}
+            return {}
+        with patch.object(adapter, "_request_sync", side_effect=fake_request):
+            handle = await adapter.submit(descriptor, TaskEnvelope(
+                project_id="qudron", task_id="task-1", title="Research",
+                instruction="Find public facts.", task_type="research",
+                idempotency_key="mcp-task-0001",
+            ))
+        self.assertEqual(
+            calls,
+            [("initialize", False), ("notifications/initialized", True), ("tools/call", False)],
+        )
+        self.assertEqual(handle.remote_task_id, "remote-1")
+
     def test_a2a_refuses_plain_remote_http(self):
         agent = AgentDescriptor(
             "bad", "Bad", "bad", "a2a", endpoint_ref="http://external.example.com"

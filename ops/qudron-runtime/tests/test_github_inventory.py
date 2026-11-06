@@ -37,7 +37,7 @@ class GitHubInventoryTests(unittest.TestCase):
    self.assertEqual(json.loads(target.read_text())["repository_count"],2)
  def test_api_auth_errors_are_sanitized(self):
   import urllib.error
-  with patch.object(gi.urllib.request,"urlopen",side_effect=urllib.error.HTTPError("u",403,"Forbidden",{},None)):
+  with patch.object(gi,"open_credential_request",side_effect=urllib.error.HTTPError("u",403,"Forbidden",{},None)):
    with self.assertRaisesRegex(gi.GitHubInventoryError,"permission failed"):
     gi._request_json("https://api.github.com/user/repos","secret")
 if __name__=="__main__":unittest.main()

@@ -157,6 +157,27 @@ class WindowsNodePolicyTests(unittest.TestCase):
         with self.assertRaises(WindowsNodeError):
             automation.type_text(123, "search-box", "Button", "must not type")
 
+    def test_running_receipt_replay_is_unknown_and_never_reexecutes_action(self):
+        params = {"app_alias": "notepad"}
+        key = "idem-running-unknown"
+        with self.node._connect() as db:
+            now = time.time()
+            db.execute(
+                """INSERT INTO task_receipts
+                   (idempotency_key,task_id,action,status,created_at,updated_at)
+                   VALUES(?,?,?,'running',?,?)""",
+                (key, "task-running", "windows.launch_app", now, now),
+            )
+        result = self.node.execute({
+            "task_id": "task-running", "idempotency_key": key,
+            "action": "windows.launch_app", "parameters": params,
+        })
+        self.assertEqual(result["status"], "unknown")
+        self.assertEqual(result["error_code"], "outcome_unknown_requires_reconciliation")
+        self.assertTrue(result["reconciliation_required"])
+        self.assertTrue(result["replayed"])
+        self.assertEqual(self.automation.invocations, [])
+
     def test_worker_has_no_arbitrary_shell_action(self):
         with self.assertRaises(WindowsNodeError):
             self.node.execute({

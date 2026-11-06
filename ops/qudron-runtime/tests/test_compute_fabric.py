@@ -7,7 +7,7 @@ from pathlib import Path
 from agent_protocol import DataClass
 from compute_fabric import (
     ComputeFabric, ComputeLease, ComputeProviderDescriptor, ComputeRequest,
-    NoEligibleCompute, SQLiteComputeLeaseStore,
+    ComputeProviderUnavailable, NoEligibleCompute, SQLiteComputeLeaseStore,
 )
 
 
@@ -22,7 +22,7 @@ class FakeComputeAdapter:
             provider_id=provider.provider_id,
             lease_id="lease-" + provider.provider_id,
             resource_id="gpu-instance-1",
-            expires_at=time.time() + 300,
+            expires_at=time.time() + max(300, request.min_runtime_seconds + 60),
             endpoint_ref="https://compute.example.test/job/1",
         )
 

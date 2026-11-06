@@ -52,7 +52,7 @@ class CloudMemoryAdapterTests(unittest.TestCase):
                 }, now,
             )
         calls = []
-        def fake_urlopen(request, timeout=0):
+        def fake_urlopen(request, timeout=0, **kwargs):
             calls.append(request)
             if len(calls) == 1:
                 # Simulate the response being lost after the remote service may

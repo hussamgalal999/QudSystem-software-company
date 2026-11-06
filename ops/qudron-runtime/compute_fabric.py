@@ -468,6 +468,8 @@ class ComputeFabric:
         self._leases: dict[str, tuple[str, ComputeLease]] = {}
         self._reservations: dict[str, int] = {}
         self._reservations_runtime: dict[str, int] = {}
+        self._release_lock = asyncio.Lock()
+        self._releasing_leases: set[str] = set()
         if self.lease_store:
             for _, lease in self.lease_store.leases():
                 self._leases[lease.lease_id] = (lease.provider_id, lease)
@@ -733,31 +735,39 @@ class ComputeFabric:
         )
 
     async def release(self, lease: ComputeLease) -> None:
-        stored = self._leases.get(lease.lease_id)
-        if not stored and self.lease_store:
-            persisted = await asyncio.to_thread(self.lease_store.get_lease, lease.lease_id)
-            if persisted:
-                state, persisted_lease = persisted
-                stored = (persisted_lease.provider_id, persisted_lease)
-                self._leases[lease.lease_id] = stored
-        if not stored or stored[0] != lease.provider_id or stored[1] != lease:
-            raise ComputeFabricError("Unknown or mismatched compute lease")
-        provider = self._providers.get(lease.provider_id)
-        if not provider:
-            raise ComputeProviderUnavailable(
-                f"Provider {lease.provider_id} is not registered for lease recovery"
+        async with self._release_lock:
+            if lease.lease_id in self._releasing_leases:
+                raise ComputeFabricError("Compute lease release is already in progress")
+            stored = self._leases.get(lease.lease_id)
+            if not stored and self.lease_store:
+                persisted = await asyncio.to_thread(self.lease_store.get_lease, lease.lease_id)
+                if persisted:
+                    state, persisted_lease = persisted
+                    stored = (persisted_lease.provider_id, persisted_lease)
+                    self._leases[lease.lease_id] = stored
+            if not stored or stored[0] != lease.provider_id or stored[1] != lease:
+                raise ComputeFabricError("Unknown or mismatched compute lease")
+            provider = self._providers.get(lease.provider_id)
+            if not provider:
+                raise ComputeProviderUnavailable(
+                    f"Provider {lease.provider_id} is not registered for lease recovery"
+                )
+            self._releasing_leases.add(lease.lease_id)
+        try:
+            adapter = self._adapters[provider.adapter]
+            if self.lease_store:
+                await asyncio.to_thread(self.lease_store.mark_release_pending, lease.lease_id)
+            # Keep the lease in both stores until provider release is confirmed.
+            await asyncio.wait_for(
+                adapter.release(provider, lease),
+                timeout=self.policy.request_timeout_seconds,
             )
-        adapter = self._adapters[provider.adapter]
-        if self.lease_store:
-            await asyncio.to_thread(self.lease_store.mark_release_pending, lease.lease_id)
-        # Keep the lease in both stores until provider release is confirmed.
-        await asyncio.wait_for(
-            adapter.release(provider, lease),
-            timeout=self.policy.request_timeout_seconds,
-        )
-        if self.lease_store:
-            await asyncio.to_thread(self.lease_store.delete_lease, lease.lease_id)
-        self._leases.pop(lease.lease_id, None)
+            if self.lease_store:
+                await asyncio.to_thread(self.lease_store.delete_lease, lease.lease_id)
+            self._leases.pop(lease.lease_id, None)
+        finally:
+            async with self._release_lock:
+                self._releasing_leases.discard(lease.lease_id)
 
     def snapshot(self) -> dict[str, Any]:
         persisted = self.lease_store.snapshot() if self.lease_store else {

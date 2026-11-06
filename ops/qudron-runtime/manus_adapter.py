@@ -190,10 +190,11 @@ class ManusAdapter:
             key=lambda item: int(item.get("timestamp", 0) or 0),
             default=None,
         )
+        # Manus may attach the status_update object to a regular message
+        # event as well as emitting a standalone status_update event.
         status_events = [
             item for item in messages
-            if isinstance(item, dict) and item.get("type") == "status_update"
-            and isinstance(item.get("status_update"), dict)
+            if isinstance(item, dict) and isinstance(item.get("status_update"), dict)
         ]
         latest_status = max(
             status_events,

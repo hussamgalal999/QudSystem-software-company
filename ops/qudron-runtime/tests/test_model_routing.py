@@ -11,11 +11,12 @@ class FakeResponse:
         return self
     def __exit__(self, exc_type, exc, tb):
         return False
-    def read(self):
-        return json.dumps({
+    def read(self, size=-1):
+        payload = json.dumps({
             "choices":[{"message":{"content":"routed response"}}],
             "usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}
         }).encode()
+        return payload if size is None or size < 0 else payload[:size]
 
 class ModelRoutingTests(unittest.TestCase):
     def setUp(self):

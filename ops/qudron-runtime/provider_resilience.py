@@ -745,7 +745,10 @@ def probe_due_catalogue_providers(
         provider_id = str(provider.get("provider", ""))
         previous = store.get(provider_id)
         last_probe = float(previous.get("last_probe") or 0) if previous else 0
-        if previous and current - last_probe < max(300, interval_seconds):
+        # Missing credentials are re-checked cheaply each cycle so adding an
+        # owner-provisioned key does not wait for the full discovery interval.
+        credentials_missing = bool(previous and previous.get("status") == "credentials_not_configured")
+        if previous and not credentials_missing and current - last_probe < max(300, interval_seconds):
             continue
         reports.append(probe_catalogue_provider(
             provider, store, environ=env, secret_reader=secret_reader,

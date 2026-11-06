@@ -245,3 +245,10 @@ Keep the submission tool approval enabled. OpenDots conversations require a Copi
 ## Social distribution
 
 The current Metricool adapter deliberately creates drafts only. Use it as the distribution layer for Facebook, Instagram, YouTube and other supported destinations after connecting the official Metricool API. The publication workflow should produce platform-specific variants, campaign IDs, media metadata, UTM tags, an approval record and post-publication evidence. No public post is considered complete until its provider returns a published ID and permalink. Never bypass Meta login or use personal cookies scraped from a browser to publish.
+
+
+## Optional Artemis Android device integration
+
+Qudron can expose approval-gated Android device tools through the independent Google ARTEMIS MCP server. Artemis and ADB run on the computer connected to the Android device; Qudron calls a small authenticated host bridge over the private network.
+
+See [docs/INTEGRATION_ARTEMIS.md](../../docs/INTEGRATION_ARTEMIS.md) for architecture, installation, tool mapping, safety boundaries and the opt-in physical-device battery test. Add ARTEMIS_BRIDGE_URL and ARTEMIS_BRIDGE_TOKEN to the private .env only after the host bridge is running. Without those values, the Android tools fail closed and do not attempt device access.

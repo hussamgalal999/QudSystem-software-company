@@ -133,6 +133,9 @@ class ContinuityStore:
             CREATE INDEX IF NOT EXISTS idx_cloud_outbox_pending
               ON cloud_outbox(status,next_attempt_at,created_at);
             """)
+            # Serialize legacy-column inspection and ALTER operations across
+            # concurrent runtime starts.
+            db.execute("BEGIN IMMEDIATE")
             agent_run_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(agent_runs)")
             }

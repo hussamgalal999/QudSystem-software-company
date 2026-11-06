@@ -44,6 +44,9 @@ class ProviderResilienceTests(unittest.TestCase):
     def test_fallback_routes_require_explicit_owner_approval_and_exact_protocol(self):
         env = {
             "PROVIDER_KEY": "test-provider-key",
+            "DEEPSEEK_API_KEY": "deepseek-test-key",
+            "UNAPPROVED_KEY": "unapproved-test-key",
+            "OTHER_KEY": "other-test-key",
             "QUDRON_PROVIDER_ROUTES_JSON": json.dumps([
                 {
                     "route_id": "deepseek-balanced",
@@ -66,6 +69,7 @@ class ProviderResilienceTests(unittest.TestCase):
                     "profile": "balanced",
                     "base_url": "https://unapproved.example/v1",
                     "model": "example-model",
+                    "api_key_env": "UNAPPROVED_KEY",
                     "enabled": True,
                     "owner_approved": False,
                     "price_class": "paid",
@@ -78,6 +82,7 @@ class ProviderResilienceTests(unittest.TestCase):
                     "profile": "balanced",
                     "base_url": "https://other.example/v1",
                     "model": "example-model",
+                    "api_key_env": "OTHER_KEY",
                     "enabled": True,
                     "owner_approved": True,
                     "protocol": "gemini_generate_content",
@@ -126,7 +131,7 @@ class ProviderResilienceTests(unittest.TestCase):
                 {
                     "route_id": "missing-key", "provider_id": "p1",
                     "profile": "balanced", "base_url": "https://p1.example/v1",
-                    "model": "model-1", "api_key_env": "PROVIDER_KEY",
+                    "model": "model-1", "api_key_env": "MISSING_PROVIDER_KEY",
                     "enabled": True, "owner_approved": True,
                     "price_class": "paid", "input_usd_per_1m": 1,
                     "output_usd_per_1m": 2,
@@ -139,6 +144,7 @@ class ProviderResilienceTests(unittest.TestCase):
                     "price_class": "paid",
                 },
             ]),
+            "PROVIDER_KEY": "valid-test-key",
         }
         self.assertEqual(load_provider_routes("balanced", environ=env), [])
 

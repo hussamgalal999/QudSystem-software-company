@@ -57,6 +57,52 @@ def agent(agent_id, provider, adapter, **kwargs):
 
 
 class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
+    async def test_update_agent_resizes_the_existing_slot_without_bypassing_active_work(self):
+        class BlockingAdapter(FakeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.active = 0
+                self.max_active = 0
+                self.started = asyncio.Event()
+                self.release = asyncio.Event()
+
+            async def submit(self, agent_descriptor, task_envelope):
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                self.started.set()
+                try:
+                    await self.release.wait()
+                finally:
+                    self.active -= 1
+                return AgentTaskHandle(
+                    agent_descriptor.provider_id,
+                    f"remote-{task_envelope.task_id}",
+                    TaskStatus.RUNNING,
+                )
+
+        fabric = AgentFabric()
+        adapter = BlockingAdapter()
+        fabric.register_adapter("fake", adapter)
+        original = agent("worker", "provider", "fake", max_concurrency=1)
+        fabric.register_agent(original)
+
+        first = asyncio.create_task(fabric.dispatch(task(
+            task_id="job-first", idempotency_key="idem-first",
+        )))
+        await adapter.started.wait()
+
+        refreshed = agent("worker", "provider", "fake", max_concurrency=1)
+        fabric.update_agent(refreshed)
+        second = asyncio.create_task(fabric.dispatch(task(
+            task_id="job-second", idempotency_key="idem-second",
+        )))
+        await asyncio.sleep(0.02)
+        self.assertEqual(adapter.max_active, 1)
+
+        adapter.release.set()
+        await asyncio.gather(first, second)
+        self.assertEqual(adapter.max_active, 1)
+
     async def test_routes_to_eligible_agent_and_polls_result(self):
         fabric = AgentFabric()
         adapter = FakeAdapter()

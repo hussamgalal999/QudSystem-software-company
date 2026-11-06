@@ -37,7 +37,7 @@ from capability_registry import search_capabilities as search_capability_registr
 from mcp_gateway import handle_mcp_request, MCPGatewayError
 from continuity_store import ContinuityStore
 from cloud_memory_adapter import (
-    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
+    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment, merge_local_and_cloud_context,
 )
 from endpoint_security import open_credential_request
 from provider_resilience import (

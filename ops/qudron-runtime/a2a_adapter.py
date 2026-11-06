@@ -71,7 +71,7 @@ class A2AHttpAdapter:
         self, agent: AgentDescriptor, method: str, path: str,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        url = urljoin(self._base(agent), path.lstrip("/"))
+        url = urljoin(self._base(agent), path)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
         req = Request(url, data=body, headers=self._headers(agent), method=method)
         last = "unknown"
@@ -121,9 +121,12 @@ class A2AHttpAdapter:
     def _message_text(message: Any) -> str:
         if not isinstance(message, dict):
             return str(message or "")
+        parts = message.get("parts")
+        if not isinstance(parts, list):
+            return ""
         return " ".join(
             str(part.get("text", ""))
-            for part in message.get("parts", [])
+            for part in parts
             if isinstance(part, dict) and part.get("text") is not None
         ).strip()
 

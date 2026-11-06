@@ -1020,7 +1020,13 @@ def reserve_model_budget(
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
                       "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     selected_base_url = (os.getenv(f"{profile_prefix}_BASE_URL") or LLM_BASE_URL).strip()
-    anonymous_free_route = is_anonymous_freellm_route(selected_base_url) or verified_free_route
+    # A task-scoped route's own entitlement and price override must win over
+    # the default profile URL. Otherwise a FreeLLM primary could accidentally
+    # make a paid fallback look free in the budget ledger.
+    explicit_route_pricing = input_rate_override is not None or output_rate_override is not None
+    anonymous_free_route = verified_free_route or (
+        not explicit_route_pricing and is_anonymous_freellm_route(selected_base_url)
+    )
     if anonymous_free_route:
         # Only an anonymous route or an explicitly owner-verified free route may
         # use a zero provider price estimate. Daily/model-call caps remain active.

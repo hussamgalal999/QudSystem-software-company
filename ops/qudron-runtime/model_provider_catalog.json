@@ -54,7 +54,14 @@
           "enabled": false,
           "source": "https://api-docs.deepseek.com/quick_start/pricing/"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "DEEPSEEK_API_KEY_FILE"
     },
     {
       "provider": "Xiaomi MiMo",
@@ -99,7 +106,14 @@
           "enabled": false,
           "source": "https://mimo.mi.com/docs/en-US/pricing"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "api-key",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "MIMO_API_KEY_FILE"
     },
     {
       "provider": "OpenRouter / Meta",
@@ -146,7 +160,14 @@
           "enabled": false,
           "source": "https://openrouter.ai/meta/muse-spark-open/"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "OPENROUTER_API_KEY_FILE"
     },
     {
       "provider": "Anthropic",
@@ -213,7 +234,15 @@
           "enabled": false,
           "source": "https://platform.claude.com/docs/en/models/overview"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "x-api-key",
+        "probe_api_version": "2023-06-01",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "ANTHROPIC_API_KEY_FILE"
     },
     {
       "provider": "OpenAI",
@@ -312,7 +341,14 @@
           "enabled": false,
           "source": "https://developers.openai.com/api/docs/models"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "OPENAI_API_KEY_FILE"
     },
     {
       "provider": "Google Gemini",
@@ -383,7 +419,14 @@
           "enabled": false,
           "source": "https://ai.google.dev/gemini-api/docs/models"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "x-goog-api-key",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "GEMINI_API_KEY_FILE"
     }
   ]
 }

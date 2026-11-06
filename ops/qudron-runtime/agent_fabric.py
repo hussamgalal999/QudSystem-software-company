@@ -72,6 +72,38 @@ class DispatchReceipt:
     route_reason: str = ""
 
 
+class _ResizableSemaphore:
+    """Stable per-agent concurrency gate whose capacity can change in place."""
+
+    def __init__(self, value: int):
+        self._limit = max(1, int(value))
+        self._active = 0
+        self._condition = asyncio.Condition()
+
+    async def __aenter__(self):
+        async with self._condition:
+            await self._condition.wait_for(lambda: self._active < self._limit)
+            self._active += 1
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        async with self._condition:
+            self._active = max(0, self._active - 1)
+            self._condition.notify_all()
+
+    def resize(self, value: int) -> None:
+        self._limit = max(1, int(value))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(self._notify_waiters())
+
+    async def _notify_waiters(self) -> None:
+        async with self._condition:
+            self._condition.notify_all()
+
+
 class AgentFabric:
     def __init__(
         self,
@@ -83,7 +115,7 @@ class AgentFabric:
         self.approval_service = approval_service
         self._agents: dict[str, AgentDescriptor] = {}
         self._adapters: dict[str, AgentAdapter] = {}
-        self._agent_slots: dict[str, asyncio.Semaphore] = {}
+        self._agent_slots: dict[str, _ResizableSemaphore] = {}
         self._provider_slots: dict[str, asyncio.Semaphore] = {}
         self._in_flight: dict[str, int] = {}
         self._lock = asyncio.Lock()
@@ -99,7 +131,7 @@ class AgentFabric:
         if descriptor.adapter not in self._adapters:
             raise ValueError(f"Adapter is not registered: {descriptor.adapter}")
         self._agents[descriptor.agent_id] = descriptor
-        self._agent_slots[descriptor.agent_id] = asyncio.Semaphore(descriptor.max_concurrency)
+        self._agent_slots[descriptor.agent_id] = _ResizableSemaphore(descriptor.max_concurrency)
         self._provider_slots.setdefault(
             descriptor.provider_id,
             asyncio.Semaphore(self.policy.maximum_parallel_per_provider),
@@ -112,7 +144,13 @@ class AgentFabric:
         if descriptor.adapter not in self._adapters:
             raise ValueError(f"Adapter is not registered: {descriptor.adapter}")
         self._agents[descriptor.agent_id] = descriptor
-        self._agent_slots[descriptor.agent_id] = asyncio.Semaphore(descriptor.max_concurrency)
+        # Keep the same gate object: replacing it while callers are waiting or
+        # running creates two independent semaphore pools and bypasses the cap.
+        slot = self._agent_slots.get(descriptor.agent_id)
+        if slot is None:
+            self._agent_slots[descriptor.agent_id] = _ResizableSemaphore(descriptor.max_concurrency)
+        else:
+            slot.resize(descriptor.max_concurrency)
         self._provider_slots.setdefault(
             descriptor.provider_id,
             asyncio.Semaphore(self.policy.maximum_parallel_per_provider),

@@ -1320,7 +1320,7 @@ def call_llm(
     )
     if not routes:
         raise RuntimeError(
-            f"No authorized Chat Completions provider is configured for the '{profile}' profile. "
+            f"LLM profile '{profile}' is not configured with an authorized Chat Completions provider. "
             "Configure an owner-approved route; do not use browser cookies or undocumented sessions."
         )
 

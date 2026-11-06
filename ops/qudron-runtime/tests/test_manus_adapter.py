@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from approval_service import ApprovalService
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 from continuity_store import ContinuityStore
 from manus_adapter import ManusAdapter, ManusAPIError
@@ -92,13 +93,15 @@ class ManusAdapterTests(unittest.TestCase):
                 self.adapter.send_message("task-1", "Continue the task.")
         denied_request.assert_not_called()
 
+        private_key = Ed25519PrivateKey.generate()
+        issuer = ApprovalTokenIssuer(private_key)
         approvals = ApprovalService(
-            "b" * 40, Path(self.temp.name) / "manus-approvals.sqlite3"
+            private_key.public_key(), Path(self.temp.name) / "manus-approvals.sqlite3"
         )
         adapter = ManusAdapter(
             "test-token", store=self.store, approval_service=approvals,
         )
-        token = approvals.issue(
+        token = issuer.issue(
             action="manus.task.send_message",
             resource_id="task-1",
             approved_by="owner",

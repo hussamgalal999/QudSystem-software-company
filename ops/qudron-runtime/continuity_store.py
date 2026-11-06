@@ -441,9 +441,28 @@ class ContinuityStore:
                 )
             }
 
+    @staticmethod
+    def _assert_job_lease(
+        db: sqlite3.Connection, job_id: str, owner: str | None, now: str,
+    ) -> None:
+        if owner is None:
+            return
+        try:
+            row = db.execute(
+                "SELECT status,locked_by,lock_until FROM jobs WHERE id=?",
+                (job_id,),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            raise RuntimeError("Job lease table unavailable; stage write rejected") from exc
+        if (
+            not row or row["status"] != "running" or row["locked_by"] != owner
+            or not row["lock_until"] or row["lock_until"] <= now
+        ):
+            raise RuntimeError("Job lease lost; stage write rejected")
+
     def begin_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str,
-        lease_seconds: int = 3600,
+        lease_seconds: int = 3600, job_lease_owner: str | None = None,
     ) -> dict[str, Any]:
         """Atomically claim a stage or return its checkpoint/current owner state."""
         now = _now()
@@ -451,6 +470,7 @@ class ContinuityStore:
         lease_until = epoch + max(60, min(86_400, int(lease_seconds)))
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._assert_job_lease(db, job_id, job_lease_owner, now)
             row = db.execute(
                 "SELECT status,output,attempts,claim_token,lease_until FROM agent_runs "
                 "WHERE job_id=? AND agent_id=? AND stage=?",
@@ -511,11 +531,12 @@ class ContinuityStore:
     def complete_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str,
         claim_token: str, output: str | None, memory_note: str | None = None,
-        memory_ttl_days: int = 30,
+        memory_ttl_days: int = 30, job_lease_owner: str | None = None,
     ) -> None:
         now = _now()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._assert_job_lease(db, job_id, job_lease_owner, now)
             changed = db.execute(
                 """UPDATE agent_runs
                    SET status='completed',output=?,error=NULL,updated_at=?,
@@ -553,11 +574,12 @@ class ContinuityStore:
 
     def fail_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str,
-        claim_token: str, error: str,
+        claim_token: str, error: str, job_lease_owner: str | None = None,
     ) -> None:
         now = _now()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._assert_job_lease(db, job_id, job_lease_owner, now)
             changed = db.execute(
                 """UPDATE agent_runs SET status='failed',error=?,updated_at=?,
                        claim_token=NULL,lease_until=NULL
@@ -576,6 +598,29 @@ class ContinuityStore:
                 task_id=job_id, next_action=error[:1000], now=now,
             )
             db.commit()
+
+    def abandon_stage_claim(
+        self, *, job_id: str, project: str, agent_id: str, stage: str,
+        claim_token: str, reason: str = "Job lease lost; stage claim abandoned",
+    ) -> bool:
+        """Release only this worker's stage claim after its parent job lease is lost."""
+        now = _now()
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                """UPDATE agent_runs SET status='failed',error=?,updated_at=?,
+                       claim_token=NULL,lease_until=NULL
+                   WHERE job_id=? AND agent_id=? AND stage=?
+                     AND status='running' AND claim_token=?""",
+                (reason[:1200], now, job_id, agent_id, stage, claim_token),
+            ).rowcount
+            if changed == 1:
+                self._queue_event(
+                    db, project=project, job_id=job_id, agent_id=agent_id,
+                    event_type="stage_abandoned", detail=reason[:500], now=now,
+                )
+            db.commit()
+            return changed == 1
 
     def remember(
         self, *, project: str, agent_id: str, content: str,

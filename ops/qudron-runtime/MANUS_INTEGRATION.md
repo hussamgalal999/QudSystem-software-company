@@ -39,4 +39,4 @@ The default is disabled. Do not put secrets in Git, reports, prompts or ChatGPT.
 
 task.listMessages returns a messages[] collection; poll status_update events. A task with status stopped is not necessarily completely finished: task.detail may report has_running_background_jobs=true. Keep monitoring when background work remains.
 
-If Manus asks a question, Qudron can send a follow-up. If Manus requests an action confirmation, Qudron must inspect the target event and its confirm_input_schema and ask the owner. It must never auto-confirm unrecognized actions.
+**Owner-confirmation limitation:** Manus event inspection and `confirm_input_schema` handling are not implemented as an automatic Qudron workflow. The adapter now fails closed: `task.sendMessage` requires a scoped, one-time owner approval token for that exact task. The generic AgentFabric follow-up path does not yet supply this token, so it remains blocked until an authenticated owner-facing approval flow is connected. Qudron must never auto-confirm unrecognized actions.

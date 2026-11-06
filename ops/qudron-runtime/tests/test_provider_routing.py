@@ -71,7 +71,7 @@ class ProviderRoutingTests(unittest.TestCase):
             "https://api.deepseek.com", priority=20,
         )
         seen = []
-        def fake_open(request, timeout=0):
+        def fake_open(request, timeout=0, **kwargs):
             seen.append(request.full_url)
             if len(seen) == 1:
                 raise HTTPError(request.full_url, 429, "rate limit", None, None)
@@ -87,7 +87,8 @@ class ProviderRoutingTests(unittest.TestCase):
             patch.object(worker, "acquire_model_call_slot", return_value="slot") as acquire_slot,
             patch.object(worker, "release_model_call_slot") as release_slot,
             patch.object(worker, "record_model_usage") as record_usage,
-            patch("urllib.request.urlopen", side_effect=fake_open),
+            patch.object(worker, "open_credential_request", side_effect=fake_open),
+            patch("provider_resilience.open_credential_request", side_effect=fake_open),
         ):
             answer = worker.call_llm(
                 self.job(), {"id": "research_analyst", "profile": "balanced"},
@@ -119,7 +120,8 @@ class ProviderRoutingTests(unittest.TestCase):
         )
         with (
             patch.object(worker, "load_provider_routes", return_value=[public_route]),
-            patch("urllib.request.urlopen") as network,
+            patch.object(worker, "open_credential_request") as network,
+            patch("provider_resilience.open_credential_request"),
         ):
             with self.assertRaisesRegex(RuntimeError, "data class 'confidential'"):
                 worker.call_llm(
@@ -150,7 +152,8 @@ class ProviderRoutingTests(unittest.TestCase):
             patch.object(worker, "reserve_model_budget", side_effect=RuntimeError(
                 "Qudron daily model budget reached"
             )) as reserve,
-            patch("urllib.request.urlopen") as network,
+            patch.object(worker, "open_credential_request") as network,
+            patch("provider_resilience.open_credential_request"),
         ):
             with self.assertRaisesRegex(RuntimeError, "daily model budget reached"):
                 worker.call_llm(
@@ -168,7 +171,7 @@ class ProviderRoutingTests(unittest.TestCase):
             price_class="free", input_usd_per_1m=0, output_usd_per_1m=0,
         )
         seen = []
-        def fake_open(request, timeout=0):
+        def fake_open(request, timeout=0, **kwargs):
             seen.append(request)
             return FakeResponse({
                 "choices": [{"message": {"content": "Public test result."}}],
@@ -181,7 +184,8 @@ class ProviderRoutingTests(unittest.TestCase):
             patch.object(worker, "acquire_model_call_slot", return_value="slot"),
             patch.object(worker, "release_model_call_slot"),
             patch.object(worker, "record_model_usage"),
-            patch("urllib.request.urlopen", side_effect=fake_open),
+            patch.object(worker, "open_credential_request", side_effect=fake_open),
+            patch("provider_resilience.open_credential_request", side_effect=fake_open),
         ):
             worker.call_llm(
                 self.job(), {"id": "research_analyst", "profile": "balanced"},
@@ -244,7 +248,7 @@ class ProviderRoutingTests(unittest.TestCase):
             price_class="free", input_usd_per_1m=0, output_usd_per_1m=0,
         )
         seen = []
-        def fake_open(request, timeout=0):
+        def fake_open(request, timeout=0, **kwargs):
             seen.append(request)
             return FakeResponse({
                 "choices": [{"message": {"content": "Public test result."}}],
@@ -257,7 +261,8 @@ class ProviderRoutingTests(unittest.TestCase):
             patch.object(worker, "acquire_model_call_slot", return_value="slot"),
             patch.object(worker, "release_model_call_slot"),
             patch.object(worker, "record_model_usage"),
-            patch("urllib.request.urlopen", side_effect=fake_open),
+            patch.object(worker, "open_credential_request", side_effect=fake_open),
+            patch("provider_resilience.open_credential_request", side_effect=fake_open),
         ):
             answer = worker.call_llm(
                 self.job(), {"id": "research_analyst", "profile": "balanced"},

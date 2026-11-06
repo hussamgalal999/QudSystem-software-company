@@ -1772,7 +1772,9 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     if not sensitive_task:
         cloud_context = retrieve_cloud_memory_context(project)
         if cloud_context:
-            memory_context = (memory_context + "\n\n" + cloud_context)[-MAX_INPUT_CHARS:]
+            memory_context = merge_local_and_cloud_context(
+                memory_context, cloud_context, max_chars=MAX_INPUT_CHARS
+            )
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             web_result = search_web(str(job["prompt"])[:128], count=5, need_content=True)

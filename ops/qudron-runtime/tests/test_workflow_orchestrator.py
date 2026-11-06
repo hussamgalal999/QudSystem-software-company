@@ -26,6 +26,34 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    async def test_consensus_reducer_runs_after_quorum_despite_failed_vote(self):
+        nodes = expand_execution_mode(
+            ExecutionMode.CONSENSUS,
+            [("a", "A", "Vote A"), ("b", "B", "Vote B"), ("c", "C", "Vote C")],
+        )
+        definition = WorkflowDefinition(
+            "wf-consensus", "qudron", "idem-consensus",
+            ExecutionMode.CONSENSUS, nodes, max_parallel=3,
+        )
+        reducer_inputs = {}
+
+        async def executor(row):
+            if row["node_id"] == "qudron_reduce":
+                reducer_inputs.update(row.get("consensus", {}))
+                outputs = row.get("dependency_outputs", {})
+                self.assertEqual(set(outputs), {"a", "b"})
+                self.assertEqual({key: value["output"] for key, value in outputs.items()}, {"a": "a", "b": "b"})
+                return NodeExecutionResult("succeeded", "majority result")
+            if row["node_id"] == "c":
+                return NodeExecutionResult("failed", "minority worker failed")
+            return NodeExecutionResult("succeeded", row["node_id"])
+
+        result = await self.orchestrator.run(definition, executor)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(reducer_inputs["required"], 2)
+        self.assertEqual(reducer_inputs["succeeded"], ["a", "b"])
+        self.assertEqual(reducer_inputs["failed"], ["c"])
+
     async def test_parallel_nodes_run_concurrently_and_reduce_after_barrier(self):
         nodes = expand_execution_mode(
             ExecutionMode.SWARM,

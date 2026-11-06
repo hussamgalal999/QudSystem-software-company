@@ -184,6 +184,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
         class FakeWindow:
             def __init__(self, control):
                 self.control = control
+            handle = 456
             def process_id(self):
                 return 123
             def window_text(self):
@@ -204,7 +205,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
         automation._desktop = lambda: FakeDesktop(window)
 
         literal = "{ENTER} + ^ {TAB}"
-        result = automation.type_text(123, "Notepad", "search-box", "Edit", literal)
+        result = automation.type_text(123, 456, "Notepad", "search-box", "Edit", literal)
         self.assertEqual(result["character_count"], len(literal))
         self.assertEqual(control.value, literal)
         self.assertTrue(control.focused)

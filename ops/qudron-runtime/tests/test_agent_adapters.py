@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from urllib.parse import urljoin
 from unittest.mock import patch
 
 from a2a_adapter import A2AHttpAdapter, _RejectRedirectHandler
@@ -124,6 +125,23 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             failed = await adapter.poll(agent_descriptor, handle)
         self.assertEqual(failed.error_code, "REMOTE_FAILURE")
         self.assertEqual(failed.error_message, "Remote worker exited.")
+
+    def test_a2a_base_url_preserves_endpoint_path_for_well_known_discovery(self):
+        adapter = A2AHttpAdapter()
+        descriptor = AgentDescriptor(
+            agent_id="a2a-path", display_name="Path Hosted A2A",
+            provider_id="a2a-provider", adapter="a2a",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="a2a_authorized_free",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="https://agent.example.com/tenant/agent",
+        )
+        base = adapter._base(descriptor)
+        self.assertEqual(base, "https://agent.example.com/tenant/agent/")
+        self.assertEqual(
+            urljoin(base, ".well-known/agent-card.json"),
+            "https://agent.example.com/tenant/agent/.well-known/agent-card.json",
+        )
 
     def test_a2a_refuses_plain_remote_http(self):
         agent = AgentDescriptor(

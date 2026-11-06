@@ -290,3 +290,12 @@ chmod 600 qudron-approval-private.pem
   updating the owner issuer and runtime public-key file together.
 - Old HMAC tokens are intentionally invalid under version 2; issue fresh approvals
   after deploying the matching public key.
+
+
+## Latest runtime hardening notes
+
+- MCP Streamable HTTP accepts JSON and bounded Server-Sent Events responses. MCP session IDs are captured per submitted task handle; the endpoint-level cache is only a bootstrap aid.
+- A2A discovery uses the origin-root well-known path while task operations remain relative to the configured agent endpoint path. Malformed status messages with non-list `parts` are treated as empty text.
+- Compute capacity ignores expired in-memory leases; durable admission continues to count only non-expired leases and reservations.
+- Metricool owner allowlists bind content brand, Metricool blog ID, destination ID, and social network together. A mapping approved for Facebook cannot authorize a YouTube draft.
+- Vision Guard brand markers are normalized across punctuation before brand isolation checks.

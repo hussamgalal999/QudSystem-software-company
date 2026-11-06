@@ -100,6 +100,18 @@ class WindowsNodePolicyTests(unittest.TestCase):
             self.node.execute(two)
         self.assertEqual(len(self.automation.invocations), 1)
 
+
+    def test_approval_resource_binds_exact_untrimmed_ui_selectors(self):
+        base = {
+            "process_id": 123, "window_title": "Notepad",
+            "automation_id": "search-box", "control_type": "Edit",
+        }
+        padded = {**base, "automation_id": " search-box "}
+        self.assertNotEqual(
+            approval_resource("windows.invoke_control", base),
+            approval_resource("windows.invoke_control", padded),
+        )
+
     def test_typed_text_is_bound_to_approved_exact_payload(self):
         params = {
             "process_id": 123, "window_title": "Notepad",

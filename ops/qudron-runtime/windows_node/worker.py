@@ -115,6 +115,10 @@ class PywinautoAutomation:
         self, process_id: int, automation_id: str,
         control_type: str, text: str,
     ) -> dict[str, Any]:
+        if not isinstance(automation_id, str) or not automation_id.strip():
+            raise WindowsNodeError("A non-empty automation_id is required")
+        if control_type != "Edit":
+            raise WindowsNodeError("Text input is restricted to explicitly identified Edit controls")
         if not isinstance(text, str) or len(text) > 4000:
             raise WindowsNodeError("Text input must contain at most 4,000 characters")
         for window in self._desktop().windows():
@@ -122,16 +126,23 @@ class PywinautoAutomation:
                 if int(window.process_id()) != process_id:
                     continue
                 control = window.child_window(
-                    auto_id=automation_id, control_type=control_type
+                    auto_id=automation_id.strip(), control_type="Edit"
                 )
                 if not control.exists(timeout=2):
                     continue
+                # set_edit_text writes literal content; type_keys interprets
+                # braces and modifier characters as keyboard commands.
+                setter = getattr(control, "set_edit_text", None)
+                if not callable(setter):
+                    raise WindowsNodeError("Target Edit control does not support literal text assignment")
                 control.set_focus()
-                control.type_keys(text, with_spaces=True, set_foreground=True)
+                setter(text)
                 return {"typed": True, "character_count": len(text)}
+            except WindowsNodeError:
+                raise
             except Exception:
                 continue
-        raise WindowsNodeError("Allowlisted text control could not be located or filled")
+        raise WindowsNodeError("Allowlisted Edit control could not be located or filled")
 
 
 class WindowsNode:

@@ -13,11 +13,14 @@ def approval_resource(action: str, parameters: dict[str, Any]) -> str:
         return str(parameters.get("app_alias", ""))
     if action in {"windows.invoke_control", "windows.type_text"}:
         process_id = parameters.get("process_id")
+        window_handle = parameters.get("window_handle")
         window_title = parameters.get("window_title")
         automation_id = parameters.get("automation_id")
         control_type = parameters.get("control_type")
         if isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0:
             raise ValueError("UI approval requires a positive integer process_id")
+        if isinstance(window_handle, bool) or not isinstance(window_handle, int) or window_handle <= 0:
+            raise ValueError("UI approval requires a positive integer window_handle")
         if not isinstance(window_title, str) or not window_title.strip():
             raise ValueError("UI approval requires an exact window_title")
         if not isinstance(automation_id, str) or not automation_id.strip():
@@ -31,7 +34,7 @@ def approval_resource(action: str, parameters: dict[str, Any]) -> str:
                 raise ValueError("UI text approval requires bounded string content")
             text_digest = hashlib.sha256(text_value.encode("utf-8")).hexdigest()
         return ":".join((
-            str(process_id), window_title, automation_id,
+            str(process_id), str(window_handle), window_title, automation_id,
             control_type, text_digest,
         ))
     raise ValueError("This action does not require a write approval")

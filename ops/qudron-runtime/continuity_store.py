@@ -29,7 +29,7 @@ class ContinuityStore:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+        db = sqlite3.connect(self.database_path, timeout=30, isolation_level="DEFERRED")
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=30000")
         db.execute("PRAGMA journal_mode=WAL")

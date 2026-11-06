@@ -1499,6 +1499,28 @@ def call_llm(
     )
 
 
+def configured_max_agents(
+    task_type: str, *, swarm_enabled: bool = SWARM_ENABLED
+) -> int:
+    """Honor legacy per-task concurrency caps while retaining the new global ceiling."""
+    if not swarm_enabled:
+        return 1
+    legacy_key = (
+        "QUDRON_MAX_CVPEN_AGENTS"
+        if str(task_type).startswith("cvpen_")
+        else "QUDRON_MAX_SWARM_AGENTS"
+    )
+    raw = os.getenv(legacy_key, "").strip()
+    if not raw:
+        return max(1, MAX_ROLE_ASSIGNMENTS_PER_TASK)
+    try:
+        legacy_limit = int(raw)
+    except ValueError:
+        logging.warning("Ignoring invalid %s value; using global role-assignment ceiling", legacy_key)
+        return max(1, MAX_ROLE_ASSIGNMENTS_PER_TASK)
+    return max(1, min(MAX_ROLE_ASSIGNMENTS_PER_TASK, legacy_limit))
+
+
 def build_agent_memory_note(
     *, job: Mapping[str, Any], task_type: str, stage: str,
     output: str, sensitive_task: bool,
@@ -1562,7 +1584,7 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     # Do not silently truncate a specialist team to five or ten roles. The plan
     # uses every configured role; this task-scoped ceiling is a separate safety
     # control, while provider calls remain bounded by the shared model-call gate.
-    max_agents = MAX_ROLE_ASSIGNMENTS_PER_TASK if SWARM_ENABLED else 1
+    max_agents = configured_max_agents(task_type)
 
     continuity = ContinuityStore(DB_PATH)
     # Customer/financial workflows keep no intermediate model output in agent

@@ -210,7 +210,7 @@ class ContinuityStore:
             else:
                 status = "queued"
             task_ids = sorted({str(row["job_id"]) for row in active})
-            task_id = task_ids[0] if len(task_ids) == 1 else None
+            task_id = task_ids[0] if len(task_ids) == 1 and len(instances) == 1 else None
             active_stages = sorted({str(row["stage"]) for row in active})
             next_action = (
                 f"{len(active)} active task-scoped instance(s) across {len(task_ids)} job(s); "

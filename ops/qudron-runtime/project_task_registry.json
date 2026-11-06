@@ -24,10 +24,10 @@
       "id": "runtime-queue",
       "area": "Runtime",
       "title": "SQLite queue, atomic claims, retries and stale-lease recovery",
-      "status": "ci_verified",
+      "status": "implemented_pending_ci",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/qudron_worker.py; tests/test_runtime_queue.py",
-      "current_state": "Core queue tests pass in CI run #244 on the PR candidate branch.",
+      "evidence": "ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/tests/test_runtime_queue.py",
+      "current_state": "CI run #244 is historical and does not verify the current repair branch. Require a green exact-head workflow run before marking this task ci_verified.",
       "acceptance_criteria": "Restart recovery, unique claims, stale lease and bounded retries remain green on the release SHA.",
       "verification_profile": [
         "functional_correctness",

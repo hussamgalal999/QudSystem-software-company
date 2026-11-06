@@ -290,18 +290,17 @@ class ContinuityStore:
         self, instance_id: str, status: str, *,
         model_profile: str | None = None, provider_id: str | None = None,
         model_name: str | None = None, error: str | None = None,
+        allow_retry_from_succeeded: bool = False,
     ) -> dict[str, Any]:
         """Persist a validated lifecycle transition for one task-scoped instance."""
+
         allowed = {
             "queued": {"assigned", "running", "paused", "succeeded", "cancelled", "retired"},
             "assigned": {"running", "paused", "cancelled", "replaced", "retired"},
             "running": {"succeeded", "failed", "paused", "cancelled", "replaced"},
             "paused": {"queued", "assigned", "running", "cancelled", "retired"},
             "failed": {"queued", "running", "succeeded", "replaced", "retired"},
-            # A sensitive stage may finish without a persisted output checkpoint.
-            # If that task is retried, begin_stage grants a new fenced claim and the
-            # same task-scoped instance must be allowed to re-enter running.
-            "succeeded": {"running", "retired"},
+            "succeeded": {"retired"},
             "cancelled": {"retired"},
             "replaced": {"retired"},
             "retired": set(),
@@ -317,7 +316,11 @@ class ContinuityStore:
             if not row:
                 raise KeyError(instance_id)
             current = str(row["status"])
-            if status != current and status not in allowed.get(current, set()):
+            retrying_sensitive_stage = (
+                current == "succeeded" and status == "running"
+                and allow_retry_from_succeeded
+            )
+            if status != current and status not in allowed.get(current, set()) and not retrying_sensitive_stage:
                 raise ValueError(f"Invalid agent instance transition: {current} -> {status}")
             attempts = int(row["attempts"])
             if status == "running" and current != "running":

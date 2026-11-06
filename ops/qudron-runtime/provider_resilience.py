@@ -141,6 +141,13 @@ def load_provider_routes(
     if profile not in PROFILES:
         profile = "balanced"
     env = dict(os.environ if environ is None else environ)
+    global_classes = tuple(
+        item.strip().lower()
+        for item in str(env.get("QUDRON_PROVIDER_DATA_CLASSES", "public,internal")).split(",")
+        if item.strip()
+    )
+    if not global_classes or not set(global_classes).issubset(_ALLOWED_DATA_CLASSES):
+        global_classes = ("public", "internal")
     prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED", "reasoning": "LLM_REASONING"}[profile]
     base = str(env.get(f"{prefix}_BASE_URL") or env.get("LLM_BASE_URL") or "").strip()
     model = str(env.get(f"{prefix}_MODEL") or env.get("LLM_MODEL") or "").strip()
@@ -163,15 +170,12 @@ def load_provider_routes(
             host = (urlsplit(safe_base).hostname or "configured").lower()
             anonymous = bool(anonymous_detector and anonymous_detector(safe_base))
             route_id = f"primary:{profile}:{host}:{model}"[:240]
-            configured_classes = tuple(
-                item.strip().lower()
-                for item in str(env.get("QUDRON_PROVIDER_DATA_CLASSES", "public,internal")).split(",")
-                if item.strip()
+            accepted = (
+                tuple(sorted({"public"} & set(global_classes)))
+                if anonymous else global_classes
             )
-            if not configured_classes or not set(configured_classes).issubset(_ALLOWED_DATA_CLASSES):
-                configured_classes = ("public", "internal")
-            accepted = ("public",) if anonymous else configured_classes
-            routes.append(ProviderRoute(
+            if accepted:
+                routes.append(ProviderRoute(
                 route_id=route_id,
                 provider_id=host,
                 profile=profile,
@@ -243,6 +247,11 @@ def load_provider_routes(
                 continue
             normalized_classes = tuple(sorted({str(v).lower() for v in data_classes}))
             if not set(normalized_classes).issubset(_ALLOWED_DATA_CLASSES):
+                continue
+            # QUDRON_PROVIDER_DATA_CLASSES is a global ceiling, not merely a
+            # primary-route preference. No fallback may widen the data boundary.
+            normalized_classes = tuple(sorted(set(normalized_classes) & set(global_classes)))
+            if not normalized_classes:
                 continue
             api_key = _read_key(
                 env,

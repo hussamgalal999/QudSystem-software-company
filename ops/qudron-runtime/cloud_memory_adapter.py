@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 from typing import Any
+
+from endpoint_security import is_allowed_credential_endpoint
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -26,8 +28,8 @@ class CloudMemoryClient:
     }
 
     def __init__(self, base_url: str, token: str, timeout_seconds: int = 8):
-        if not base_url.startswith("https://") and not base_url.startswith("http://127.0.0.1"):
-            raise ValueError("Cloud memory must use HTTPS or local loopback HTTP")
+        if not is_allowed_credential_endpoint(base_url):
+            raise ValueError("Cloud memory must use HTTPS or an exact local loopback HTTP endpoint")
         if not token or len(token) < 32:
             raise ValueError("Cloud memory token must contain at least 32 characters")
         self.base_url = base_url.rstrip("/")

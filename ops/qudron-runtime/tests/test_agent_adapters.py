@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from a2a_adapter import A2AHttpAdapter, _RejectRedirectHandler
 from mcp_agent_adapter import MCPToolAgentAdapter
+from mcp_agent_adapter import MCPToolAgentAdapter
 from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, DataClass, ExecutionMode, TaskEnvelope, TaskStatus,
 )

@@ -1,6 +1,7 @@
 """Allowlisted local-image analysis through an OpenAI-compatible vision endpoint."""
 from __future__ import annotations
 import base64,json,mimetypes,os,uuid
+from urllib.request import Request
 from endpoint_security import open_credential_request
 from pathlib import Path
 import qudron_worker as worker
@@ -41,7 +42,7 @@ def analyze_image(path,question,job_id=None,profile="balanced"):
   body={"model":model,"max_tokens":worker.MAX_OUTPUT_TOKENS,"messages":[
    {"role":"system","content":"You are Qudron Vision Analyst. Describe only visible evidence. If the image contains code, extract it faithfully and mark unreadable areas; if it is a UI/design, describe layout, components, typography, colors and implementation clues. Never infer identity or sensitive traits."},
    {"role":"user","content":[{"type":"text","text":question},{"type":"image_url","image_url":{"url":data_url}}]}]}
-  req=__import__("urllib.request",fromlist=["Request"]).Request(base+"/chat/completions",data=json.dumps(body).encode(),headers=headers,method="POST")
+  req=Request(base+"/chat/completions",data=json.dumps(body).encode(),headers=headers,method="POST")
   with open_credential_request(req,timeout=worker.LLM_TIMEOUT,endpoint_validated=True) as response:result=json.loads(response.read().decode())
   worker.record_model_usage(jid,"image_analyst",profile,model,result,reservation);reservation=None
   choices=result.get("choices") or []

@@ -118,6 +118,16 @@ class A2AHttpAdapter:
         return mapping.get(str(raw).lower(), TaskStatus.RUNNING)
 
     @staticmethod
+    def _message_text(message: Any) -> str:
+        if not isinstance(message, dict):
+            return str(message or "")
+        return " ".join(
+            str(part.get("text", ""))
+            for part in message.get("parts", [])
+            if isinstance(part, dict) and part.get("text") is not None
+        ).strip()
+
+    @staticmethod
     def _message(task: TaskEnvelope, task_id: str | None = None) -> dict[str, Any]:
         message_id = str(uuid.UUID(task.idempotency_key[:32])) if re.fullmatch(
             r"[0-9a-fA-F]{32}", task.idempotency_key
@@ -184,10 +194,7 @@ class A2AHttpAdapter:
             )
         direct = result.get("message")
         if isinstance(direct, dict):
-            direct_text = " ".join(
-                str(part.get("text", "")) for part in direct.get("parts", [])
-                if isinstance(part, dict)
-            )
+            direct_text = self._message_text(direct)
             synthetic_id = str(direct.get("messageId") or task.task_id)
             return AgentTaskHandle(
                 provider_id=agent.provider_id, remote_task_id=synthetic_id,
@@ -208,12 +215,23 @@ class A2AHttpAdapter:
             self._request_sync, agent, "GET",
             "/tasks/" + handle.remote_task_id + "?historyLength=20",
         )
+        status_object = task.get("status") if isinstance(task.get("status"), dict) else {}
+        state = self._state(task)
+        status_message = status_object.get("message")
+        prompt = self._message_text(status_message)
+        error_object = status_object.get("error") if isinstance(status_object.get("error"), dict) else {}
+        error_code = status_object.get("errorCode") or error_object.get("code") or task.get("errorCode")
+        error_message = status_object.get("errorMessage") or error_object.get("message")
         return AgentTaskResult(
             provider_id=agent.provider_id,
             remote_task_id=handle.remote_task_id,
-            status=self._state(task),
-            summary=str(task.get("status", {}).get("message", "") if isinstance(task.get("status"), dict) else ""),
+            status=state,
+            summary=prompt,
             artifacts=self._artifacts(task, agent.agent_id),
+            needs_input=state == TaskStatus.WAITING_FOR_INPUT,
+            input_prompt=prompt if state == TaskStatus.WAITING_FOR_INPUT else None,
+            error_code=str(error_code) if error_code else None,
+            error_message=str(error_message) if error_message else None,
             raw_metadata={"context_id": task.get("contextId")},
         )
 
@@ -236,6 +254,18 @@ class A2AHttpAdapter:
         )
         task = result.get("task") if isinstance(result.get("task"), dict) else None
         if not task:
+            direct = result.get("message")
+            if isinstance(direct, dict):
+                return AgentTaskHandle(
+                    provider_id=agent.provider_id,
+                    remote_task_id=str(direct.get("messageId") or handle.remote_task_id),
+                    status=TaskStatus.SUCCEEDED,
+                    task_url=handle.task_url,
+                    metadata={
+                        **handle.metadata,
+                        "direct_message": self._message_text(direct),
+                    },
+                )
             return AgentTaskHandle(
                 provider_id=agent.provider_id, remote_task_id=handle.remote_task_id,
                 status=TaskStatus.RUNNING, metadata=handle.metadata,

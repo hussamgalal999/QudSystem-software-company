@@ -41,3 +41,28 @@ def is_allowed_credential_endpoint(url: str) -> bool:
     # Any IP address classified by the standard library as loopback is
     # local-only; non-loopback private/LAN addresses remain disallowed.
     return address.is_loopback
+
+
+
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class RejectCredentialRedirectHandler(HTTPRedirectHandler):
+    """Reject all redirects for requests carrying provider or owner credentials."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def open_credential_request(request: Request, *, timeout: float = 30):
+    """Open an authenticated request without forwarding credentials via redirects.
+
+    A 3xx response is surfaced as HTTPError to the caller. The caller must
+    revalidate and explicitly configure a new destination before retrying.
+    """
+    if not isinstance(request, Request):
+        raise TypeError("request must be urllib.request.Request")
+    if not is_allowed_credential_endpoint(request.full_url):
+        raise ValueError("Credential request endpoint is not allowed")
+    opener = build_opener(RejectCredentialRedirectHandler())
+    return opener.open(request, timeout=max(1, min(300, float(timeout))))

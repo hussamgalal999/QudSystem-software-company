@@ -1628,6 +1628,11 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         continuity.transition_agent_instance(
             instance_id, "running", model_profile=profile,
             provider_id=provider_id, model_name=model_name,
+            allow_retry_from_succeeded=(
+                str(instance.get("status")) == "succeeded"
+                and sensitive_task
+                and bool(stage_claim.get("claimed"))
+            ),
         )
 
         personal_memory = continuity.agent_memory_context(

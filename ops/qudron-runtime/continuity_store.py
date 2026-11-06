@@ -693,6 +693,12 @@ class ContinuityStore:
                           model_profile,provider_id,model_name,updated_at
                    FROM agent_instances ORDER BY updated_at DESC LIMIT 20"""
             ).fetchall()
+            recent_stages = db.execute(
+                """SELECT job_id,project,agent_id,stage,status,attempts,
+                          CASE WHEN output IS NOT NULL THEN 1 ELSE 0 END AS has_output,
+                          updated_at
+                   FROM agent_runs ORDER BY updated_at DESC LIMIT 100"""
+            ).fetchall()
             external_counts = {
                 str(row["status"]): int(row["total"])
                 for row in db.execute(
@@ -708,6 +714,7 @@ class ContinuityStore:
             "agent_instance_counts": instance_counts,
             "active_agent_instances": active_instances,
             "latest_agent_instances": [dict(row) for row in recent_instances],
+            "recent_agent_stages": [dict(row) for row in recent_stages],
             "saved_agent_memories": memory_count,
             "external_task_counts": external_counts,
             "cloud_outbox_counts": self.cloud_outbox_snapshot(),

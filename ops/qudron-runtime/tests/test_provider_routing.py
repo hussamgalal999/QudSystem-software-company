@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import os
 import tempfile
 import unittest
@@ -47,6 +48,34 @@ class ProviderRoutingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.old_db = worker.DB_PATH
         worker.DB_PATH = Path(self.temp.name) / "qudron.sqlite3"
+        worker.init_db()
+
+    def test_init_db_migrates_legacy_jobs_table_without_data_class(self):
+        legacy_db = Path(self.temp.name) / "legacy.sqlite3"
+        previous_db = worker.DB_PATH
+        try:
+            worker.DB_PATH = legacy_db
+            with sqlite3.connect(legacy_db) as db:
+                db.execute("""CREATE TABLE jobs (
+                    id TEXT PRIMARY KEY, job_key TEXT UNIQUE, title TEXT NOT NULL,
+                    role TEXT NOT NULL, task_type TEXT NOT NULL, prompt TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+                    run_after TEXT NOT NULL, locked_by TEXT, lock_until TEXT,
+                    result_path TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+                )""")
+                db.execute("""INSERT INTO jobs
+                    (id,job_key,title,role,task_type,prompt,run_after,created_at,updated_at)
+                    VALUES('legacy','legacy-key','Old job','Analyst','research','safe prompt',
+                    '2026-11-06T00:00:00+00:00','2026-11-06T00:00:00+00:00',
+                    '2026-11-06T00:00:00+00:00')""")
+            worker.init_db()
+            with worker.connect_db() as db:
+                columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+                legacy = db.execute("SELECT data_class FROM jobs WHERE id='legacy'").fetchone()
+            self.assertIn("data_class", columns)
+            self.assertEqual(legacy["data_class"], "internal")
+        finally:
+            worker.DB_PATH = previous_db
 
     def tearDown(self):
         worker.DB_PATH = self.old_db
@@ -266,6 +295,8 @@ class ProviderRoutingTests(unittest.TestCase):
         self.assertEqual(worker.classify_job_data(confidential_job), "confidential")
         restricted_job = dict(public_job, data_class="restricted")
         self.assertEqual(worker.classify_job_data(restricted_job), "restricted")
+        restricted_customer_job = dict(self.job("cvpen_cv_creation"), data_class="restricted")
+        self.assertEqual(worker.classify_job_data(restricted_customer_job), "restricted")
 
         sensitive_job = self.job()
         sensitive_job["prompt"] = "Research this contact: jane@example.com"

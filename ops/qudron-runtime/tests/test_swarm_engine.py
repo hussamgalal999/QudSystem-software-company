@@ -18,11 +18,27 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertGreaterEqual(len(registry["agents"]), 20)
         self.assertIn("cvpen_cv_creation", registry["teams"])
 
-    def test_swarm_is_bounded_and_ordered(self):
+    def test_explicit_swarm_limit_is_respected_and_ordered(self):
         plan = build_swarm_plan("cvpen_cv_creation", max_agents=3)
         self.assertEqual(len(plan), 3)
         self.assertEqual(plan[0]["execution_stage"], "produce")
         self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_default_plan_uses_every_role_in_the_selected_team(self):
+        registry = load_agent_registry("agent_registry.json")
+        plan = build_swarm_plan("cvpen_cv_creation", registry=registry)
+        self.assertEqual(len(plan), len(registry["teams"]["cvpen_cv_creation"]))
+        self.assertEqual(len(plan), 10)
+        self.assertEqual(plan[0]["execution_stage"], "produce")
+        self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+        self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_registry_has_at_least_forty_specialist_identities(self):
+        registry = load_agent_registry("agent_registry.json")
+        self.assertGreaterEqual(len(registry["agents"]), 40)
+        waves = [name for name in registry["teams"] if name.startswith("qudron_wave_")]
+        self.assertEqual(len(waves), 8)
+        self.assertTrue(all(len(registry["teams"][name]) == 5 for name in waves))
 
     def test_unknown_task_falls_back_to_research_team(self):
         self.assertEqual(build_swarm_plan("unknown")[0]["id"], "research_analyst")

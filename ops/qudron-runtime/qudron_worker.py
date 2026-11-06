@@ -1555,17 +1555,23 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
             model_profile=profile, provider_id=provider_id, model_name=model_name,
         )
         instance_id = str(instance["instance_id"])
-        cached = continuity.begin_stage(
+        stage_claim = continuity.begin_stage(
             job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage
         )
-        if cached is not None:
+        if stage_claim.get("completed"):
             continuity.transition_agent_instance(
                 instance_id, "succeeded", model_profile=profile,
                 provider_id=provider_id, model_name=model_name,
             )
             logging.info("Resumed completed agent instance %s for role %s/%s and job %s",
                          instance_id, agent_id, stage, job["id"])
-            return str(cached["output"])
+            return str(stage_claim["output"])
+        if not stage_claim.get("claimed"):
+            raise RuntimeError(
+                f"Agent stage {agent_id}/{stage} is already owned by another worker; "
+                "defer execution until its lease expires or the owner completes it."
+            )
+        claim_token = str(stage_claim["claim_token"])
         continuity.transition_agent_instance(
             instance_id, "running", model_profile=profile,
             provider_id=provider_id, model_name=model_name,
@@ -1603,14 +1609,14 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
                     safe_note += "\nRedacted outcome excerpt: " + safe_excerpt
             continuity.complete_stage(
                 job_id=str(job["id"]), project=project, agent_id=agent_id,
-                stage=stage, output=None if sensitive_task else output,
-                memory_note=safe_note,
+                stage=stage, claim_token=claim_token,
+                output=None if sensitive_task else output, memory_note=safe_note,
             )
         except Exception as exc:
             safe_error = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200]
             continuity.fail_stage(
                 job_id=str(job["id"]), project=project, agent_id=agent_id,
-                stage=stage, error=safe_error,
+                stage=stage, claim_token=claim_token, error=safe_error,
             )
             continuity.transition_agent_instance(
                 instance_id, "failed", error=safe_error,

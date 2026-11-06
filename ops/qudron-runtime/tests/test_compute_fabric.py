@@ -85,6 +85,19 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.provider_id, "kaggle")
         await self.fabric.release(second)
 
+
+    async def test_expired_in_memory_lease_does_not_block_new_capacity(self):
+        self.fabric.register_provider(provider(max_concurrent_leases=1))
+        expired = ComputeLease(
+            provider_id="kaggle", lease_id="expired-lease",
+            resource_id="old-instance", expires_at=time.time() - 10,
+            endpoint_ref="https://compute.example.test/old",
+        )
+        self.fabric._leases[expired.lease_id] = ("kaggle", expired)
+        self.assertEqual(self.fabric.snapshot()["active_leases"], 0)
+        lease = await self.fabric.acquire(request(request_id="compute-after-expiry"))
+        self.assertEqual(lease.provider_id, "kaggle")
+
     async def test_unverified_or_unauthorized_provider_is_never_eligible(self):
         self.fabric.register_provider(provider("unverified", last_verified_at=None))
         self.fabric.register_provider(provider("unauthorized", authorized=False))

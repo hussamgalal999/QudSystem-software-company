@@ -903,6 +903,13 @@ def retrieve_cloud_memory_context(project: str, limit: int = 25) -> str:
     if client is None:
         return ""
     try:
+        # Optional cloud context must never hold a worker behind the full
+        # provider timeout. Local SQLite remains the immediate fallback.
+        try:
+            context_timeout = float(os.getenv("QUDRON_MEMORY_CONTEXT_TIMEOUT_SECONDS", "2"))
+        except (TypeError, ValueError):
+            context_timeout = 2.0
+        client.timeout_seconds = max(1.0, min(5.0, context_timeout))
         packet = client.get_context(project_id=project, limit=max(1, min(100, limit)))
         rendered = context_packet_to_text(packet, max_chars=8000)
     except (CloudMemoryError, ValueError) as exc:

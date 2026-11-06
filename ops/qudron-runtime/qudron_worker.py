@@ -1544,7 +1544,16 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
                 + personal_memory + "\n\nCURRENT TASK CONTEXT:\n" + prior
             )
         try:
-            output = call_llm(job, agent, instruction, agent_prior, memory_context)
+            def on_route_selected(provider_id: str, model_name: str, selected_profile: str) -> None:
+                continuity.transition_agent_instance(
+                    instance_id, "running", model_profile=selected_profile,
+                    provider_id=provider_id, model_name=model_name,
+                )
+
+            output = call_llm(
+                job, agent, instruction, agent_prior, memory_context,
+                on_route_selected=on_route_selected,
+            )
             if not isinstance(output, str) or not output.strip():
                 raise RuntimeError(f"Agent returned empty output: {agent_id}")
             safe_note = (
@@ -1955,6 +1964,37 @@ def cloud_memory_sync_loop() -> None:
         STOP.wait(interval)
 
 
+def provider_health_loop() -> None:
+    """Continuously re-check explicitly configured provider routes without inference calls."""
+    interval = max(60, min(3600, int(os.getenv("QUDRON_PROVIDER_HEALTH_INTERVAL_SECONDS", "300"))))
+    timeout = max(2, min(15, int(os.getenv("QUDRON_PROVIDER_PROBE_TIMEOUT_SECONDS", "5"))))
+    store = ProviderHealthStore(DB_PATH)
+    while not STOP.is_set():
+        try:
+            routes = []
+            for profile in ("fast", "balanced", "reasoning"):
+                routes.extend(load_provider_routes(
+                    profile, environ=os.environ, secret_reader=_read_secret_file,
+                    anonymous_detector=is_anonymous_freellm_route,
+                ))
+            deduped = {route.route_id: route for route in routes}
+            reports = probe_due_routes(
+                list(deduped.values()), store, interval_seconds=interval,
+                timeout_seconds=timeout,
+            )
+            for report in reports:
+                logging.info(
+                    "Provider route probe: provider=%s profile=%s model=%s status=%s latency_ms=%s",
+                    report["provider_id"], report["profile"], report["model"],
+                    report["status"], report["latency_ms"],
+                )
+        except Exception as exc:
+            # Probe logs must never include authorization headers, URLs with secrets,
+            # raw response bodies, or provider prompts.
+            logging.warning("Provider health cycle deferred: %s", type(exc).__name__)
+        STOP.wait(interval)
+
+
 def run() -> None:
     global AGENT_REGISTRY, API_TOKEN
     setup_logging()
@@ -1978,6 +2018,7 @@ def run() -> None:
     health = ThreadingHTTPServer(("0.0.0.0", HEALTH_PORT), HealthHandler)
     threading.Thread(target=health.serve_forever, name="health", daemon=True).start()
     threading.Thread(target=cloud_memory_sync_loop, name="cloud-memory-sync", daemon=True).start()
+    threading.Thread(target=provider_health_loop, name="provider-health", daemon=True).start()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="agent") as pool:
         futures = [pool.submit(worker_loop) for _ in range(WORKERS)]

@@ -151,6 +151,18 @@ class AgentFabric:
             raise KeyError(descriptor.agent_id)
         if descriptor.adapter not in self._adapters:
             raise ValueError(f"Adapter is not registered: {descriptor.adapter}")
+        current = self._agents[descriptor.agent_id]
+        has_active_remote_work = (
+            any(key[0] == descriptor.agent_id for key in self._active_task_leases)
+            or any(key[0] == descriptor.agent_id for key in self._unknown_submission_leases)
+        )
+        if has_active_remote_work and (
+            descriptor.provider_id != current.provider_id
+            or descriptor.adapter != current.adapter
+        ):
+            raise AgentFabricError(
+                "Cannot change an agent provider or adapter while remote tasks are active"
+            )
         self._agents[descriptor.agent_id] = descriptor
         # Keep the same gate object: replacing it while callers are waiting or
         # running creates two independent semaphore pools and bypasses the cap.
@@ -181,6 +193,8 @@ class AgentFabric:
                 "quality_score": agent.quality_score,
                 "verified_age_seconds": verified_age,
                 "in_flight_provider": self._in_flight.get(agent.provider_id, 0),
+                "active_remote_tasks": sum(1 for key in self._active_task_leases if key[0] == agent.agent_id)
+                + sum(1 for key in self._unknown_submission_leases if key[0] == agent.agent_id),
             })
         return result
 

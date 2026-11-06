@@ -13,7 +13,7 @@ import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 import uuid
 
 from agent_protocol import (
@@ -22,6 +22,18 @@ from agent_protocol import (
 )
 from agent_fabric import ProviderUnavailable
 
+
+
+
+class _RejectRedirectHandler(HTTPRedirectHandler):
+    """Never forward an authenticated A2A request to a redirect target."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _open_without_redirects(request: Request, *, timeout: int):
+    return build_opener(_RejectRedirectHandler()).open(request, timeout=timeout)
 
 class A2AAdapterError(ProviderUnavailable):
     pass
@@ -65,7 +77,7 @@ class A2AHttpAdapter:
         last = "unknown"
         for attempt in range(self.retries + 1):
             try:
-                with urlopen(req, timeout=self.timeout_seconds) as response:
+                with _open_without_redirects(req, timeout=self.timeout_seconds) as response:
                     raw = response.read(2_000_001)
                     if len(raw) > 2_000_000:
                         raise A2AAdapterError("A2A response exceeded 2 MB safety limit")

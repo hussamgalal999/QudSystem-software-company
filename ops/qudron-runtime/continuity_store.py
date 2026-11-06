@@ -56,6 +56,8 @@ class ContinuityStore:
               error TEXT,
               started_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
+              claim_token TEXT,
+              lease_until REAL,
               PRIMARY KEY(job_id, agent_id, stage)
             );
             CREATE INDEX IF NOT EXISTS idx_agent_runs_job
@@ -131,6 +133,17 @@ class ContinuityStore:
             CREATE INDEX IF NOT EXISTS idx_cloud_outbox_pending
               ON cloud_outbox(status,next_attempt_at,created_at);
             """)
+            agent_run_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(agent_runs)")
+            }
+            if "claim_token" not in agent_run_columns:
+                db.execute("ALTER TABLE agent_runs ADD COLUMN claim_token TEXT")
+            if "lease_until" not in agent_run_columns:
+                db.execute("ALTER TABLE agent_runs ADD COLUMN lease_until REAL")
+            db.execute(
+                "UPDATE agent_runs SET lease_until=? WHERE status='running' AND lease_until IS NULL",
+                (time.time() + 3600,),
+            )
 
     @staticmethod
     def _queue_cloud(
@@ -388,13 +401,17 @@ class ContinuityStore:
             }
 
     def begin_stage(
-        self, *, job_id: str, project: str, agent_id: str, stage: str
-    ) -> dict[str, Any] | None:
-        """Return a completed checkpoint, or mark the stage running and return None."""
+        self, *, job_id: str, project: str, agent_id: str, stage: str,
+        lease_seconds: int = 3600,
+    ) -> dict[str, Any]:
+        """Atomically claim a stage or return its checkpoint/current owner state."""
         now = _now()
+        epoch = time.time()
+        lease_until = epoch + max(60, min(86_400, int(lease_seconds)))
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute(
-                "SELECT status,output,attempts FROM agent_runs "
+                "SELECT status,output,attempts,claim_token,lease_until FROM agent_runs "
                 "WHERE job_id=? AND agent_id=? AND stage=?",
                 (job_id, agent_id, stage),
             ).fetchone()
@@ -407,15 +424,33 @@ class ContinuityStore:
                     db, project=project, agent_id=agent_id, status="running",
                     task_id=job_id, next_action=f"Resume completed checkpoint: {stage}", now=now,
                 )
-                return {"output": str(row["output"]), "attempts": int(row["attempts"])}
+                db.commit()
+                return {
+                    "completed": True, "claimed": False,
+                    "output": str(row["output"]), "attempts": int(row["attempts"]),
+                }
+            if row and row["status"] == "running" and row["lease_until"] is not None:
+                if float(row["lease_until"]) > epoch:
+                    db.commit()
+                    return {
+                        "completed": False, "claimed": False, "status": "running",
+                        "attempts": int(row["attempts"]),
+                    }
             attempts = (int(row["attempts"]) + 1) if row else 1
+            claim_token = uuid.uuid4().hex
             db.execute(
                 """INSERT INTO agent_runs
-                   (job_id,project,agent_id,stage,status,attempts,output,error,started_at,updated_at)
-                   VALUES(?,?,?,?,? ,?,NULL,NULL,?,?)
+                   (job_id,project,agent_id,stage,status,attempts,output,error,
+                    started_at,updated_at,claim_token,lease_until)
+                   VALUES(?,?,?,?,?, ?,NULL,NULL,?,?,?,?)
                    ON CONFLICT(job_id,agent_id,stage) DO UPDATE SET
-                     status='running',attempts=excluded.attempts,error=NULL,updated_at=excluded.updated_at""",
-                (job_id, project, agent_id, stage, "running", attempts, now, now),
+                     status='running',attempts=excluded.attempts,error=NULL,
+                     updated_at=excluded.updated_at,claim_token=excluded.claim_token,
+                     lease_until=excluded.lease_until""",
+                (
+                    job_id, project, agent_id, stage, "running", attempts,
+                    now, now, claim_token, lease_until,
+                ),
             )
             event_type = "stage_started" if attempts == 1 else "stage_retried"
             self._queue_event(
@@ -426,21 +461,32 @@ class ContinuityStore:
                 db, project=project, agent_id=agent_id, status="running",
                 task_id=job_id, next_action=f"Execute stage: {stage}", now=now,
             )
-        return None
+            db.commit()
+        return {
+            "completed": False, "claimed": True,
+            "claim_token": claim_token, "attempts": attempts,
+        }
 
     def complete_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str,
-        output: str | None, memory_note: str | None = None,
+        claim_token: str, output: str | None, memory_note: str | None = None,
         memory_ttl_days: int = 30,
     ) -> None:
         now = _now()
         with self.connect() as db:
-            db.execute(
+            changed = db.execute(
                 """UPDATE agent_runs
-                   SET status='completed',output=?,error=NULL,updated_at=?
-                   WHERE job_id=? AND agent_id=? AND stage=?""",
-                (output[:24000] if output is not None else None, now, job_id, agent_id, stage),
-            )
+                   SET status='completed',output=?,error=NULL,updated_at=?,
+                       claim_token=NULL,lease_until=NULL
+                   WHERE job_id=? AND agent_id=? AND stage=?
+                     AND status='running' AND claim_token=?""",
+                (
+                    output[:24000] if output is not None else None,
+                    now, job_id, agent_id, stage, claim_token,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError("Stage completion rejected: claim is stale or no longer owned")
             self._queue_event(
                 db, project=project, job_id=job_id, agent_id=agent_id,
                 event_type="stage_completed", detail=stage, now=now,
@@ -463,15 +509,20 @@ class ContinuityStore:
                 )
 
     def fail_stage(
-        self, *, job_id: str, project: str, agent_id: str, stage: str, error: str
+        self, *, job_id: str, project: str, agent_id: str, stage: str,
+        claim_token: str, error: str,
     ) -> None:
         now = _now()
         with self.connect() as db:
-            db.execute(
-                """UPDATE agent_runs SET status='failed',error=?,updated_at=?
-                   WHERE job_id=? AND agent_id=? AND stage=?""",
-                (error[:1200], now, job_id, agent_id, stage),
-            )
+            changed = db.execute(
+                """UPDATE agent_runs SET status='failed',error=?,updated_at=?,
+                       claim_token=NULL,lease_until=NULL
+                   WHERE job_id=? AND agent_id=? AND stage=?
+                     AND status='running' AND claim_token=?""",
+                (error[:1200], now, job_id, agent_id, stage, claim_token),
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError("Stage failure rejected: claim is stale or no longer owned")
             self._queue_event(
                 db, project=project, job_id=job_id, agent_id=agent_id,
                 event_type="stage_failed", detail=error[:500], now=now,

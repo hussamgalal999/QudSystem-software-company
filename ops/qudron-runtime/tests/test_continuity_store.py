@@ -52,7 +52,7 @@ class ContinuityStoreTests(unittest.TestCase):
                    VALUES(?,?,?,?,?,?,?)""",
                 ("legacy-job", "qudron", "worker", "research", "running", "2026-11-01", "2026-11-01"),
             )
-        recovered_store = ContinuityStore(self.db_path)
+        recovered_store = ContinuityStore(legacy_path)
         with recovered_store.connect() as db:
             row = db.execute(
                 "SELECT claim_token,lease_until FROM agent_runs WHERE job_id='legacy-job'"

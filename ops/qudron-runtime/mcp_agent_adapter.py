@@ -113,8 +113,14 @@ class MCPToolAgentAdapter:
             parsed = json.loads(text) if text else {}
         except json.JSONDecodeError:
             parsed = {}
-        remote_id = parsed.get("job_id") or parsed.get("id") or task.task_id
-        status = TaskStatus.QUEUED if parsed.get("job_id") else TaskStatus.SUCCEEDED
+        remote_id_value = parsed.get("job_id") or parsed.get("id")
+        remote_id = str(remote_id_value) if remote_id_value is not None else task.task_id
+        status_tool = agent.metadata.get("status_tool")
+        # An MCP submit response may use either job_id or id for an asynchronous
+        # task. If a status tool is configured, never report the submit receipt
+        # itself as the completed task result.
+        is_async = bool(status_tool and remote_id_value is not None and remote_id)
+        status = TaskStatus.QUEUED if is_async else TaskStatus.SUCCEEDED
         return AgentTaskHandle(
             provider_id=agent.provider_id,
             remote_task_id=str(remote_id),
@@ -123,7 +129,7 @@ class MCPToolAgentAdapter:
             metadata={
                 "protocol": "mcp",
                 "submit_tool": tool_name,
-                "status_tool": agent.metadata.get("status_tool"),
+                "status_tool": status_tool,
                 "result_tool": agent.metadata.get("result_tool"),
                 "immediate_text": text if status == TaskStatus.SUCCEEDED else None,
             },

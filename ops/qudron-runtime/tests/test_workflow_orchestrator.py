@@ -8,13 +8,17 @@ from workflow_orchestrator import (
     WorkflowOrchestrator, WorkflowStore, expand_execution_mode, validate_dag,
 )
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from approval_service import ApprovalService
 
 
 class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.approvals = ApprovalService("a" * 40, Path(self.temp.name) / "approvals.sqlite3")
+        private_key = Ed25519PrivateKey.generate()
+        self.approvals = ApprovalService(
+            private_key.public_key(), Path(self.temp.name) / "approvals.sqlite3"
+        )
         self.store = WorkflowStore(
             Path(self.temp.name) / "state.sqlite3",
             approval_service=self.approvals,

@@ -283,7 +283,7 @@ def redact_sensitive_text(value: str) -> str:
     # Also redact common internationally formatted numbers, e.g. +1 555 123 4567.
     # Requiring separators avoids treating unformatted IDs as phone numbers.
     text = re.sub(
-        r"(?<!\\w)\\+?\\d{1,3}(?:[\\s().-])(?:\\d[\\s().-]*){6,13}\\d(?!\\w)",
+        r"(?<!\w)\+?\d{1,3}(?:[\s().-])(?:\d[\s().-]*){6,13}\d(?!\w)",
         "[REDACTED_PHONE]",
         text,
     )

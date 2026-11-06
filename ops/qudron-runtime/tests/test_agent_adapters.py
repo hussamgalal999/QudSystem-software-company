@@ -197,7 +197,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             def read(self, _limit=-1):
                 return (
                     b'event: message\n'
-                    b'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"SSE result"}]}}\\n\\n'
+                    b'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"SSE result"}]}}\n\n'
                 )
 
         with patch("mcp_agent_adapter.open_credential_request", return_value=EventStreamResponse()):

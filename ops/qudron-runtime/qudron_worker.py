@@ -35,7 +35,9 @@ from capability_miner import mine_from_environment
 from capability_registry import search_capabilities as search_capability_registry
 from mcp_gateway import handle_mcp_request, MCPGatewayError
 from continuity_store import ContinuityStore
-from cloud_memory_adapter import flush_from_environment
+from cloud_memory_adapter import (
+    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
+)
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -828,6 +830,26 @@ def retrieve_memory_context(project: str, limit: int = 10) -> str:
     return "\n".join(lines)[:8000]
 
 
+def retrieve_cloud_memory_context(project: str, limit: int = 25) -> str:
+    """Load optional bounded project context; local SQLite remains authoritative."""
+    try:
+        client = CloudMemoryClient.from_environment()
+    except (CloudMemoryError, ValueError) as exc:
+        logging.warning("Cloud memory context unavailable during client setup (%s)", type(exc).__name__)
+        return ""
+    if client is None:
+        return ""
+    try:
+        packet = client.get_context(project_id=project, limit=max(1, min(100, limit)))
+        rendered = context_packet_to_text(packet, max_chars=8000)
+    except (CloudMemoryError, ValueError) as exc:
+        logging.warning("Cloud memory context fetch failed (%s); continuing with local memory", type(exc).__name__)
+        return ""
+    if not rendered:
+        return ""
+    return redact_sensitive_text(rendered)[:8000]
+
+
 def any_model_profile_configured() -> bool:
     for prefix in ("LLM_FAST", "LLM_BALANCED", "LLM_REASONING"):
         base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).strip()
@@ -1284,7 +1306,18 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         summary = mine_from_environment(max_repositories=max_repositories)
         return "# GitHub capability mining run\n\n```json\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n```"
     project = infer_project(job)
+    task_type = str(job["task_type"])
+    # Do not retrieve cloud context for customer/financial workflows. Their
+    # content stays on the approved local path unless a separate data policy is added.
+    sensitive_task = task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }
     memory_context = retrieve_memory_context(project)
+    if not sensitive_task:
+        cloud_context = retrieve_cloud_memory_context(project)
+        if cloud_context:
+            memory_context = (memory_context + "\\n\\n" + cloud_context)[-MAX_INPUT_CHARS:]
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             web_result = search_web(str(job["prompt"])[:128], count=5, need_content=True)
@@ -1312,14 +1345,9 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     max_agents = MAX_AGENT_INSTANCES_PER_TASK if SWARM_ENABLED else 1
 
     continuity = ContinuityStore(DB_PATH)
-    task_type = str(job["task_type"])
     # Customer/financial workflows keep no intermediate model output in agent
     # checkpoints or memories. Their resumable metadata is retained, but content
     # is re-executed rather than persisted in an extra memory store.
-    sensitive_task = task_type in {
-        "cvpen_cv_creation", "cvpen_ats_audit",
-        "customer_support_reply", "payment_reconciliation",
-    }
 
     def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
         agent_id = str(agent["id"])

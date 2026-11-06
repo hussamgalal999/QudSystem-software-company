@@ -72,7 +72,7 @@ class MetricoolClient:
    network=network,
    approved_brand_destinations=_load_owner_approved_brand_destinations(),
   )
-  payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network}],"draft":True,"autoPublish":False}
+  payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network,"id":destination_id}],"draft":True,"autoPublish":False}
   return self.request("POST","/v2/scheduler/posts",payload=payload)
 
 def summarize_posts(posts:Any)->dict[str,Any]:

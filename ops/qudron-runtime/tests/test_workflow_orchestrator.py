@@ -8,12 +8,17 @@ from workflow_orchestrator import (
     WorkflowOrchestrator, WorkflowStore, expand_execution_mode, validate_dag,
 )
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
+from approval_service import ApprovalService
 
 
 class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.store = WorkflowStore(Path(self.temp.name) / "state.sqlite3")
+        self.approvals = ApprovalService("a" * 40, Path(self.temp.name) / "approvals.sqlite3")
+        self.store = WorkflowStore(
+            Path(self.temp.name) / "state.sqlite3",
+            approval_service=self.approvals,
+        )
         self.orchestrator = WorkflowOrchestrator(
             self.store, max_global_parallel=8, retry_base_seconds=0
         )
@@ -113,7 +118,12 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "waiting_for_approval")
         self.assertEqual(invoked, [])
 
-        self.store.approve_node("wf-approval", "publish", "owner")
+        token = self.approvals.issue(
+            action="workflow.node.approve",
+            resource_id="wf-approval/publish",
+            approved_by="owner",
+        )
+        self.store.approve_node("wf-approval", "publish", token)
         result = await self.orchestrator.run(definition, executor)
         self.assertEqual(result["status"], "succeeded")
         self.assertEqual(invoked, ["publish"])

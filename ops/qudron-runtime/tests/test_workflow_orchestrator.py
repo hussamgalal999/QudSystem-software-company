@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from workflow_orchestrator import (
-    NodeExecutionResult, ResourceBusy, WorkflowDefinition, WorkflowNode,
+    NodeExecutionResult, ResourceBusy, WorkflowDefinition, WorkflowNode, WorkflowError,
     WorkflowOrchestrator, WorkflowStore, expand_execution_mode, validate_dag,
 )
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
@@ -98,10 +98,10 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             ExecutionMode.SEQUENTIAL, (node,),
         )
         self.store.create(definition)
-        first = self.store.start_node("wf-claim-once", "claim")
-        second = self.store.start_node("wf-claim-once", "claim")
+        first = self.store.start_node("wf-claim-once", "claim", "owner-first")
         self.assertEqual(first, 1)
-        self.assertIsNone(second)
+        with self.assertRaises(WorkflowError):
+            self.store.start_node("wf-claim-once", "claim", "owner-second")
 
     async def test_stale_attempt_cannot_finish_or_retry_newer_attempt(self):
         node = WorkflowNode("fenced", "Fenced", "Retry safely.", max_attempts=2)
@@ -110,21 +110,25 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             ExecutionMode.SEQUENTIAL, (node,),
         )
         self.store.create(definition)
-        first = self.store.start_node("wf-fenced", "fenced")
+        first_owner = "owner-first"
+        first = self.store.start_node("wf-fenced", "fenced", first_owner)
         self.assertEqual(first, 1)
-        self.assertTrue(self.store.retry_node("wf-fenced", "fenced", "retry", first))
-        second = self.store.start_node("wf-fenced", "fenced")
+        self.assertTrue(self.store.retry_node("wf-fenced", "fenced", first_owner, "retry"))
+        second_owner = "owner-second"
+        second = self.store.start_node("wf-fenced", "fenced", second_owner)
         self.assertEqual(second, 2)
-        stale_finish = self.store.finish_node(
-            "wf-fenced", "fenced", NodeExecutionResult("succeeded", "stale"), first
-        )
-        stale_retry = self.store.retry_node("wf-fenced", "fenced", "stale error", first)
-        self.assertFalse(stale_finish)
-        self.assertFalse(stale_retry)
+        with self.assertRaises(WorkflowError):
+            self.store.finish_node(
+                "wf-fenced", "fenced", first_owner,
+                NodeExecutionResult("succeeded", "stale"),
+            )
+        with self.assertRaises(WorkflowError):
+            self.store.retry_node("wf-fenced", "fenced", first_owner, "stale error")
         self.assertEqual(self.store.rows("wf-fenced")[0]["status"], "running")
-        self.assertTrue(self.store.finish_node(
-            "wf-fenced", "fenced", NodeExecutionResult("succeeded", "current"), second
-        ))
+        self.store.finish_node(
+            "wf-fenced", "fenced", second_owner,
+            NodeExecutionResult("succeeded", "current"),
+        )
 
     async def test_sequential_mode_creates_dependency_chain(self):
         nodes = expand_execution_mode(

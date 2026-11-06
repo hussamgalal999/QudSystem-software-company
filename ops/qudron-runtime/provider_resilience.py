@@ -507,13 +507,25 @@ def eligible_routes(
     store: ProviderHealthStore,
     *,
     data_class: str = "public",
+    permitted_data_classes: tuple[str, ...] | None = None,
     now: float | None = None,
 ) -> list[ProviderRoute]:
-    """Keep approved in-scope routes, skipping routes whose breaker is open."""
+    """Apply the global data policy as well as each route's narrower allowlist."""
     current = time.time() if now is None else now
+    if permitted_data_classes is None:
+        configured = os.getenv("QUDRON_PROVIDER_DATA_CLASSES", "public,internal")
+        permitted = {
+            item.strip().lower() for item in configured.split(",") if item.strip()
+        }
+    else:
+        permitted = {str(item).strip().lower() for item in permitted_data_classes}
+    requested_class = str(data_class).lower()
+    if requested_class not in permitted:
+        return []
     return [
         route for route in routes
-        if route_allowed_for_data(route, data_class) and not store.circuit_open(route, now=current)
+        if route_allowed_for_data(route, requested_class)
+        and not store.circuit_open(route, now=current)
     ]
 
 

@@ -54,15 +54,19 @@ class RejectCredentialRedirectHandler(HTTPRedirectHandler):
         return None
 
 
-def open_credential_request(request: Request, *, timeout: float = 30):
+def open_credential_request(
+    request: Request, *, timeout: float = 30, endpoint_validated: bool = False
+):
     """Open an authenticated request without forwarding credentials via redirects.
 
-    A 3xx response is surfaced as HTTPError to the caller. The caller must
-    revalidate and explicitly configure a new destination before retrying.
+    By default, apply this module's HTTPS/exact-loopback policy. A caller may
+    set endpoint_validated=True only after applying its own stricter provider
+    URL validation (for example, the model router's exact Docker-service allowlist).
+    A 3xx response is surfaced as HTTPError; it is never followed automatically.
     """
     if not isinstance(request, Request):
         raise TypeError("request must be urllib.request.Request")
-    if not is_allowed_credential_endpoint(request.full_url):
+    if not endpoint_validated and not is_allowed_credential_endpoint(request.full_url):
         raise ValueError("Credential request endpoint is not allowed")
     opener = build_opener(RejectCredentialRedirectHandler())
     return opener.open(request, timeout=max(1, min(300, float(timeout))))

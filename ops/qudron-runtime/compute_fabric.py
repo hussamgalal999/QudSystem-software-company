@@ -163,6 +163,13 @@ class SQLiteComputeLeaseStore:
                 CREATE INDEX IF NOT EXISTS idx_compute_reservations_provider_expiry
                     ON compute_reservations(provider_id, expires_at);
             """)
+            reservation_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(compute_reservations)")
+            }
+            if "runtime_seconds" not in reservation_columns:
+                db.execute(
+                    "ALTER TABLE compute_reservations ADD COLUMN runtime_seconds INTEGER NOT NULL DEFAULT 0"
+                )
         finally:
             db.close()
 
@@ -235,6 +242,8 @@ class SQLiteComputeLeaseStore:
         request_id: str,
         max_concurrent_leases: int,
         ttl_seconds: int,
+        quota_remaining_seconds: int | None = None,
+        requested_runtime_seconds: int = 0,
     ) -> str | None:
         """Atomically reserve one provider slot across multiple Qudron processes."""
         now = time.time()
@@ -268,9 +277,41 @@ class SQLiteComputeLeaseStore:
             if int(active) + int(reserved) >= max_concurrent_leases:
                 db.commit()
                 return None
+            if quota_remaining_seconds is not None:
+                active_rows = db.execute(
+                    """SELECT metadata_json,expires_at,created_at FROM compute_leases
+                       WHERE provider_id=? AND state IN (?,?)""",
+                    (provider_id, *self.ACTIVE_STATES),
+                ).fetchall()
+                active_runtime = 0
+                for row in active_rows:
+                    try:
+                        metadata = json.loads(row["metadata_json"] or "{}")
+                    except (TypeError, ValueError):
+                        metadata = {}
+                    reserved_runtime = metadata.get("reserved_runtime_seconds")
+                    if not isinstance(reserved_runtime, int) or reserved_runtime < 0:
+                        reserved_runtime = max(0, int(float(row["expires_at"]) - now))
+                    active_runtime += reserved_runtime
+                reserved_runtime = int(db.execute(
+                    """SELECT COALESCE(SUM(runtime_seconds),0) FROM compute_reservations
+                       WHERE provider_id=? AND expires_at>?""",
+                    (provider_id, now),
+                ).fetchone()[0])
+                if (
+                    active_runtime + reserved_runtime + max(0, int(requested_runtime_seconds))
+                    > max(0, int(quota_remaining_seconds))
+                ):
+                    db.commit()
+                    return None
             db.execute(
-                "INSERT INTO compute_reservations VALUES(?,?,?,?,?)",
-                (reservation_id, request_id, provider_id, now + ttl_seconds, now),
+                """INSERT INTO compute_reservations
+                   (reservation_id,request_id,provider_id,expires_at,created_at,runtime_seconds)
+                   VALUES(?,?,?,?,?,?)""",
+                (
+                    reservation_id, request_id, provider_id, now + ttl_seconds, now,
+                    max(0, int(requested_runtime_seconds)),
+                ),
             )
             db.commit()
             return reservation_id
@@ -426,6 +467,7 @@ class ComputeFabric:
         self._adapters: dict[str, ComputeAdapter] = {}
         self._leases: dict[str, tuple[str, ComputeLease]] = {}
         self._reservations: dict[str, int] = {}
+        self._reservations_runtime: dict[str, int] = {}
         if self.lease_store:
             for _, lease in self.lease_store.leases():
                 self._leases[lease.lease_id] = (lease.provider_id, lease)
@@ -485,8 +527,18 @@ class ComputeFabric:
             return False, "persistent_resource_required"
         if provider.max_runtime_seconds < request.min_runtime_seconds:
             return False, "runtime_window_too_short"
-        if provider.quota_remaining_seconds is not None and provider.quota_remaining_seconds < request.min_runtime_seconds:
-            return False, "insufficient_remaining_quota"
+        if provider.quota_remaining_seconds is not None:
+            active_runtime = sum(
+                max(0, int(lease.metadata.get(
+                    "reserved_runtime_seconds",
+                    max(0, lease.expires_at - time.time()),
+                )))
+                for provider_id, lease in self._leases.values()
+                if provider_id == provider.provider_id
+            )
+            reserved_runtime = self._reservations_runtime.get(provider.provider_id, 0)
+            if active_runtime + reserved_runtime + request.min_runtime_seconds > provider.quota_remaining_seconds:
+                return False, "insufficient_remaining_quota"
         if request.data_class.value not in provider.accepted_data_classes:
             return False, "data_class_not_accepted"
         if request.data_class == DataClass.CONFIDENTIAL and not self.policy.permit_confidential_data:
@@ -551,6 +603,8 @@ class ComputeFabric:
                     request.request_id,
                     provider.max_concurrent_leases,
                     max(300, self.policy.request_timeout_seconds * 2),
+                    provider.quota_remaining_seconds,
+                    request.min_runtime_seconds,
                 )
                 if not reservation_id:
                     failures.append(f"{provider.provider_id}:capacity_or_duplicate_request")
@@ -564,6 +618,10 @@ class ComputeFabric:
                     self._reservations[provider.provider_id] = (
                         self._reservations.get(provider.provider_id, 0) + 1
                     )
+                    self._reservations_runtime[provider.provider_id] = (
+                        self._reservations_runtime.get(provider.provider_id, 0)
+                        + request.min_runtime_seconds
+                    )
                     locally_reserved = True
 
             lease: ComputeLease | None = None
@@ -573,8 +631,15 @@ class ComputeFabric:
                     adapter.acquire(provider, request),
                     timeout=self.policy.request_timeout_seconds,
                 )
-                # A provider allocation is a real resource. Persist it before
-                # exposing it to callers or releasing the reservation.
+                # A provider allocation is a real resource. Persist its
+                # quota reservation before exposing it to callers.
+                lease = replace(
+                    lease,
+                    metadata={
+                        **lease.metadata,
+                        "reserved_runtime_seconds": request.min_runtime_seconds,
+                    },
+                )
                 if lease.provider_id != provider.provider_id:
                     raise ComputeFabricError("Adapter returned a mismatched provider identity")
                 if lease.expires_at - time.time() < request.min_runtime_seconds:
@@ -655,6 +720,14 @@ class ComputeFabric:
                             self._reservations[provider.provider_id] = remaining
                         else:
                             self._reservations.pop(provider.provider_id, None)
+                        remaining_runtime = (
+                            self._reservations_runtime.get(provider.provider_id, 0)
+                            - request.min_runtime_seconds
+                        )
+                        if remaining_runtime > 0:
+                            self._reservations_runtime[provider.provider_id] = remaining_runtime
+                        else:
+                            self._reservations_runtime.pop(provider.provider_id, None)
         raise ComputeProviderUnavailable(
             "All eligible compute providers failed: " + ", ".join(failures)
         )

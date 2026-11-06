@@ -1,7 +1,9 @@
 """Official Metricool API adapter. Reads analytics and schedules drafts only by default."""
 from __future__ import annotations
-import csv, io, json, os, urllib.parse, urllib.request, urllib.error
+import csv, io, json, os, urllib.parse, urllib.error
+from urllib.request import Request
 from typing import Any
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 
 BASE="https://app.metricool.com/api"
 NETWORKS={"facebook","instagram","linkedin","youtube","tiktok","pinterest","twitter","threads","bluesky"}
@@ -14,6 +16,7 @@ class MetricoolClient:
   self.user_id=str(user_id if user_id is not None else os.getenv("METRICOOL_USER_ID","")).strip()
   self.blog_id=str(blog_id if blog_id is not None else os.getenv("METRICOOL_BLOG_ID","")).strip()
   self.base_url=base_url.rstrip("/")
+  if not is_allowed_credential_endpoint(self.base_url):raise MetricoolError("Metricool API endpoint must use HTTPS or exact loopback HTTP")
   if not self.token or not self.user_id or not self.blog_id:
    raise MetricoolError("METRICOOL_API_TOKEN, METRICOOL_USER_ID and METRICOOL_BLOG_ID are required")
  def request(self,method:str,path:str,params:dict[str,Any]|None=None,payload:dict[str,Any]|None=None)->Any:
@@ -23,9 +26,9 @@ class MetricoolClient:
   body=json.dumps(payload).encode() if payload is not None else None
   headers={"X-Mc-Auth":self.token,"Accept":"application/json"}
   if body is not None:headers["Content-Type"]="application/json"
-  req=urllib.request.Request(url,data=body,headers=headers,method=method.upper())
+  req=Request(url,data=body,headers=headers,method=method.upper())
   try:
-   with urllib.request.urlopen(req,timeout=30) as response:
+   with open_credential_request(req,timeout=30) as response:
     raw=response.read()
     if not raw:return {}
     content_type=response.headers.get("Content-Type","")

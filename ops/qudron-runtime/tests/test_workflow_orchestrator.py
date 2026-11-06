@@ -222,6 +222,31 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertTrue(self.store.acquire_resources("new", claims, 30))
 
+
+    async def test_missing_approval_target_does_not_consume_valid_token(self):
+        token = self.approval_issuer.issue(
+            action="workflow.node.approve",
+            resource_id="wf-created-later/publish",
+            approved_by="owner",
+        )
+        with self.assertRaisesRegex(WorkflowError, "target was not found"):
+            self.store.approve_node("wf-created-later", "publish", token)
+
+        node = WorkflowNode(
+            "publish", "Publish", "Publish only after owner approval.",
+            requires_approval=True,
+        )
+        definition = WorkflowDefinition(
+            "wf-created-later", "qudron", "idem-created-later",
+            ExecutionMode.SEQUENTIAL, (node,),
+        )
+        self.store.create(definition)
+        self.store.approve_node("wf-created-later", "publish", token)
+        self.assertEqual(
+            self.store.snapshot("wf-created-later")["nodes"][0]["approved_by"],
+            "owner",
+        )
+
     async def test_approval_gated_node_is_not_executed(self):
         node = WorkflowNode(
             "publish", "Publish", "Publish to a public page.",

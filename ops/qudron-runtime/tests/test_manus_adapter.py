@@ -40,7 +40,7 @@ class ManusAdapterTests(unittest.TestCase):
             "ok": True, "task_id": "task-abc", "task_title": "Qudron research",
             "task_url": "https://manus.im/app/task-abc", "share_visibility": "private",
         }
-        with patch("manus_adapter.urlopen", return_value=FakeResponse(response)) as request:
+        with patch("manus_adapter.open_credential_request", return_value=FakeResponse(response)) as request:
             result = self.adapter.create_task(
                 prompt="Research public model-provider docs.",
                 title="Qudron research", local_job_id="job-0001",
@@ -71,7 +71,7 @@ class ManusAdapterTests(unittest.TestCase):
                 }
             ],
         }
-        with patch("manus_adapter.urlopen", return_value=FakeResponse(response)):
+        with patch("manus_adapter.open_credential_request", return_value=FakeResponse(response)):
             result = self.adapter.list_messages("task-abc")
         self.assertEqual(result["status"], "running")
         self.assertEqual(result["last_event_id"], "evt-1")
@@ -117,7 +117,7 @@ class ManusAdapterTests(unittest.TestCase):
     def test_post_is_not_retried_after_ambiguous_server_failure(self):
         adapter = ManusAdapter("test-secret", retries=3)
         failure = HTTPError("https://api.manus.ai/v2/task.create", 503, "busy", {}, None)
-        with patch("manus_adapter.urlopen", side_effect=failure) as request:
+        with patch("manus_adapter.open_credential_request", side_effect=failure) as request:
             with self.assertRaisesRegex(ManusAPIError, "HTTP 503"):
                 adapter._request("POST", "/v2/task.create", {"title": "once"})
         self.assertEqual(request.call_count, 1)
@@ -126,7 +126,7 @@ class ManusAdapterTests(unittest.TestCase):
         adapter = ManusAdapter("test-secret", retries=1)
         failure = HTTPError("https://api.manus.ai/v2/task.detail", 503, "busy", {}, None)
         with (
-            patch("manus_adapter.urlopen", side_effect=[failure, FakeResponse({"ok": True})]) as request,
+            patch("manus_adapter.open_credential_request", side_effect=[failure, FakeResponse({"ok": True})]) as request,
             patch("manus_adapter.time.sleep"),
         ):
             self.assertEqual(adapter._request("GET", "/v2/task.detail"), {"ok": True})
@@ -141,7 +141,7 @@ class ManusAdapterTests(unittest.TestCase):
                 ManusAdapter.from_environment(self.store)
 
     def test_sensitive_share_visibility_cannot_be_made_public_by_default(self):
-        with patch("manus_adapter.urlopen", return_value=FakeResponse({
+        with patch("manus_adapter.open_credential_request", return_value=FakeResponse({
             "ok": True, "task_id": "task-private", "task_url": "https://manus.im/app/task-private"
         })) as request:
             self.adapter.create_task(prompt="Private internal task", title="Private")

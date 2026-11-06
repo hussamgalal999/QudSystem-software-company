@@ -75,6 +75,22 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         self.assertEqual(self.store.cloud_outbox_snapshot()["sent"], 1)
         self.assertEqual(result["pending"], 0)
 
+    def test_optional_cloud_memory_retrieval_uses_short_timeout(self):
+        from qudron_worker import retrieve_cloud_memory_context
+
+        class SlowOptionalClient:
+            timeout_seconds = 45
+            def get_context(self, **kwargs):
+                return {"project": {"project_id": "qudron", "name": "Qudron"}}
+
+        client = SlowOptionalClient()
+        with patch.object(CloudMemoryClient, "from_environment", return_value=client), patch.dict(
+            os.environ, {"QUDRON_MEMORY_CONTEXT_TIMEOUT_SECONDS": "45"}, clear=False
+        ):
+            rendered = retrieve_cloud_memory_context("qudron")
+        self.assertLessEqual(client.timeout_seconds, 5)
+        self.assertIn("Qudron", rendered)
+
     def test_failed_cloud_sync_keeps_record_for_retry(self):
         now = "2026-11-05T12:00:00+00:00"
         with self.store.connect() as db:

@@ -27,7 +27,7 @@ import urllib.request
 from urllib.parse import urlsplit
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
@@ -38,6 +38,10 @@ from mcp_gateway import handle_mcp_request, MCPGatewayError
 from continuity_store import ContinuityStore
 from cloud_memory_adapter import (
     CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
+)
+from provider_resilience import (
+    ProviderHealthStore, eligible_routes, load_provider_routes,
+    probe_due_routes, route_health_snapshot,
 )
 
 APP_DIR = Path(__file__).resolve().parent
@@ -536,12 +540,41 @@ def mcp_get_models() -> dict[str, Any]:
         except Exception:
             gateway["status"] = "unreachable_or_unauthorized"
 
+    configured_routes = []
+    for profile in ("fast", "balanced", "reasoning"):
+        try:
+            configured_routes.extend(load_provider_routes(
+                profile, environ=os.environ, secret_reader=_read_secret_file,
+                anonymous_detector=is_anonymous_freellm_route,
+            ))
+        except Exception:
+            # Configuration errors are reported as unavailable, never as a reason
+            # to guess credentials or try an undocumented provider route.
+            continue
+    route_by_id = {item["route_id"]: item for item in route_health_snapshot(DB_PATH)}
+    route_status = []
+    seen_routes = set()
+    for route in configured_routes:
+        if route.route_id in seen_routes:
+            continue
+        seen_routes.add(route.route_id)
+        record = route.safe_record()
+        health = route_by_id.get(route.route_id)
+        record["health"] = health or {
+            "status": "not_probed",
+            "model_available": False,
+            "consecutive_failures": 0,
+        }
+        route_status.append(record)
+
     return {
         "catalogue_as_of": catalog.get("as_of") if isinstance(catalog, dict) else None,
         "policy": catalog.get("policy") if isinstance(catalog, dict) else "No catalogue policy available.",
         "gateway": gateway,
         "providers": providers,
-        "note": "A provider key being configured or a model appearing in a catalogue is not proof of live inference. No paid inference request was made by this read-only tool.",
+        "configured_execution_routes": route_status,
+        "provider_health": route_health_snapshot(DB_PATH),
+        "note": "A provider key, configured route or model catalogue entry is not proof of live inference. Health probes are read-only model-list requests; no paid inference request is made by this inspection tool.",
     }
 
 
@@ -935,8 +968,13 @@ def release_model_call_slot(slot_id: str | None) -> None:
         db.execute("DELETE FROM model_call_slots WHERE id=?", (slot_id,))
 
 
-def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
-                         payload_bytes: int, task_type: str | None = None) -> str | None:
+def reserve_model_budget(
+    job_id: str, agent_id: str, profile: str, model: str,
+    payload_bytes: int, task_type: str | None = None, *,
+    input_rate_override: float | None = None,
+    output_rate_override: float | None = None,
+    verified_free_route: bool = False,
+) -> str | None:
     daily_budget = configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD")
     monthly_budget = configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD")
     cvpen_job_budget = (
@@ -960,14 +998,17 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
             )
         return None
     input_rate, output_rate = profile_cost_rates(profile)
+    if input_rate_override is not None:
+        input_rate = input_rate_override
+    if output_rate_override is not None:
+        output_rate = output_rate_override
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
                       "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     selected_base_url = (os.getenv(f"{profile_prefix}_BASE_URL") or LLM_BASE_URL).strip()
-    anonymous_free_route = is_anonymous_freellm_route(selected_base_url)
+    anonymous_free_route = is_anonymous_freellm_route(selected_base_url) or verified_free_route
     if anonymous_free_route:
-        # Anonymous routes are quota-limited free-tier endpoints; no paid key is
-        # configured. Record their provider charge as zero, but keep the daily
-        # budget and provider quotas active. Never infer zero cost for keyed APIs.
+        # Only an anonymous route or an explicitly owner-verified free route may
+        # use a zero provider price estimate. Daily/model-call caps remain active.
         input_rate = 0.0 if input_rate is None else input_rate
         output_rate = 0.0 if output_rate is None else output_rate
     if not anonymous_free_route and (input_rate == 0 or output_rate == 0) and os.getenv(
@@ -1062,8 +1103,12 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     return reservation_id
 
 
-def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
-                       response_data: dict[str, Any], reservation_id: str | None) -> None:
+def record_model_usage(
+    job_id: str, agent_id: str, profile: str, model: str,
+    response_data: dict[str, Any], reservation_id: str | None, *,
+    input_rate_override: float | None = None,
+    output_rate_override: float | None = None,
+) -> None:
     usage = response_data.get("usage")
     if not isinstance(usage, dict):
         usage = {}
@@ -1080,6 +1125,10 @@ def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
     completion_tokens = safe_count(completion_tokens)
     total_tokens = safe_count(total_tokens)
     input_rate, output_rate = profile_cost_rates(profile)
+    if input_rate_override is not None:
+        input_rate = input_rate_override
+    if output_rate_override is not None:
+        output_rate = output_rate_override
     provider_cost = usage.get("cost", usage.get("total_cost"))
     cost_usd: float | None = None
     try:
@@ -1229,23 +1278,46 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
         )
 
 
-def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
-             prior_context: str, memory_context: str) -> str:
+def classify_job_data(job: sqlite3.Row) -> str:
+    """Conservative data classification used before provider route selection."""
+    task_type = str(job["task_type"])
+    if task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }:
+        return "confidential"
+    if task_type in PUBLIC_KEYLESS_TASK_TYPES:
+        return "public"
+    return "internal"
+
+
+def call_llm(
+    job: sqlite3.Row, agent: dict[str, Any], instruction: str,
+    prior_context: str, memory_context: str,
+    on_route_selected: Callable[[str, str, str], None] | None = None,
+) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
-    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
-              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
-    base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
-    api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
-    if not api_key:
-        api_key = _read_secret_file(
-            os.getenv(f"{prefix}_API_KEY_FILE") or os.getenv("LLM_API_KEY_FILE", "")
-        )
-    model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
-    if not base_url or not model:
+    if profile not in {"fast", "balanced", "reasoning"}:
+        profile = "balanced"
+    routes = load_provider_routes(
+        profile, environ=os.environ, secret_reader=_read_secret_file,
+        anonymous_detector=is_anonymous_freellm_route,
+    )
+    if not routes:
         raise RuntimeError(
-            f"LLM profile '{profile}' is not configured: set {prefix}_BASE_URL and "
-            f"{prefix}_MODEL or the default LLM_BASE_URL and LLM_MODEL."
+            f"No authorized Chat Completions provider is configured for the '{profile}' profile. "
+            "Configure an owner-approved route; do not use browser cookies or undocumented sessions."
         )
+
+    data_class = classify_job_data(job)
+    health_store = ProviderHealthStore(DB_PATH)
+    candidates = eligible_routes(routes, health_store, data_class=data_class)
+    if not candidates:
+        raise RuntimeError(
+            f"No healthy, owner-approved provider route accepts the task data class '{data_class}'. "
+            "The task is preserved; configure or verify an eligible route."
+        )
+
     system = (
         "You are a specialist AI worker inside Qudron, the operating system for QudSystem. "
         "Brand values: trust, quality, speed, commitment; Made in Egypt. "
@@ -1255,59 +1327,132 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         f"Your specialist identity is {agent.get('name', agent.get('id', 'Specialist'))}. "
         f"Responsibilities: {agent.get('responsibilities', 'Complete the assigned specialist stage.')}"
     )
-    anonymous_route = is_anonymous_freellm_route(base_url)
-    if anonymous_route:
-        # Never send Qudron's persistent internal memory to anonymous public APIs.
-        memory_context = "[omitted: private Qudron memory is not sent to anonymous providers]"
-    user = (
+    common_user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
         f"Original task and instructions:\n{str(job['prompt'])[:MAX_INPUT_CHARS]}\n\n"
         f"Current stage instructions:\n{instruction}\n\n"
         f"Prior stage context:\n{str(prior_context or '[none]')[-MAX_INPUT_CHARS // 2:]}\n\n"
-        f"Relevant memory:\n{str(memory_context or '[none]')[-4000:]}\n\n"
         "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
         "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
-    validate_keyless_payload(job, user, base_url)
-    payload = json.dumps({
-        "model": model,
-        "temperature": 0.3 if profile == "reasoning" else 0.4,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-    }).encode("utf-8")
-    reservation_id = reserve_model_budget(
-        str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload),
-        str(job["task_type"])
-    )
-    slot_id = None
-    try:
-        slot_id = acquire_model_call_slot(
-            str(job["id"]), str(agent.get("id", "unknown"))
+
+    failures: list[str] = []
+    for route in candidates:
+        if route.protocol != "openai_chat_completions":
+            # Defense in depth; the route loader currently filters this already.
+            failures.append(f"{route.provider_id}:unsupported_protocol")
+            continue
+        route_memory = (
+            "[omitted: private Qudron memory is not sent to anonymous providers]"
+            if route.anonymous else str(memory_context or "[none]")[-4000:]
         )
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        request = urllib.request.Request(
-            f"{base_url}/chat/completions", data=payload, headers=headers, method="POST"
-        )
+        user = common_user + "\n\nRelevant memory:\n" + route_memory
+        if route.anonymous:
+            try:
+                validate_keyless_payload(job, user, route.base_url)
+            except RuntimeError:
+                failures.append(f"{route.provider_id}:anonymous_data_policy_denied")
+                continue
+
+        payload = json.dumps({
+            "model": route.model,
+            "temperature": 0.3 if profile == "reasoning" else 0.4,
+            "max_tokens": MAX_OUTPUT_TOKENS,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }).encode("utf-8")
+
         try:
-            with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1500]
-            raise RuntimeError(f"LLM HTTP {exc.code}: {detail}") from exc
-        record_model_usage(
-            str(job["id"]), str(agent.get("id", "unknown")), profile, model, data, reservation_id
-        )
-        reservation_id = None
-    finally:
-        release_model_call_slot(slot_id)
-        release_model_budget_reservation(reservation_id)
-    choices = data.get("choices") or []
-    answer = choices[0].get("message", {}).get("content") if choices else None
-    if not isinstance(answer, str) or not answer.strip():
-        raise RuntimeError("LLM returned an empty response")
-    return answer.strip()
+            reservation_id = reserve_model_budget(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.model, len(payload), str(job["task_type"]),
+                input_rate_override=route.input_usd_per_1m,
+                output_rate_override=route.output_usd_per_1m,
+                verified_free_route=route.verified_free,
+            )
+        except RuntimeError as exc:
+            message = str(exc).lower()
+            if any(token in message for token in (
+                "budget reached", "budget cap", "per-order", "daily model budget",
+                "monthly model budget", "cvpen per-order",
+            )):
+                # A provider fallback must never turn into a spend-limit bypass.
+                raise
+            failures.append(f"{route.provider_id}:pricing_or_budget_gate")
+            continue
+
+        slot_id = None
+        try:
+            slot_id = acquire_model_call_slot(
+                str(job["id"]), str(agent.get("id", "unknown"))
+            )
+            if on_route_selected:
+                on_route_selected(route.provider_id, route.model, profile)
+            headers = {"Content-Type": "application/json", "Accept": "application/json"}
+            if route.api_key:
+                headers["Authorization"] = f"Bearer {route.api_key}"
+            request = urllib.request.Request(
+                f"{route.base_url.rstrip('/')}/chat/completions",
+                data=payload, headers=headers, method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
+                    raw = response.read(4_000_001)
+                    if len(raw) > 4_000_000:
+                        raise RuntimeError("provider_response_too_large")
+                    data = json.loads(raw.decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                code = int(exc.code)
+                error_class = f"http_{code}"
+                health_store.mark_call_failure(route, error_class)
+                failures.append(f"{route.provider_id}:{error_class}")
+                if code in {400, 404, 413, 422}:
+                    # These usually indicate a route/model/request contract issue.
+                    # Do not repeat a known malformed request against other vendors.
+                    raise RuntimeError(f"Provider rejected the request ({error_class}).") from None
+                continue
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                health_store.mark_call_failure(route, "network_unavailable")
+                failures.append(f"{route.provider_id}:network_unavailable")
+                continue
+            except (UnicodeDecodeError, json.JSONDecodeError, RuntimeError) as exc:
+                error_class = "invalid_or_oversized_response"
+                health_store.mark_call_failure(route, error_class)
+                failures.append(f"{route.provider_id}:{error_class}")
+                continue
+
+            choices = data.get("choices") if isinstance(data, dict) else None
+            answer = (
+                choices[0].get("message", {}).get("content")
+                if isinstance(choices, list) and choices and isinstance(choices[0], dict)
+                else None
+            )
+            if not isinstance(answer, str) or not answer.strip():
+                health_store.mark_call_failure(route, "empty_or_incompatible_response")
+                failures.append(f"{route.provider_id}:empty_or_incompatible_response")
+                continue
+
+            record_model_usage(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.model, data, reservation_id,
+                input_rate_override=route.input_usd_per_1m,
+                output_rate_override=route.output_usd_per_1m,
+            )
+            reservation_id = None
+            health_store.mark_call_success(route)
+            return answer.strip()
+        except Exception:
+            # Do not write prompts, credentials, HTTP response bodies, or raw
+            # provider errors into route-health logs.
+            raise
+        finally:
+            release_model_call_slot(slot_id)
+            release_model_budget_reservation(reservation_id)
+
+    summary = ", ".join(failures[:8]) if failures else "no eligible route"
+    raise RuntimeError(
+        "All eligible provider routes are unavailable or failed their safety/health checks: "
+        + summary
+    )
 
 
 def execute_job_swarm(job: sqlite3.Row) -> str:

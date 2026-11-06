@@ -78,7 +78,26 @@ class MCPToolAgentAdapter:
                     raise MCPAdapterError("MCP response exceeded 1 MB safety limit")
                 if not raw and notification:
                     return {}
-                result = json.loads(raw.decode("utf-8"))
+                content_type = str(response.headers.get("Content-Type", "")).lower()
+                if "text/event-stream" in content_type:
+                    events = []
+                    for line in raw.decode("utf-8").splitlines():
+                        if not line.startswith("data:"):
+                            continue
+                        data_line = line[5:].strip()
+                        if not data_line or data_line == "[DONE]":
+                            continue
+                        try:
+                            event = json.loads(data_line)
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(event, dict):
+                            events.append(event)
+                    if not events:
+                        raise MCPAdapterError("MCP event stream contained no JSON-RPC message")
+                    result = events[-1]
+                else:
+                    result = json.loads(raw.decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise MCPAdapterError(f"MCP request failed: {type(exc).__name__}") from exc
         if not isinstance(result, dict):

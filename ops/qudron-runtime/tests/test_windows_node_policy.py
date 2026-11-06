@@ -22,12 +22,12 @@ class FakeAutomation:
         self.invocations.append(("launch", path))
         return {"launched": True, "process_id": 99}
 
-    def invoke_control(self, process_id, automation_id, control_type):
-        self.invocations.append(("invoke", process_id, automation_id, control_type))
+    def invoke_control(self, process_id, window_title, automation_id, control_type):
+        self.invocations.append(("invoke", process_id, window_title, automation_id, control_type))
         return {"invoked": True, "automation_id": automation_id}
 
-    def type_text(self, process_id, automation_id, control_type, text):
-        self.invocations.append(("type", process_id, automation_id, control_type, text))
+    def type_text(self, process_id, window_title, automation_id, control_type, text):
+        self.invocations.append(("type", process_id, window_title, automation_id, control_type, text))
         return {"typed": True, "character_count": len(text)}
 
 
@@ -102,8 +102,8 @@ class WindowsNodePolicyTests(unittest.TestCase):
 
     def test_typed_text_is_bound_to_approved_exact_payload(self):
         params = {
-            "process_id": 123, "automation_id": "search",
-            "control_type": "Edit", "text": "approved text",
+            "process_id": 123, "window_title": "Notepad",
+            "automation_id": "search", "control_type": "Edit", "text": "approved text",
         }
         approval = self.approval("windows.type_text", params, "nonce-00000000000003")
         changed = {**params, "text": "different text"}
@@ -132,6 +132,8 @@ class WindowsNodePolicyTests(unittest.TestCase):
                 self.control = control
             def process_id(self):
                 return 123
+            def window_text(self):
+                return "Notepad"
             def child_window(self, auto_id, control_type):
                 self.selector = (auto_id, control_type)
                 return self.control
@@ -148,15 +150,15 @@ class WindowsNodePolicyTests(unittest.TestCase):
         automation._desktop = lambda: FakeDesktop(window)
 
         literal = "{ENTER} + ^ {TAB}"
-        result = automation.type_text(123, "search-box", "Edit", literal)
+        result = automation.type_text(123, "Notepad", "search-box", "Edit", literal)
         self.assertEqual(result["character_count"], len(literal))
         self.assertEqual(control.value, literal)
         self.assertTrue(control.focused)
         self.assertEqual(window.selector, ("search-box", "Edit"))
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "", "Edit", "must not type")
+            automation.type_text(123, "Notepad", "", "Edit", "must not type")
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "search-box", "Button", "must not type")
+            automation.type_text(123, "Notepad", "search-box", "Button", "must not type")
 
     def test_running_receipt_replay_is_unknown_and_never_reexecutes_action(self):
         params = {"app_alias": "notepad"}

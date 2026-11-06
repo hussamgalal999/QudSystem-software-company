@@ -58,6 +58,39 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(peak, 2)
         self.assertEqual(result["counts"]["succeeded"], 4)
 
+    async def test_retry_reacquires_resource_lease_before_second_attempt(self):
+        node = WorkflowNode(
+            "write", "Write resource", "Perform a retry-safe write.",
+            resource_claims=(ResourceClaim("repo:shared", ResourceMode.WRITE),),
+            retry_safe=True, max_attempts=2,
+        )
+        definition = WorkflowDefinition(
+            "wf-retry-lease", "qudron", "idem-retry-lease",
+            ExecutionMode.SEQUENTIAL, (node,),
+        )
+        acquisitions = []
+        original_acquire = self.store.acquire_resources
+
+        def tracked_acquire(owner, claims, ttl_seconds):
+            acquisitions.append(owner)
+            return original_acquire(owner, claims, ttl_seconds)
+
+        self.store.acquire_resources = tracked_acquire
+        attempts = 0
+
+        async def executor(row):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return NodeExecutionResult("failed", "transient failure")
+            return NodeExecutionResult("succeeded", "completed after retry")
+
+        result = await self.orchestrator.run(definition, executor)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(attempts, 2)
+        self.assertEqual(len(acquisitions), 2)
+        self.assertEqual(self.store.rows("wf-retry-lease")[0]["status"], "succeeded")
+
     async def test_sequential_mode_creates_dependency_chain(self):
         nodes = expand_execution_mode(
             ExecutionMode.SEQUENTIAL,

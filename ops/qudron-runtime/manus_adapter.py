@@ -15,6 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from approval_service import ApprovalService
 from continuity_store import ContinuityStore
 
 
@@ -29,6 +30,7 @@ class ManusAdapter:
         self, credential: str, *, credential_type: str = "api_key",
         base_url: str | None = None, timeout: int = 30, retries: int = 2,
         store: ContinuityStore | None = None,
+        approval_service: ApprovalService | None = None,
     ):
         if not credential or not credential.strip():
             raise ManusAPIError("Manus credential is not configured")
@@ -40,6 +42,7 @@ class ManusAdapter:
         self.timeout = max(5, min(120, int(timeout)))
         self.retries = max(0, min(4, int(retries)))
         self.store = store
+        self.approval_service = approval_service
 
     @classmethod
     def from_environment(cls, store: ContinuityStore | None = None) -> "ManusAdapter":
@@ -200,9 +203,25 @@ class ManusAdapter:
             )
         return normalized
 
-    def send_message(self, task_id: str, message: str) -> dict[str, Any]:
+    def send_message(
+        self, task_id: str, message: str, *, approval_token: str | None = None
+    ) -> dict[str, Any]:
         if not task_id or not isinstance(message, str) or not message.strip():
             raise ValueError("task_id and a non-empty message are required")
+        if self.approval_service is None or not approval_token:
+            raise ManusAPIError(
+                "Owner approval is required before sending a Manus follow-up message"
+            )
+        try:
+            approval = self.approval_service.verify_and_consume(
+                approval_token,
+                action="manus.task.send_message",
+                resource_id=task_id,
+            )
+        except Exception as exc:
+            raise ManusAPIError("Owner approval could not be verified") from exc
+        if not approval:
+            raise ManusAPIError("Owner approval token is invalid, expired, out of scope, or already used")
         result = self._request("POST", "/v2/task.sendMessage", {
             "task_id": task_id, "message": {"content": message.strip()}
         })

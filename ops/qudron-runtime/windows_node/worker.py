@@ -198,7 +198,10 @@ class WindowsNode:
         ui_available = False
         if sys.platform == "win32":
             try:
-                import pywinauto  # noqa: F401
+                from pywinauto import Desktop
+                # Import success alone does not prove that this process can
+                # enumerate the user's interactive desktop session.
+                Desktop(backend="uia").windows()
                 ui_available = True
             except Exception:
                 ui_available = False

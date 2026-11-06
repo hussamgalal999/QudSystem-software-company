@@ -31,8 +31,8 @@ def approval_resource(action: str, parameters: dict[str, Any]) -> str:
                 raise ValueError("UI text approval requires bounded string content")
             text_digest = hashlib.sha256(text_value.encode("utf-8")).hexdigest()
         return ":".join((
-            str(process_id), window_title.strip(), automation_id.strip(),
-            control_type.strip(), text_digest,
+            str(process_id), window_title, automation_id,
+            control_type, text_digest,
         ))
     raise ValueError("This action does not require a write approval")
 

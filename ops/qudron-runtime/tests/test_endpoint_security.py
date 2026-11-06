@@ -1,6 +1,11 @@
 import unittest
 
-from endpoint_security import is_allowed_credential_endpoint
+from urllib.request import Request
+
+from endpoint_security import (
+    RejectCredentialRedirectHandler, is_allowed_credential_endpoint,
+    open_credential_request,
+)
 
 
 class CredentialEndpointPolicyTests(unittest.TestCase):
@@ -31,6 +36,23 @@ class CredentialEndpointPolicyTests(unittest.TestCase):
         ):
             with self.subTest(url=url):
                 self.assertFalse(is_allowed_credential_endpoint(url))
+
+
+
+class CredentialRedirectPolicyTests(unittest.TestCase):
+    def test_authorized_request_redirects_are_rejected(self):
+        handler = RejectCredentialRedirectHandler()
+        request = Request("https://api.example.com/v1/tasks")
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {"Location": "https://attacker.example/collect"},
+            "https://attacker.example/collect",
+        )
+        self.assertIsNone(redirected)
+
+    def test_open_credential_request_requires_an_allowed_endpoint(self):
+        request = Request("http://remote.example/v1/tasks")
+        with self.assertRaisesRegex(ValueError, "endpoint is not allowed"):
+            open_credential_request(request, timeout=2)
 
 
 if __name__ == "__main__":

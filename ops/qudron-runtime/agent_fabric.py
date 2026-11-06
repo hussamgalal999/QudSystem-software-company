@@ -398,6 +398,11 @@ class AgentFabric:
         )
         if updated.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
             await self._release_task_lease(agent_id, handle.remote_task_id)
+        elif updated.remote_task_id != handle.remote_task_id:
+            async with self._lock:
+                lease = self._active_task_leases.pop((agent_id, handle.remote_task_id), None)
+                if lease:
+                    self._active_task_leases[(agent_id, updated.remote_task_id)] = lease
         return updated
     async def cancel(
         self, agent_id: str, handle: AgentTaskHandle

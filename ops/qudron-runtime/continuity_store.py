@@ -140,9 +140,16 @@ class ContinuityStore:
                 db.execute("ALTER TABLE agent_runs ADD COLUMN claim_token TEXT")
             if "lease_until" not in agent_run_columns:
                 db.execute("ALTER TABLE agent_runs ADD COLUMN lease_until REAL")
+            # Legacy running rows have no fencing token, so no current worker can
+            # prove ownership. Expire them immediately for safe reclaim.
             db.execute(
-                "UPDATE agent_runs SET lease_until=? WHERE status='running' AND lease_until IS NULL",
-                (time.time() + 3600,),
+                """UPDATE agent_runs SET lease_until=0
+                   WHERE status='running' AND claim_token IS NULL"""
+            )
+            db.execute(
+                """UPDATE agent_runs SET lease_until=?
+                   WHERE status='running' AND lease_until IS NULL AND claim_token IS NOT NULL""",
+                (time.time() - 1,),
             )
 
     @staticmethod

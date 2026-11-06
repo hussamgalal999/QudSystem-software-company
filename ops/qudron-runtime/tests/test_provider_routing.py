@@ -189,6 +189,18 @@ class ProviderRoutingTests(unittest.TestCase):
         payload = json.loads(seen[0].data.decode("utf-8"))
         self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
 
+    def test_agent_memory_note_redacts_sensitive_job_title(self):
+        note = worker.build_agent_memory_note(
+            job={"id": "job-1", "title": "Candidate jane@example.com phone +1 555 123 4567"},
+            task_type="research",
+            stage="review",
+            output="Public result.",
+            sensitive_task=False,
+        )
+        self.assertNotIn("jane@example.com", note)
+        self.assertNotIn("+1 555 123 4567", note)
+        self.assertIn("[REDACTED]", note)
+
     def test_public_task_type_becomes_internal_with_prior_context_or_sensitive_prompt(self):
         public_job = self.job()
         self.assertEqual(worker.classify_job_data(public_job), "public")

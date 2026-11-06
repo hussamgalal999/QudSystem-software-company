@@ -239,6 +239,13 @@ class RuntimeQueueTests(unittest.TestCase):
         self.assertEqual(snapshot["max_parallel_reviews"], 16)
 
 
+
+    def test_cloud_memory_context_is_disabled_without_owner_configuration(self):
+        with patch.dict(worker.os.environ, {
+            "QUDRON_MEMORY_URL": "", "QUDRON_MEMORY_TOKEN": "",
+        }, clear=False):
+            self.assertEqual(worker.retrieve_cloud_memory_context("qudron"), "")
+
     def test_global_model_call_slots_enforce_shared_concurrency_cap(self):
         with patch.object(worker, "MAX_CONCURRENT_MODEL_CALLS", 2), \
              patch.object(worker, "MODEL_CALL_SLOT_TIMEOUT_SECONDS", 1):

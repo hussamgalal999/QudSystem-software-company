@@ -271,14 +271,18 @@ class AgentFabric:
             adapter = self._adapters[agent.adapter]
             provider_slot = self._provider_slots[agent.provider_id]
             agent_slot = self._agent_slots[agent.agent_id]
-            await provider_slot.acquire()
+            self._pending_submissions.add(agent.agent_id)
             try:
-                await agent_slot.acquire()
+                await provider_slot.acquire()
+                try:
+                    await agent_slot.acquire()
+                except BaseException:
+                    provider_slot.release()
+                    raise
             except BaseException:
-                provider_slot.release()
+                self._pending_submissions.discard(agent.agent_id)
                 raise
             acquired = True
-            self._pending_submissions.add(agent.agent_id)
             try:
                 async with self._lock:
                     self._in_flight[agent.provider_id] = self._in_flight.get(agent.provider_id, 0) + 1

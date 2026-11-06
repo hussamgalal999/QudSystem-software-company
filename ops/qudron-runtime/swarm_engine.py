@@ -281,9 +281,9 @@ def redact_sensitive_text(value: str) -> str:
     text = re.sub(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]", text)
     text = re.sub(r"(?<!\d)(?:\+?20|0)?1[0125]\d{8}(?!\d)", "[REDACTED_PHONE]", text)
     # Also redact common internationally formatted numbers, e.g. +1 555 123 4567.
-    # Requiring separators avoids treating unformatted IDs as phone numbers.
+    # Also cover parenthesized area codes such as (415) 555-2671.
     text = re.sub(
-        r"(?<!\w)\+?\d{1,3}(?:[\s().-])(?:\d[\s().-]*){6,13}\d(?!\w)",
+        r"(?<!\w)(?:\+\d{1,3}[\s.-]+(?:\(\d{2,4}\)|\d{2,4})[\s.-]+\d{3,4}[\s.-]*\d{3,4}|\(\d{3}\)[\s.-]*\d{3}[\s.-]*\d{4}|\d{3}[\s.-]\d{3}[\s.-]\d{4})(?!\w)",
         "[REDACTED_PHONE]",
         text,
     )

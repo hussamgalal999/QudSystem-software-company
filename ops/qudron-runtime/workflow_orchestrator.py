@@ -51,6 +51,10 @@ class WorkflowNode:
             raise ValueError("max_attempts must be between 1 and 5")
         if self.requires_approval and self.approved_by and len(self.approved_by) > 160:
             raise ValueError("approved_by is too long")
+        quorum = self.metadata.get("quorum_required")
+        if quorum is not None:
+            if type(quorum) is not int or not 1 <= quorum <= len(self.dependencies):
+                raise ValueError("quorum_required must be an integer within 1..len(dependencies)")
 
 
 @dataclass(frozen=True)

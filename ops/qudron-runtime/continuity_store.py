@@ -356,26 +356,48 @@ class ContinuityStore:
                         f"provider={next_provider or 'unresolved'}; model={next_model or 'unresolved'}"),
                 now=now,
             )
-            snapshot_status = {
-                "running": "running", "assigned": "running", "queued": "queued",
-                "paused": "blocked", "failed": "blocked", "succeeded": "idle",
-                "cancelled": "idle", "replaced": "idle", "retired": "idle",
-            }[status]
-            next_action = {
-                "queued": f"Await execution for stage: {stage}",
-                "assigned": f"Assigned stage: {stage}",
-                "running": f"Executing stage: {stage}",
-                "paused": f"Resume stage: {stage}",
-                "failed": safe_error or f"Retry or replace stage: {stage}",
-                "succeeded": "Await next assignment.",
-                "cancelled": "No further action; task cancelled.",
-                "replaced": "Superseded by a replacement instance.",
-                "retired": "Instance retired.",
-            }[status]
+            active_role_instances = db.execute(
+                """SELECT job_id,stage,status FROM agent_instances
+                   WHERE project=? AND role_id=?
+                     AND status IN ('queued','assigned','running','paused')
+                   ORDER BY updated_at DESC LIMIT 100""",
+                (project, role_id),
+            ).fetchall()
+            if active_role_instances:
+                active_statuses = {str(item["status"]) for item in active_role_instances}
+                if active_statuses & {"running", "assigned"}:
+                    snapshot_status = "running"
+                elif "queued" in active_statuses:
+                    snapshot_status = "queued"
+                else:
+                    snapshot_status = "blocked"
+                latest_active = active_role_instances[0]
+                task_id = str(latest_active["job_id"])
+                next_action = (
+                    f"{len(active_role_instances)} active instance(s); "
+                    f"latest stage {latest_active['stage']} is {latest_active['status']}"
+                )
+            else:
+                snapshot_status = {
+                    "running": "running", "assigned": "running", "queued": "queued",
+                    "paused": "blocked", "failed": "blocked", "succeeded": "idle",
+                    "cancelled": "idle", "replaced": "idle", "retired": "idle",
+                }[status]
+                next_action = {
+                    "queued": f"Await execution for stage: {stage}",
+                    "assigned": f"Assigned stage: {stage}",
+                    "running": f"Executing stage: {stage}",
+                    "paused": f"Resume stage: {stage}",
+                    "failed": safe_error or f"Retry or replace stage: {stage}",
+                    "succeeded": "Await next assignment.",
+                    "cancelled": "No further action; task cancelled.",
+                    "replaced": "Superseded by a replacement instance.",
+                    "retired": "Instance retired.",
+                }[status]
+                task_id = job_id if status == "failed" else None
             self._queue_agent_snapshot(
                 db, project=project, agent_id=role_id, status=snapshot_status,
-                task_id=job_id if status in {"queued", "assigned", "running", "paused", "failed"} else None,
-                next_action=next_action, now=now,
+                task_id=task_id, next_action=next_action, now=now,
             )
             updated = db.execute(
                 "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)

@@ -1442,9 +1442,9 @@ def call_llm(
                 error_class = f"http_{code}"
                 health_store.mark_call_failure(route, error_class)
                 failures.append(f"{route.provider_id}:{error_class}")
-                if code in {400, 404, 413, 422}:
-                    # These usually indicate a route/model/request contract issue.
-                    # Do not repeat a known malformed request against other vendors.
+                if code in {400, 422}:
+                    # Invalid task payloads are request-wide; 404 and 413 are
+                    # often route-local (model absent or provider size limit).
                     raise RuntimeError(f"Provider rejected the request ({error_class}).") from None
                 continue
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -2035,7 +2035,7 @@ def provider_health_loop() -> None:
                 900, min(86_400, int(os.getenv("QUDRON_PROVIDER_DISCOVERY_INTERVAL_SECONDS", "21600")))
             )
             catalogue_reports = probe_due_catalogue_providers(
-                APP_DIR / "model_provider_catalog.json",
+                Path(os.getenv("QUDRON_MODEL_CATALOG_PATH", str(APP_DIR / "model_provider_catalog.json"))),
                 ProviderCatalogueStore(DB_PATH),
                 environ=os.environ, secret_reader=_read_secret_file,
                 interval_seconds=catalogue_interval, timeout_seconds=timeout,

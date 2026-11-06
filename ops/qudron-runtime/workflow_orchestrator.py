@@ -570,6 +570,7 @@ class WorkflowOrchestrator:
         running: dict[str, asyncio.Task[None]] = {}
         self.store.set_workflow_status(workflow_id, "running")
 
+        node_by_id = {node.node_id: node for node in definition.nodes}
         while True:
             rows = self.store.rows(workflow_id)
             by_id = {row["node_id"]: row for row in rows}
@@ -588,7 +589,19 @@ class WorkflowOrchestrator:
                 if row["requires_approval"] and not row["approved_by"]:
                     continue
                 dependencies = set(json.loads(row["dependencies_json"]))
-                if not dependencies.issubset(completed_ids):
+                node_definition = node_by_id[node_id]
+                is_consensus_reducer = (
+                    definition.execution_mode == ExecutionMode.CONSENSUS
+                    and bool(node_definition.metadata.get("reducer"))
+                )
+                successful_dependencies = dependencies & completed_ids
+                quorum_required = int(
+                    node_definition.metadata.get("quorum_required") or (len(dependencies) // 2 + 1)
+                ) if is_consensus_reducer else 0
+                if is_consensus_reducer:
+                    if len(successful_dependencies) < quorum_required:
+                        continue
+                elif not dependencies.issubset(completed_ids):
                     continue
                 owner = f"{workflow_id}:{node_id}:{uuid.uuid4().hex}"
                 claims = tuple(
@@ -614,6 +627,18 @@ class WorkflowOrchestrator:
                             "output": None, "artifacts": [], "evidence": []
                         }
                 node_input["dependency_outputs"] = dependency_outputs
+                if is_consensus_reducer:
+                    failed_dependencies = {
+                        dependency_id for dependency_id in dependencies
+                        if by_id.get(dependency_id, {}).get("status") == "failed"
+                    }
+                    pending_dependencies = dependencies - successful_dependencies - failed_dependencies
+                    node_input["consensus"] = {
+                        "required": quorum_required,
+                        "succeeded": sorted(successful_dependencies),
+                        "failed": sorted(failed_dependencies),
+                        "pending": sorted(pending_dependencies),
+                    }
                 running[node_id] = asyncio.create_task(
                     self._execute_node(workflow_id, node_input, executor, semaphore, owner)
                 )
@@ -632,7 +657,29 @@ class WorkflowOrchestrator:
 
             rows = self.store.rows(workflow_id)
             statuses = {row["node_id"]: row["status"] for row in rows}
-            if all(status == "succeeded" for status in statuses.values()):
+            if definition.execution_mode == ExecutionMode.CONSENSUS:
+                reducer = next(
+                    (node for node in definition.nodes if node.metadata.get("reducer")), None
+                )
+                reducer_status = statuses.get(reducer.node_id) if reducer else None
+                worker_ids = set(reducer.dependencies) if reducer else set()
+                quorum_required = int(
+                    reducer.metadata.get("quorum_required") or (len(worker_ids) // 2 + 1)
+                ) if reducer else 1
+                successful_votes = sum(statuses.get(node_id) == "succeeded" for node_id in worker_ids)
+                pending_votes = sum(statuses.get(node_id) in {"queued", "running"} for node_id in worker_ids)
+                if reducer_status == "succeeded" and successful_votes >= quorum_required:
+                    final_status = "succeeded"
+                elif reducer_status == "failed" or successful_votes + pending_votes < quorum_required:
+                    final_status = "failed"
+                elif any(
+                    row["requires_approval"] and not row["approved_by"] and row["status"] == "queued"
+                    for row in rows
+                ):
+                    final_status = "waiting_for_approval"
+                else:
+                    final_status = "blocked"
+            elif all(status == "succeeded" for status in statuses.values()):
                 final_status = "succeeded"
             elif any(status == "failed" for status in statuses.values()):
                 final_status = "failed"

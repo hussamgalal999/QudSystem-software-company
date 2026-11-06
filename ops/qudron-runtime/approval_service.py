@@ -32,15 +32,19 @@ def issue_approval_token(
     """Issue a scoped token. Call only after authenticating the human approver."""
     if not isinstance(secret, str) or len(secret) < 32:
         raise ApprovalError("Approval secret must contain at least 32 characters")
+    if not all(isinstance(value, str) for value in (action, resource_id, approved_by)):
+        raise ApprovalError("action, resource_id and approved_by must be strings")
     if not action.strip() or not resource_id.strip() or not approved_by.strip():
         raise ApprovalError("action, resource_id and approved_by are required")
+    if len(action) > 120 or len(resource_id) > 500 or len(approved_by) > 160:
+        raise ApprovalError("Approval scope exceeds the supported length")
     ttl = max(30, min(3600, int(ttl_seconds)))
     now = int(time.time())
     claims = {
         "v": 1,
-        "action": action[:120],
-        "resource_id": resource_id[:500],
-        "approved_by": approved_by[:160],
+        "action": action,
+        "resource_id": resource_id,
+        "approved_by": approved_by,
         "issued_at": now,
         "expires_at": now + ttl,
         "nonce": secrets.token_urlsafe(24),
@@ -113,7 +117,7 @@ class ApprovalService:
         if not isinstance(token, str) or token.count(".") != 1:
             return None
         encoded, supplied_signature = token.split(".", 1)
-        if not encoded or len(supplied_signature) != 64:
+        if not encoded or len(supplied_signature) != 64 or not supplied_signature.isascii():
             return None
         expected = hmac.new(
             self._secret.encode("utf-8"), encoded.encode("ascii", "ignore"), hashlib.sha256

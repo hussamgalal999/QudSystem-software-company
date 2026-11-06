@@ -155,6 +155,46 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         await fabric.reconcile_submission_timeout("worker", "job-timeout", handle=None)
         self.assertEqual(fabric._agent_slots["worker"]._active, 0)
 
+    async def test_cancelled_submission_retains_slot_until_reconciliation(self):
+        class BlockingAdapter(FakeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.started = asyncio.Event()
+                self.never = asyncio.Event()
+            async def submit(self, agent_descriptor, task_envelope):
+                self.started.set()
+                await self.never.wait()
+
+        adapter = BlockingAdapter()
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=5))
+        fabric.register_adapter("fake", adapter)
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+        dispatch = asyncio.create_task(fabric.dispatch(task(
+            task_id="job-cancelled", idempotency_key="idem-cancelled",
+        )))
+        await adapter.started.wait()
+        dispatch.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await dispatch
+        self.assertEqual(fabric._agent_slots["worker"]._active, 1)
+        await fabric.reconcile_submission_timeout("worker", "job-cancelled", handle=None)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+
+    async def test_terminal_timeout_reconciliation_does_not_leave_stale_active_lease(self):
+        class HangingAdapter(FakeAdapter):
+            async def submit(self, agent_descriptor, task_envelope):
+                await asyncio.Event().wait()
+
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=0.01))
+        fabric.register_adapter("fake", HangingAdapter())
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+        with self.assertRaises(ProviderUnavailable):
+            await fabric.dispatch(task(task_id="job-terminal", idempotency_key="idem-terminal"))
+        terminal = AgentTaskHandle("provider", "remote-terminal", TaskStatus.SUCCEEDED)
+        await fabric.reconcile_submission_timeout("worker", "job-terminal", handle=terminal)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+        self.assertNotIn(("worker", "remote-terminal"), fabric._active_task_leases)
+
     async def test_follow_up_and_cancel_obey_fabric_request_timeout(self):
         class HangingLifecycleAdapter(FakeAdapter):
             async def follow_up(self, agent_descriptor, handle, message):

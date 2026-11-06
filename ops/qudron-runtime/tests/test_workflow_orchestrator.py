@@ -9,13 +9,14 @@ from workflow_orchestrator import (
 )
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from approval_service import ApprovalService
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 
 class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         private_key = Ed25519PrivateKey.generate()
+        self.approval_issuer = ApprovalTokenIssuer(private_key)
         self.approvals = ApprovalService(
             private_key.public_key(), Path(self.temp.name) / "approvals.sqlite3"
         )
@@ -228,7 +229,7 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "waiting_for_approval")
         self.assertEqual(invoked, [])
 
-        token = self.approvals.issue(
+        token = self.approval_issuer.issue(
             action="workflow.node.approve",
             resource_id="wf-approval/publish",
             approved_by="owner",

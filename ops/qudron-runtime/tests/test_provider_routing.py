@@ -189,6 +189,22 @@ class ProviderRoutingTests(unittest.TestCase):
         payload = json.loads(seen[0].data.decode("utf-8"))
         self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
 
+    def test_registered_qudron_waves_are_enabled_for_worker_and_authenticated_api_intake(self):
+        registry = worker.load_agent_registry(worker.AGENT_REGISTRY_PATH)
+        wave_names = sorted(name for name in registry["teams"] if name.startswith("qudron_wave_"))
+        self.assertEqual(len(wave_names), 8)
+        for index, wave_name in enumerate(wave_names, start=1):
+            with self.subTest(wave=wave_name):
+                self.assertIn(wave_name, worker.ALLOWED_TASK_TYPES)
+                self.assertIn(wave_name, worker.EXTERNAL_API_TASK_TYPES)
+                accepted = worker._validate_api_job({
+                    "task_type": wave_name,
+                    "title": f"Execute {wave_name}",
+                    "prompt": "Run the registered internal workstream and return evidence.",
+                    "idempotency_key": f"wave-task-{index:04d}",
+                })
+                self.assertEqual(accepted["task_type"], wave_name)
+
     def test_legacy_swarm_and_cvpen_agent_limits_remain_honored(self):
         global_limit = worker.MAX_ROLE_ASSIGNMENTS_PER_TASK
         with patch.dict(os.environ, {"QUDRON_MAX_SWARM_AGENTS": "7"}, clear=False):

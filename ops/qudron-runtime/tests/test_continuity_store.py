@@ -14,6 +14,36 @@ class ContinuityStoreTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_concurrent_stage_claim_is_exclusive_and_stale_claim_cannot_complete(self):
+        first = self.store.begin_stage(
+            job_id="job-claim", project="qudron", agent_id="worker", stage="analyze"
+        )
+        second_store = ContinuityStore(self.db_path)
+        second = second_store.begin_stage(
+            job_id="job-claim", project="qudron", agent_id="worker", stage="analyze"
+        )
+        self.assertTrue(first["claimed"])
+        self.assertFalse(second["claimed"])
+        with self.store.connect() as db:
+            db.execute(
+                "UPDATE agent_runs SET lease_until=0 WHERE job_id=? AND agent_id=? AND stage=?",
+                ("job-claim", "worker", "analyze"),
+            )
+        recovered = second_store.begin_stage(
+            job_id="job-claim", project="qudron", agent_id="worker", stage="analyze"
+        )
+        self.assertTrue(recovered["claimed"])
+        self.assertNotEqual(first["claim_token"], recovered["claim_token"])
+        with self.assertRaisesRegex(RuntimeError, "claim is stale"):
+            self.store.complete_stage(
+                job_id="job-claim", project="qudron", agent_id="worker",
+                stage="analyze", claim_token=first["claim_token"], output="stale",
+            )
+        second_store.complete_stage(
+            job_id="job-claim", project="qudron", agent_id="worker",
+            stage="analyze", claim_token=recovered["claim_token"], output="current",
+        )
+
     def test_stage_events_are_queued_for_cloud_sync(self):
         self.store.begin_stage(
             job_id="job-outbox", project="qudron", agent_id="qa_engineer", stage="verify"
@@ -79,47 +109,51 @@ class ContinuityStoreTests(unittest.TestCase):
         self.assertIn("Retain this long-lived note", memory)
 
     def test_completed_agent_stage_is_reused_after_restart(self):
-        self.assertIsNone(self.store.begin_stage(
+        claim = self.store.begin_stage(
             job_id="job-001", project="qudron", agent_id="software_engineer", stage="produce"
-        ))
+        )
+        self.assertTrue(claim["claimed"])
         self.store.complete_stage(
             job_id="job-001", project="qudron", agent_id="software_engineer",
-            stage="produce", output="completed implementation draft",
+            stage="produce", claim_token=claim["claim_token"], output="completed implementation draft",
             memory_note="Completed implementation draft for task job-001.",
         )
         restarted = ContinuityStore(self.db_path)
         checkpoint = restarted.begin_stage(
             job_id="job-001", project="qudron", agent_id="software_engineer", stage="produce"
         )
+        self.assertTrue(checkpoint["completed"])
         self.assertEqual(checkpoint["output"], "completed implementation draft")
         self.assertEqual(checkpoint["attempts"], 1)
 
     def test_failed_stage_is_retried_and_attempt_count_increases(self):
-        self.store.begin_stage(
+        first = self.store.begin_stage(
             job_id="job-002", project="qudron", agent_id="qa_engineer", stage="review"
         )
         self.store.fail_stage(
             job_id="job-002", project="qudron", agent_id="qa_engineer",
-            stage="review", error="mock failure",
+            stage="review", claim_token=first["claim_token"], error="mock failure",
         )
-        self.assertIsNone(self.store.begin_stage(
+        retry = self.store.begin_stage(
             job_id="job-002", project="qudron", agent_id="qa_engineer", stage="review"
-        ))
+        )
+        self.assertTrue(retry["claimed"])
         snapshot = self.store.snapshot()
         self.assertEqual(snapshot["agent_stage_counts"]["running"], 1)
 
     def test_sensitive_stage_can_be_completed_without_persisting_the_output(self):
-        self.store.begin_stage(
+        claim = self.store.begin_stage(
             job_id="job-003", project="cvpen", agent_id="cv_writer", stage="produce"
         )
         self.store.complete_stage(
             job_id="job-003", project="cvpen", agent_id="cv_writer",
-            stage="produce", output=None,
+            stage="produce", claim_token=claim["claim_token"], output=None,
             memory_note="Completed CV draft stage; source content not retained in agent memory.",
         )
-        self.assertIsNone(self.store.begin_stage(
+        retry = self.store.begin_stage(
             job_id="job-003", project="cvpen", agent_id="cv_writer", stage="produce"
-        ))
+        )
+        self.assertTrue(retry["claimed"])
         self.assertIn("source content not retained", self.store.agent_memory_context(
             project="cvpen", agent_id="cv_writer"
         ))

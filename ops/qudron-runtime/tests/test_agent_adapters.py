@@ -156,7 +156,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             metadata={"submit_tool": "submit_task", "status_tool": "get_status"},
         )
         calls = []
-        def fake_request(agent_descriptor, method, params=None, *, notification=False):
+        def fake_request(agent_descriptor, method, params=None, *, notification=False, session_id=None):
             calls.append((method, notification))
             if method == "initialize":
                 return {"protocolVersion": adapter.protocol_version}

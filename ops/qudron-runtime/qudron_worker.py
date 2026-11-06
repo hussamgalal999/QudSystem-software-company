@@ -1191,7 +1191,7 @@ def record_model_usage(
     response_data: dict[str, Any], reservation_id: str | None, *,
     input_rate_override: float | None = None,
     output_rate_override: float | None = None,
-) -> None:
+) -> float | None:
     usage = response_data.get("usage")
     if not isinstance(usage, dict):
         usage = {}
@@ -1334,16 +1334,44 @@ def model_usage_snapshot(recent_limit: int = 20) -> dict[str, Any]:
                ORDER BY created_at DESC LIMIT ?""",
             (max(1, min(100, recent_limit)),),
         ).fetchall()
+        daily_attempts = db.execute(
+            """SELECT COUNT(*) attempts,
+                      SUM(CASE WHEN status='succeeded' THEN 1 ELSE 0 END) succeeded,
+                      SUM(CASE WHEN status IN ('failed','rejected','interrupted') THEN 1 ELSE 0 END) failed,
+                      SUM(CASE WHEN status='in_flight' THEN 1 ELSE 0 END) in_flight,
+                      SUM(CASE WHEN billing_state='unknown' THEN 1 ELSE 0 END) uncertain_billing,
+                      COALESCE(SUM(CASE WHEN billing_state='unknown' THEN estimated_cost_usd ELSE 0 END),0) uncertain_cost_exposure_usd
+               FROM llm_call_attempts WHERE started_at LIKE ?""",
+            (day,),
+        ).fetchone()
+        monthly_attempts = db.execute(
+            """SELECT COUNT(*) attempts,
+                      SUM(CASE WHEN billing_state='unknown' THEN 1 ELSE 0 END) uncertain_billing,
+                      COALESCE(SUM(CASE WHEN billing_state='unknown' THEN estimated_cost_usd ELSE 0 END),0) uncertain_cost_exposure_usd
+               FROM llm_call_attempts WHERE started_at LIKE ?""",
+            (month,),
+        ).fetchone()
+        recent_attempts = db.execute(
+            """SELECT job_id,agent_id,profile,provider_id,model,status,billing_state,
+                      estimated_cost_usd,reported_cost_usd,error_class,started_at,finished_at
+               FROM llm_call_attempts ORDER BY started_at DESC LIMIT ?""",
+            (max(1, min(100, recent_limit)),),
+        ).fetchall()
     return {
         "day_utc": now.date().isoformat(),
         "month_utc": now.strftime("%Y-%m"),
         "daily": dict(totals),
         "monthly": dict(month_totals),
+        "attempts_daily": dict(daily_attempts),
+        "attempts_monthly": dict(monthly_attempts),
+        "uncertain_cost_exposure_daily_usd": float(daily_attempts["uncertain_cost_exposure_usd"] or 0),
+        "uncertain_cost_exposure_monthly_usd": float(monthly_attempts["uncertain_cost_exposure_usd"] or 0),
         "reserved_in_flight_usd": float(pending_reserved or 0),
         "daily_budget_usd": configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD"),
         "monthly_budget_usd": configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD"),
-        "cost_note": "Costs are provider-reported or calculated from configured per-million-token rates; null means the provider usage or rate was unavailable.",
+        "cost_note": "Successful usage is provider-reported or calculated from configured rates. Failed/uncertain attempts are separate; uncertain estimated exposure remains in budget checks until reconciled.",
         "recent": [dict(row) for row in recent],
+        "recent_attempts": [dict(row) for row in recent_attempts],
     }
 
 
@@ -1550,12 +1578,17 @@ def call_llm(
             continue
 
         slot_id = None
+        attempt_id = None
         try:
             slot_id = acquire_model_call_slot(
                 str(job["id"]), str(agent.get("id", "unknown"))
             )
             if on_route_selected:
                 on_route_selected(route.provider_id, route.model, profile)
+            attempt_id = start_model_call_attempt(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.provider_id, route.model, reservation_id,
+            )
             headers = {"Content-Type": "application/json", "Accept": "application/json"}
             if route.api_key:
                 headers["Authorization"] = f"Bearer {route.api_key}"
@@ -1573,19 +1606,35 @@ def call_llm(
                 code = int(exc.code)
                 error_class = f"http_{code}"
                 health_store.mark_call_failure(route, error_class)
+                billing_state = "not_charged" if code in {400, 401, 403, 404, 413, 422, 429} else "unknown"
+                finish_model_call_attempt(
+                    attempt_id, status="rejected" if code in {400, 422} else "failed",
+                    billing_state=billing_state, error_class=error_class,
+                )
+                attempt_id = None
                 failures.append(f"{route.provider_id}:{error_class}")
                 if code in {400, 422}:
-                    # Invalid task payloads are request-wide; 404 and 413 are
-                    # often route-local (model absent or provider size limit).
+                    # Invalid task payloads are request-wide; route-local errors
+                    # may proceed to an approved fallback.
                     raise RuntimeError(f"Provider rejected the request ({error_class}).") from None
                 continue
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 health_store.mark_call_failure(route, "network_unavailable")
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class="network_unavailable",
+                )
+                attempt_id = None
                 failures.append(f"{route.provider_id}:network_unavailable")
                 continue
             except (UnicodeDecodeError, json.JSONDecodeError, RuntimeError) as exc:
                 error_class = "invalid_or_oversized_response"
                 health_store.mark_call_failure(route, error_class)
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class=error_class,
+                )
+                attempt_id = None
                 failures.append(f"{route.provider_id}:{error_class}")
                 continue
 
@@ -1597,21 +1646,43 @@ def call_llm(
             )
             if not isinstance(answer, str) or not answer.strip():
                 health_store.mark_call_failure(route, "empty_or_incompatible_response")
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class="empty_or_incompatible_response",
+                )
+                attempt_id = None
                 failures.append(f"{route.provider_id}:empty_or_incompatible_response")
                 continue
 
-            record_model_usage(
+            recorded_cost = record_model_usage(
                 str(job["id"]), str(agent.get("id", "unknown")), profile,
                 route.model, data, reservation_id,
                 input_rate_override=route.input_usd_per_1m,
                 output_rate_override=route.output_usd_per_1m,
             )
+            usage = data.get("usage") if isinstance(data, dict) else None
+            provider_cost = usage.get("cost", usage.get("total_cost")) if isinstance(usage, dict) else None
+            try:
+                provider_cost_valid = provider_cost is not None and math.isfinite(float(provider_cost)) and float(provider_cost) >= 0
+            except (TypeError, ValueError):
+                provider_cost_valid = False
+            billing_state = "reported" if provider_cost_valid else ("estimated" if recorded_cost is not None else "unknown")
+            finish_model_call_attempt(
+                attempt_id, status="succeeded", billing_state=billing_state,
+                reported_cost_usd=recorded_cost,
+            )
+            attempt_id = None
             reservation_id = None
             health_store.mark_call_success(route)
             return answer.strip()
-        except Exception:
-            # Do not write prompts, credentials, HTTP response bodies, or raw
-            # provider errors into route-health logs.
+        except Exception as exc:
+            # Do not persist prompts, credentials, response bodies, or exception text.
+            if attempt_id:
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class=type(exc).__name__,
+                )
+                attempt_id = None
             raise
         finally:
             release_model_call_slot(slot_id)

@@ -42,7 +42,13 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
                 reducer_inputs.update(row.get("consensus", {}))
                 outputs = row.get("dependency_outputs", {})
                 self.assertEqual(set(outputs), {"a", "b"})
-                self.assertEqual({key: value["output"] for key, value in outputs.items()}, {"a": "a", "b": "b"})
+                self.assertEqual(
+                    {key: value["output"]["summary"] for key, value in outputs.items()},
+                    {"a": "a", "b": "b"},
+                )
+                for value in outputs.values():
+                    self.assertEqual(value["artifacts"], [])
+                    self.assertEqual(value["evidence"], [])
                 return NodeExecutionResult("succeeded", "majority result")
             if row["node_id"] == "c":
                 return NodeExecutionResult("failed", "minority worker failed")

@@ -103,7 +103,9 @@ class ProviderRoutingTests(unittest.TestCase):
         self.assertEqual(record_usage.call_count, 1)
         self.assertEqual(acquire_slot.call_count, 2)
         self.assertEqual(release_slot.call_count, 2)
-        self.assertEqual(release_budget.call_count, 1)
+        self.assertEqual(release_budget.call_count, 2)
+        self.assertEqual(release_budget.call_args_list[0].args, ("reservation-1",))
+        self.assertEqual(release_budget.call_args_list[1].args, (None,))
 
         health = ProviderHealthStore(worker.DB_PATH)
         self.assertTrue(health.circuit_open(primary))

@@ -402,19 +402,23 @@ class SQLiteComputeLeaseStore:
             db.close()
 
     def snapshot(self) -> dict[str, int]:
+        now = time.time()
         db = self._connect()
         try:
-            rows = db.execute(
-                "SELECT state,COUNT(*) AS amount FROM compute_leases GROUP BY state"
-            ).fetchall()
-            counts = {row["state"]: int(row["amount"]) for row in rows}
+            active = db.execute(
+                "SELECT COUNT(*) FROM compute_leases WHERE state='active' AND expires_at>?",
+                (now,),
+            ).fetchone()[0]
+            release_pending = db.execute(
+                "SELECT COUNT(*) FROM compute_leases WHERE state='release_pending'",
+            ).fetchone()[0]
             reservations = db.execute(
                 "SELECT COUNT(*) FROM compute_reservations WHERE expires_at>?",
-                (time.time(),),
+                (now,),
             ).fetchone()[0]
             return {
-                "active_leases": counts.get("active", 0),
-                "release_pending": counts.get("release_pending", 0),
+                "active_leases": int(active),
+                "release_pending": int(release_pending),
                 "reservations": int(reservations),
             }
         finally:

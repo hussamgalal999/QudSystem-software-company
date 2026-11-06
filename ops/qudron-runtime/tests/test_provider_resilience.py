@@ -43,6 +43,7 @@ class ProviderResilienceTests(unittest.TestCase):
 
     def test_fallback_routes_require_explicit_owner_approval_and_exact_protocol(self):
         env = {
+            "PROVIDER_KEY": "test-provider-key",
             "QUDRON_PROVIDER_ROUTES_JSON": json.dumps([
                 {
                     "route_id": "deepseek-balanced",

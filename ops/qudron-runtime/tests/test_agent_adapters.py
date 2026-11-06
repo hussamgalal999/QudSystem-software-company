@@ -6,7 +6,7 @@ from unittest.mock import patch
 from a2a_adapter import A2AHttpAdapter, _RejectRedirectHandler
 from mcp_agent_adapter import MCPToolAgentAdapter
 from agent_protocol import (
-    AgentDescriptor, DataClass, ExecutionMode, TaskEnvelope, TaskStatus,
+    AgentDescriptor, AgentTaskHandle, DataClass, ExecutionMode, TaskEnvelope, TaskStatus,
 )
 
 
@@ -68,7 +68,14 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a2a_follow_up_preserves_direct_message_response(self):
         adapter = A2AHttpAdapter()
-        agent_descriptor = agent("a2a", "a2a-provider", "a2a")
+        agent_descriptor = AgentDescriptor(
+            agent_id="a2a", display_name="A2A Agent",
+            provider_id="a2a-provider", adapter="a2a",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="a2a_authorized_free",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="https://agent.example.com",
+        )
         handle = AgentTaskHandle(
             "a2a-provider", "task-1", TaskStatus.RUNNING,
             metadata={"protocol": "a2a", "context_id": "context-1"},
@@ -86,7 +93,14 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a2a_poll_exposes_input_prompt_and_failure_details(self):
         adapter = A2AHttpAdapter()
-        agent_descriptor = agent("a2a", "a2a-provider", "a2a")
+        agent_descriptor = AgentDescriptor(
+            agent_id="a2a", display_name="A2A Agent",
+            provider_id="a2a-provider", adapter="a2a",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="a2a_authorized_free",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="https://agent.example.com",
+        )
         handle = AgentTaskHandle("a2a-provider", "task-1", TaskStatus.RUNNING)
         with patch.object(adapter, "_request_sync", return_value={
             "id": "task-1",

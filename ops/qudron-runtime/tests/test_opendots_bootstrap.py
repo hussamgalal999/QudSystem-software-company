@@ -156,6 +156,28 @@ class OpenDotsBootstrapTests(unittest.TestCase):
             )
             self.assertFalse(any(method == "DELETE" for _, method in calls))
 
+    def test_request_json_rejects_unapproved_http_origin_before_network(self):
+        with patch.object(bootstrap, "OPENDOTS_URL", "http://opendots:4310"), \
+             patch("bootstrap_opendots_mcp.open_credential_request") as opener:
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "differs from"):
+                bootstrap.request_json("http://attacker.example:4310/api/workspace", "owner-token")
+            opener.assert_not_called()
+
+    def test_main_rejects_unapproved_qudron_mcp_target_before_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            owner_file = Path(directory) / "owner-token"
+            qudron_file = Path(directory) / "qudron-token"
+            owner_file.write_text("o" * 48)
+            qudron_file.write_text("q" * 48)
+            with patch.object(bootstrap, "OWNER_TOKEN_FILE", owner_file), \
+                 patch.object(bootstrap, "QUDRON_TOKEN_FILE", qudron_file), \
+                 patch.object(bootstrap, "OPENDOTS_URL", "http://opendots:4310"), \
+                 patch.object(bootstrap, "QUDRON_MCP_URL", "http://qudron.attacker:8765/mcp"), \
+                 patch.object(bootstrap, "request_json") as request:
+                with self.assertRaisesRegex(bootstrap.BootstrapError, "QUDRON_MCP_URL"):
+                    bootstrap.main()
+            request.assert_not_called()
+
     def test_invalid_owner_token_fails_without_network(self):
         with tempfile.TemporaryDirectory() as directory:
             owner_file = Path(directory) / "owner-token"

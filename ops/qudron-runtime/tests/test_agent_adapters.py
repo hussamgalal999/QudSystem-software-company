@@ -13,8 +13,9 @@ from agent_protocol import (
 
 
 class FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data, headers=None):
         self.data = json.dumps(data).encode()
+        self.headers = dict(headers or {})
 
     def __enter__(self):
         return self

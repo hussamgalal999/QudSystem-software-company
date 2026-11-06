@@ -197,6 +197,10 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_model_call_slots_lease
           ON model_call_slots(lease_until);
         """)
+        job_columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+        if "data_class" not in job_columns:
+            db.execute("ALTER TABLE jobs ADD COLUMN data_class TEXT NOT NULL DEFAULT 'internal'")
+        db.execute("UPDATE jobs SET data_class='internal' WHERE data_class IS NULL OR TRIM(data_class)=''")
 
 def next_local_occurrence(item: dict[str, Any], after_utc: dt.datetime) -> dt.datetime:
     """Return the next scheduled local wall-clock occurrence strictly after after_utc."""
@@ -1413,59 +1417,21 @@ def is_anonymous_freellm_route(base_url: str) -> bool:
 def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) -> None:
     if not is_anonymous_freellm_route(base_url):
         return
-    task_type = str(job["task_type"])
-    if task_type not in PUBLIC_KEYLESS_TASK_TYPES:
-        raise RuntimeError(
-            "Anonymous free-model routing is limited to public research and content drafts. "
-            "Configure an approved authenticated/private provider for customer data, private code, "
-            "support, finance, CVs, security incidents or confidential work."
-        )
-    lowered = user_text.lower()
-    restricted_markers = (
-        "confidential", "internal-only", "internal only", "non-public",
-        "private source", "private repository", "customer record",
-        "customer data", "payment evidence", "bank account", "password",
-        "access token", "api key", "secret key",
-    )
-    if any(marker in lowered for marker in restricted_markers):
-        raise RuntimeError(
-            "The request contains an explicit confidential/customer/credential marker; "
-            "anonymous free-model routing is blocked."
-        )
-    # Existing redaction rules cover common contact/identity/payment/token patterns.
-    # If any sensitive-looking value would be redacted, fail closed rather than ship it.
-    if redact_sensitive_text(user_text) != user_text:
-        raise RuntimeError(
-            "The prompt contains a value flagged by Qudron's sensitive-data redactor; "
-            "anonymous free-model routing is blocked."
-        )
-
-
-def classify_job_data(
-    job: sqlite3.Row | Mapping[str, Any],
-    prior_context: str = "",
-    memory_context: str = "",
-) -> str:
-    """Use the owner-declared task class, with conservative context escalation.
-
-    Unknown/legacy jobs are internal. Public is an explicit owner declaration,
-    never inferred from a task type or a phrase in its prompt. Private prior
-    context or memory always escalates public content to internal.
-    """
-    task_type = str(job["task_type"])
-    if task_type in {
-        "cvpen_cv_creation", "cvpen_ats_audit",
-        "customer_support_reply", "payment_reconciliation",
-    }:
-        return "confidential"
-
     try:
         declared = str(job["data_class"]).strip().lower()
     except (KeyError, IndexError):
         declared = "internal"
     if declared not in {"public", "internal", "confidential", "restricted"}:
         declared = "internal"
-    if declared in {"confidential", "restricted"}:
+    if declared == "restricted":
+        return "restricted"
+    task_type = str(job["task_type"])
+    if task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }:
+        return "confidential"
+    if declared == "confidential":
         return declared
 
     prompt = str(job["prompt"] or "")

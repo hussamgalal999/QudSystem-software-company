@@ -128,6 +128,37 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(NoEligibleAgent):
             await fabric.dispatch(task(data_class=DataClass.CONFIDENTIAL))
 
+    async def test_ambiguous_submit_timeout_does_not_fail_over_and_duplicate_task(self):
+        class HangingAdapter:
+            def __init__(self):
+                self.calls = 0
+            async def submit(self, agent_descriptor, task_envelope):
+                self.calls += 1
+                await asyncio.Event().wait()
+            async def poll(self, agent_descriptor, handle):
+                raise AssertionError("poll must not be called")
+            async def follow_up(self, agent_descriptor, handle, message):
+                raise AssertionError("follow_up must not be called")
+            async def cancel(self, agent_descriptor, handle):
+                raise AssertionError("cancel must not be called")
+
+        slow = HangingAdapter()
+        fallback = FakeAdapter()
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=0.01))
+        fabric.register_adapter("slow", slow)
+        fabric.register_adapter("fake", fallback)
+        fabric.register_agent(agent(
+            "a-slow", "provider-a", "slow", quality_score=0.95,
+        ))
+        fabric.register_agent(agent(
+            "b-fallback", "provider-b", "fake", quality_score=0.90,
+        ))
+
+        with self.assertRaisesRegex(ProviderUnavailable, "outcome is unknown"):
+            await fabric.dispatch(task())
+        self.assertEqual(slow.calls, 1)
+        self.assertEqual(fallback.submitted, [])
+
     async def test_failover_uses_next_eligible_provider(self):
         fabric = AgentFabric()
         fabric.register_adapter("broken", FakeAdapter(fail=True))

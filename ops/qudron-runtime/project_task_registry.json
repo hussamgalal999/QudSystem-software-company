@@ -178,7 +178,7 @@
       "title": "Make every new ChatGPT session recover the latest project state and next action",
       "status": "planned",
       "priority": "P0",
-      "evidence": "docs/PROJECT_STATE.md; docs/CONTINUITY_PROTOCOL.md",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md; docs/CONTINUITY_PROTOCOL.md",
       "current_state": "Repository state manifest and session-resume protocol are being added; automatic session access is not guaranteed by ChatGPT itself.",
       "acceptance_criteria": "New conversation reads the authoritative repo/PR state and identifies the last completed commit, tasks and next step.",
       "verification_profile": [
@@ -216,7 +216,7 @@
       "title": "Model 10,000 logical specialist workers with persistent identity and memory",
       "status": "target_unmeasured",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/agent_registry.json; docs/PROJECT_STATE.md",
+      "evidence": "ops/qudron-runtime/agent_registry.json; docs/QUDRON_PROJECT_STATE.md",
       "current_state": "Logical capacity remains a target; no 10,000-agent load test or scheduler evidence exists.",
       "acceptance_criteria": "Load test confirms durable admission, per-agent memory and queue fairness at an agreed scale.",
       "verification_profile": [
@@ -235,7 +235,7 @@
       "title": "Run 10,000 simultaneous model inference workers",
       "status": "not_started",
       "priority": "P3",
-      "evidence": "docs/PROJECT_STATE.md",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
       "current_state": "Not a current promise or a safe default; upstream quotas, inference concurrency and host resources are unmeasured.",
       "acceptance_criteria": "Only claim a tested simultaneous count after load test and provider approvals.",
       "verification_profile": [
@@ -489,7 +489,7 @@
       "title": "Evaluate OpenClaw browser-login connector without session scraping or terms bypass",
       "status": "not_started",
       "priority": "P2",
-      "evidence": "docs/PROJECT_STATE.md",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
       "current_state": "Not integrated. Browser-based access must preserve provider login, terms and protected session boundaries.",
       "acceptance_criteria": "Security review and provider-term review pass; only documented owner-authorized access modes are enabled.",
       "verification_profile": [
@@ -529,7 +529,7 @@
       "title": "Merge Google Artemis MCP integration after review and CI",
       "status": "open_pr",
       "priority": "P0",
-      "evidence": "PR #22; docs/INTEGRATION_ARTEMIS.md",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
       "current_state": "PR #22 is open Draft, not merged; CI run #244 succeeded on its candidate branch.",
       "acceptance_criteria": "Owner reviews and approves PR; merge only after final branch validation.",
       "verification_profile": [
@@ -548,7 +548,7 @@
       "title": "Authorize the owner's Android device for ADB and run Artemis diagnosis",
       "status": "blocked_owner",
       "priority": "P0",
-      "evidence": "docs/ARTEMIS_E2E_RUNBOOK.md",
+      "evidence": "PR #22 (open/unmerged): docs/ARTEMIS_E2E_RUNBOOK.md on the Artemis branch",
       "current_state": "No physical device was accessed in this session; owner must accept Android USB debugging and provide a live host.",
       "acceptance_criteria": "Artemis mobile_diagnose reports ready/degraded with exact device identity and no credential probing.",
       "verification_profile": [
@@ -567,7 +567,7 @@
       "title": "Run Qudron-to-Artemis-to-phone trace-verified physical end-to-end test",
       "status": "blocked_owner",
       "priority": "P0",
-      "evidence": "docs/ARTEMIS_E2E_RUNBOOK.md; tests/test_artemis_android_e2e.py",
+      "evidence": "PR #22 (open/unmerged): docs/ARTEMIS_E2E_RUNBOOK.md; ops/qudron-runtime/tests/test_artemis_android_e2e.py",
       "current_state": "Test is opt-in and has not been executed on the owner's device.",
       "acceptance_criteria": "A read-only battery workflow completes through Qudron MCP and trace evidence matches ADB reference.",
       "verification_profile": [
@@ -586,7 +586,7 @@
       "title": "Inventory installed apps and accessible app capabilities on the owner's device",
       "status": "planned",
       "priority": "P1",
-      "evidence": "docs/INTEGRATION_ARTEMIS.md",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
       "current_state": "No device inventory has been collected.",
       "acceptance_criteria": "Owner-approved package inventory is stored with timestamp and app scope; private app data is not scraped.",
       "verification_profile": [
@@ -605,7 +605,7 @@
       "title": "Build authorized static/dynamic app security assessment and evidence workflow",
       "status": "planned",
       "priority": "P1",
-      "evidence": "docs/PROJECT_STATE.md",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
       "current_state": "No full APK/static/dynamic scanner pipeline is currently connected.",
       "acceptance_criteria": "Permission, storage, network, exported component and input validation checks produce reproducible reports for in-scope apps only.",
       "verification_profile": [
@@ -624,7 +624,7 @@
       "title": "Delegate real tasks to apps, browsers and AI apps installed on the phone",
       "status": "planned",
       "priority": "P1",
-      "evidence": "docs/INTEGRATION_ARTEMIS.md",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
       "current_state": "Artemis primitives exist in an open PR; app-specific workflows and per-action verifiers are not implemented.",
       "acceptance_criteria": "At least one owner-selected app workflow is completed, resumed, traced and verified end-to-end.",
       "verification_profile": [
@@ -643,7 +643,7 @@
       "title": "Collect bounded screenshots, hierarchy, trace and relevant Logcat evidence",
       "status": "implemented_unverified",
       "priority": "P2",
-      "evidence": "docs/INTEGRATION_ARTEMIS.md",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
       "current_state": "Artemis documents the path; no physical-device evidence has been produced.",
       "acceptance_criteria": "A harmless authorized run returns trace and bounded relevant log excerpts on the actual device.",
       "verification_profile": [
@@ -738,7 +738,7 @@
       "title": "Capture customer/user feedback and convert it into ranked fixes and product opportunities",
       "status": "not_started",
       "priority": "P1",
-      "evidence": "docs/PROJECT_STATE.md",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
       "current_state": "No complete feedback ingestion, deduplication and prioritization loop is connected.",
       "acceptance_criteria": "Feedback from approved channels links to product, issue, evidence, owner and released fix.",
       "verification_profile": [
@@ -1103,7 +1103,7 @@
       "title": "Enforce approvals for external publishing, messaging, payments, account changes and device mutation",
       "status": "implemented_unverified",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/mcp_gateway.py; docs/DECISIONS.md",
+      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/tests/test_approval_service.py; docs/CONTINUITY_PROTOCOL.md",
       "current_state": "Mutating MCP tools carry non-read-only hints; end-to-end approval policy across every connector is incomplete.",
       "acceptance_criteria": "Every high-impact tool requires user approval and stores approver, target, diff, timestamp and outcome.",
       "verification_profile": [
@@ -1198,7 +1198,7 @@
       "title": "Close or explicitly accept every known technical debt item before production",
       "status": "not_started",
       "priority": "P0",
-      "evidence": "docs/PROJECT_STATE.md; project_task_registry.json",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md; project_task_registry.json",
       "current_state": "There are open integration, deployment, provider, security and customer-data gates.",
       "acceptance_criteria": "No unowned high/critical debt; every accepted risk has owner, expiry, mitigation and evidence.",
       "verification_profile": [

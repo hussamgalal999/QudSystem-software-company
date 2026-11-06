@@ -207,6 +207,22 @@ class WindowsNodePolicyTests(unittest.TestCase):
         if sys.platform != "win32":
             self.assertFalse(self.node.health()["ui_automation_available"])
 
+    def test_approval_resource_binds_exact_window_title(self):
+        base = {
+            "process_id": 123,
+            "window_title": "Notepad - Notes",
+            "automation_id": "search-box",
+            "control_type": "Edit",
+            "text": "literal text",
+        }
+        first = approval_resource("windows.type_text", base)
+        second = approval_resource(
+            "windows.type_text", {**base, "window_title": "Another Window"}
+        )
+        self.assertNotEqual(first, second)
+        with self.assertRaisesRegex(ValueError, "window_title"):
+            approval_resource("windows.type_text", {**base, "window_title": ""})
+
     def test_worker_has_no_arbitrary_shell_action(self):
         with self.assertRaises(WindowsNodeError):
             self.node.execute({

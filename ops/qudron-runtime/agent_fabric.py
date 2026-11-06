@@ -267,7 +267,16 @@ class AgentFabric:
                     fallback_count=index,
                     route_reason="; ".join(failures) if failures else "highest eligible capability score",
                 )
-            except (asyncio.TimeoutError, ProviderUnavailable, ConnectionError) as exc:
+            except asyncio.TimeoutError as exc:
+                # Cancellation of an adapter coroutine does not prove that a
+                # blocking thread or remote provider stopped its submission.
+                # The outcome is ambiguous: fail closed and reconcile this
+                # attempt before any cross-provider fallback can duplicate it.
+                raise ProviderUnavailable(
+                    f"Submission outcome is unknown after timeout for {agent.agent_id}; "
+                    "reconcile the remote task before retrying or failing over"
+                ) from exc
+            except (ProviderUnavailable, ConnectionError) as exc:
                 failures.append(f"{agent.agent_id}:{type(exc).__name__}")
                 continue
         raise ProviderUnavailable("All eligible providers failed: " + ", ".join(failures))

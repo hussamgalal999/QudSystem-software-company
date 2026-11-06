@@ -1,6 +1,6 @@
 """Official Metricool API adapter. Reads analytics and schedules drafts only by default."""
 from __future__ import annotations
-import csv, io, json, os, urllib.parse, urllib.error
+import csv, io, json, os, re, urllib.parse, urllib.error
 from urllib.request import Request
 from typing import Any
 from endpoint_security import is_allowed_credential_endpoint, open_credential_request
@@ -138,7 +138,7 @@ def validate_brand_destination(
  label=" ".join(str(content_brand or "").casefold().replace("_"," ").split())
  if not label:
   raise MetricoolError("Content brand is required before creating a Metricool draft")
- normalized_text=" ".join(str(text or "").casefold().split())
+ normalized_text=" ".join(re.sub(r"[^\\w\\s]", " ", str(text or "").casefold()).split())
  if label not in {"vision guard","vision guard systems"} and any(
   marker in normalized_text for marker in _VISION_GUARD_MARKERS
  ):

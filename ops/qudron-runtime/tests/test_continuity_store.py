@@ -17,6 +17,21 @@ class ContinuityStoreTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+
+    def test_connection_context_rolls_back_all_statements_after_failure(self):
+        with self.store.connect() as db:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS transaction_probe (value TEXT NOT NULL)"
+            )
+        with self.assertRaisesRegex(RuntimeError, "forced transaction failure"):
+            with self.store.connect() as db:
+                db.execute("INSERT INTO transaction_probe(value) VALUES(?)", ("first",))
+                db.execute("INSERT INTO transaction_probe(value) VALUES(?)", ("second",))
+                raise RuntimeError("forced transaction failure")
+        with self.store.connect() as db:
+            count = db.execute("SELECT COUNT(*) FROM transaction_probe").fetchone()[0]
+        self.assertEqual(count, 0)
+
     def test_concurrent_stage_claim_is_exclusive_and_stale_claim_cannot_complete(self):
         first = self.store.begin_stage(
             job_id="job-claim", project="qudron", agent_id="worker", stage="analyze"

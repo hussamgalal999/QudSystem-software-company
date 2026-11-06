@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 import math
+import ipaddress
 import os
 from pathlib import Path
 import re
@@ -27,7 +28,7 @@ _SAFE_ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]{1,79}$")
 _INTERNAL_HTTP_HOSTS = {"localhost", "127.0.0.1", "::1", "freellm", "ollama", "litellm"}
 
 
-class ProviderRouteError(RuntimeError):
+class ProviderRouteError(ValueError):
     """Invalid provider route or unusable provider response."""
 
 
@@ -88,9 +89,16 @@ def _base_url(value: Any, *, allow_private_http: bool = False) -> str:
         raise ProviderRouteError("Provider base URL is invalid")
     if parts.scheme == "https":
         return url
-    if parts.scheme == "http" and (allow_private_http or parts.hostname.lower() in _INTERNAL_HTTP_HOSTS):
-        return url
-    raise ProviderRouteError("Provider routes must use HTTPS (or an explicitly private local HTTP endpoint)")
+    if parts.scheme == "http":
+        host = parts.hostname.lower()
+        private_host = host in _INTERNAL_HTTP_HOSTS or host.endswith((".local", ".internal", ".svc", ".cluster.local"))
+        try:
+            private_ip = ipaddress.ip_address(host).is_private or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            private_ip = False
+        if private_host or (allow_private_http and private_ip):
+            return url
+    raise ProviderRouteError("Provider routes must use HTTPS or a private local-network HTTP endpoint")
 
 
 def _read_key(
@@ -686,12 +694,25 @@ def probe_catalogue_provider(
                                 model_id = model_id.split("/", 1)[1]
                             if not model_id:
                                 continue
+                            modalities = item.get("input_modalities", item.get("supported_input", []))
+                            if not isinstance(modalities, list):
+                                modalities = []
+                            safe_modalities = [
+                                str(value)[:40] for value in modalities[:12]
+                                if isinstance(value, (str, int))
+                            ]
+                            context_tokens = item.get("context_window", item.get("inputTokenLimit"))
+                            max_output_tokens = item.get("max_output_tokens", item.get("outputTokenLimit"))
+                            if not isinstance(context_tokens, int) or context_tokens < 0:
+                                context_tokens = None
+                            if not isinstance(max_output_tokens, int) or max_output_tokens < 0:
+                                max_output_tokens = None
                             discovered.append({
                                 "id": model_id[:200],
-                                "display_name": str(item.get("display_name") or item.get("name") or model_id)[:200],
-                                "input_modalities": item.get("input_modalities", item.get("supported_input", [])),
-                                "context_tokens": item.get("context_window", item.get("inputTokenLimit")),
-                                "max_output_tokens": item.get("max_output_tokens", item.get("outputTokenLimit")),
+                                "display_name": str(item.get("display_name") or item.get("displayName") or item.get("name") or model_id)[:200],
+                                "input_modalities": safe_modalities,
+                                "context_tokens": context_tokens,
+                                "max_output_tokens": max_output_tokens,
                             })
                         if not discovered:
                             error_class = "no_models_advertised"

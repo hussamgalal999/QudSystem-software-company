@@ -100,7 +100,10 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(adapter.max_active, 1)
 
         adapter.release.set()
-        await asyncio.gather(first, second)
+        first_receipt = await first
+        await fabric.poll("worker", first_receipt.handle)
+        second_receipt = await second
+        await fabric.poll("worker", second_receipt.handle)
         self.assertEqual(adapter.max_active, 1)
 
     async def test_routes_to_eligible_agent_and_polls_result(self):

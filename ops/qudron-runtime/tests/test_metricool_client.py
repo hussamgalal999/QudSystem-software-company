@@ -45,7 +45,7 @@ class MetricoolTests(unittest.TestCase):
     )
    mocked.assert_not_called()
  def test_vision_guard_caption_cannot_be_misclassified_to_qudsystem(self):
-  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
+  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
   with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
    with patch("metricool_client.open_credential_request") as mocked:
     with self.assertRaisesRegex(mc.MetricoolError,"Vision Guard"):
@@ -56,7 +56,7 @@ class MetricoolTests(unittest.TestCase):
      )
     mocked.assert_not_called()
  def test_metricool_draft_rejects_wrong_destination_even_for_approved_brand(self):
-  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
+  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
   with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
    with self.assertRaisesRegex(mc.MetricoolError,"does not match"):
     self.client().create_review_draft(

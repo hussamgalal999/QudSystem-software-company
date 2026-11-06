@@ -54,6 +54,7 @@ class CloudMemoryClient:
     def _request(
         self, method: str, endpoint: str,
         payload: dict[str, Any] | None = None,
+        *, idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         if endpoint not in self.ALLOWED_ENDPOINTS and endpoint != "/health":
             raise CloudMemoryError("Cloud-memory endpoint is not allowlisted")
@@ -63,6 +64,8 @@ class CloudMemoryClient:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
         request = Request(
             self.base_url + endpoint, data=data, headers=headers, method=method
         )
@@ -204,7 +207,7 @@ def flush_outbox(
             payload = json.loads(str(record["payload_json"]))
             if not isinstance(payload, dict):
                 raise CloudMemoryError("Outbox payload is not a JSON object")
-            client._request("POST", endpoint, payload)
+            client._request("POST", endpoint, payload, idempotency_key=outbox_id)
             store.mark_cloud_outbox_sent(outbox_id)
             sent += 1
         except Exception as exc:

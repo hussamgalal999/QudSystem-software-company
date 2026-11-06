@@ -138,6 +138,31 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(adapter.released, [("kaggle", "short-lease")])
         self.assertEqual(fabric.snapshot()["active_leases"], 0)
 
+    async def test_concurrent_release_calls_only_contact_provider_once(self):
+        class BlockingReleaseAdapter(FakeComputeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.release_started = asyncio.Event()
+                self.allow_release = asyncio.Event()
+            async def release(self, provider_descriptor, lease):
+                self.release_started.set()
+                await self.allow_release.wait()
+                self.released.append((provider_descriptor.provider_id, lease.lease_id))
+
+        fabric = ComputeFabric()
+        adapter = BlockingReleaseAdapter()
+        fabric.register_adapter("fake", adapter)
+        fabric.register_provider(provider())
+        lease = await fabric.acquire(request())
+        first = asyncio.create_task(fabric.release(lease))
+        await adapter.release_started.wait()
+        with self.assertRaisesRegex(ComputeFabricError, "already in progress"):
+            await fabric.release(lease)
+        adapter.allow_release.set()
+        await first
+        self.assertEqual(adapter.released, [("kaggle", lease.lease_id)])
+        self.assertEqual(fabric.snapshot()["active_leases"], 0)
+
     async def test_unknown_lease_release_is_rejected(self):
         self.fabric.register_provider(provider())
         lease = await self.fabric.acquire(request())

@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "project": "Qudron — QudSystem Executive Orchestration Platform",
-  "snapshot_date": "2026-11-06",
+  "snapshot_date": "2026-11-07",
   "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
   "base_branch": "main",
-  "source_commit": "07348ed7218135059e143d97ba632179ac69c420",
+  "source_commit": "a0c603368bd6ad427c57d3e81529d0a7c8ec8759",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -1177,10 +1177,10 @@
       "id": "ci-release-gate",
       "area": "Release",
       "title": "Pass full CI for this continuity branch and its final merge candidate",
-      "status": "pending_ci",
+      "status": "implemented_unverified",
       "priority": "P0",
-      "evidence": "GitHub Actions Qudron Runtime Checks",
-      "current_state": "Earlier Artemis PR run #244 passed; this newer continuity branch has not yet passed CI.",
+      "evidence": "GitHub Actions run 42294161790; commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759; PR #26",
+      "current_state": "Qudron Runtime Checks completed successfully on repair-branch commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759 (run 42294161790), including unit/safety tests, runtime and FreeLLM image builds, Compose validation, sidecar health/auth smoke test and timezone database check. A fresh exact-head run is required after subsequent code or registry changes; independent review and production gates remain open.",
       "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
       "verification_profile": [
         "exact_commit_ci_green",

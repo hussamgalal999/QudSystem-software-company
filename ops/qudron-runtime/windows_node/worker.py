@@ -251,11 +251,27 @@ class WindowsNode:
                 (idempotency_key,),
             ).fetchone()
             if prior:
+                replay_status = str(prior["status"])
+                replay_error = prior["error_code"]
+                if replay_status == "running":
+                    # A durable running receipt means the UI action may have
+                    # happened before a crash. Never replay a mutating action
+                    # just because its completion receipt is missing.
+                    replay_status = "unknown"
+                    replay_error = "outcome_unknown_requires_reconciliation"
+                    db.execute(
+                        """UPDATE task_receipts
+                           SET status='unknown',error_code=?,updated_at=?
+                           WHERE idempotency_key=? AND status='running'""",
+                        (replay_error, time.time(), idempotency_key),
+                    )
                 db.execute("COMMIT")
                 return {
-                    "task_id": prior["task_id"], "status": prior["status"],
+                    "task_id": prior["task_id"], "status": replay_status,
+                    "error_code": replay_error,
                     "result": json.loads(prior["safe_result_json"] or "{}"),
                     "replayed": True,
+                    "reconciliation_required": replay_status == "unknown",
                 }
 
             approved_by = None

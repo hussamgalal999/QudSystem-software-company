@@ -44,6 +44,28 @@ class ContinuityStoreTests(unittest.TestCase):
             stage="analyze", claim_token=recovered["claim_token"], output="current",
         )
 
+    def test_snapshot_exposes_all_recent_stage_checkpoints_without_raw_output(self):
+        first = self.store.begin_stage(
+            job_id="job-snapshot", project="qudron", agent_id="worker", stage="research"
+        )
+        self.store.complete_stage(
+            job_id="job-snapshot", project="qudron", agent_id="worker",
+            stage="research", claim_token=first["claim_token"], output="private output one",
+        )
+        second = self.store.begin_stage(
+            job_id="job-snapshot", project="qudron", agent_id="worker", stage="review"
+        )
+        self.store.complete_stage(
+            job_id="job-snapshot", project="qudron", agent_id="worker",
+            stage="review", claim_token=second["claim_token"], output="private output two",
+        )
+        snapshot = self.store.snapshot()
+        stages = [row for row in snapshot["recent_agent_stages"] if row["job_id"] == "job-snapshot"]
+        self.assertEqual({row["stage"] for row in stages}, {"research", "review"})
+        self.assertTrue(all(row["has_output"] for row in stages))
+        self.assertNotIn("output", stages[0])
+        self.assertNotIn("claim_token", stages[0])
+
     def test_stage_events_are_queued_for_cloud_sync(self):
         self.store.begin_stage(
             job_id="job-outbox", project="qudron", agent_id="qa_engineer", stage="verify"

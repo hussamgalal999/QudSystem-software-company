@@ -147,6 +147,15 @@ def context_packet_to_text(packet: dict[str, Any], *, max_chars: int = 8000) -> 
             item = value.get(field)
             if isinstance(item, (str, int, float, bool)):
                 text_value = str(item).strip()
+                if isinstance(item, str) and text_value.startswith(("{", "[")):
+                    try:
+                        decoded = json.loads(text_value)
+                    except json.JSONDecodeError:
+                        decoded = None
+                    if isinstance(decoded, (dict, list)):
+                        # JSON-encoded blobs can smuggle nested secrets or instructions
+                        # through an otherwise scalar allowlist field.
+                        continue
                 if text_value:
                     safe[field] = text_value[:1000]
         return safe or None

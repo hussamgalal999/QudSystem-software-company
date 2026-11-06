@@ -20,7 +20,7 @@ There is no arbitrary shell, PowerShell, file-system traversal, process injectio
 
 ## Approval and conflict prevention
 
-Read-only inspection requires the owner node token. Launch/click/type operations also require a short-lived HMAC-signed approval envelope that binds the approver, action, process ID, exact window handle, exact window title, automation ID, control type, expiry and one-time nonce. Changing the target window invalidates the approval. The node rejects altered payloads, expired approvals and replayed nonces. The task idempotency key prevents a retried network request from repeating an already completed UI action.
+Read-only inspection requires the owner node token. Launch/click/type operations also require a short-lived HMAC-signed approval envelope. A launch approval binds the approver, action and allowlisted application alias. A click/type approval additionally binds the process ID, exact window handle, exact window title, automation ID and control type; text entry also binds a digest of the exact text. Every approval includes an expiry and one-time nonce. Changing the target window invalidates a click/type approval. The node rejects altered payloads, expired approvals and replayed nonces. The task idempotency key prevents a retried network request from repeating an already completed UI action.
 
 Keep each desktop workflow scoped to a named application and target control. UIA identifiers can change across app versions; verify the target immediately before acting. Do not run two writers against the same application/document concurrently. Use Qudron resource claims to serialize those tasks.
 

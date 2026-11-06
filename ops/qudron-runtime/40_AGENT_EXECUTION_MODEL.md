@@ -12,7 +12,7 @@ The registry and the provider-neutral fabric are foundations; they do not provis
 ## Dynamic task planning
 
 - The planner now selects **every role listed in the selected team by default**. It no longer silently truncates routine teams to five or CVPen teams to ten.
-- An explicit task-scoped admission guard is configured by `QUDRON_MAX_AGENT_INSTANCES_PER_TASK` (default 10,000; hard safety ceiling 10,000). This is an admission setting, not proof of 10,000 running model sessions or duplicate role instances.
+- An explicit task-scoped role-assignment guard is configured by `QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK` (default 10,000; hard safety ceiling 10,000). This caps planned role assignments only; it does not provision or count 10,000 persisted agent instances.
 - A task can still request an intentional subset through an explicit `max_agents` argument for bounded testing or specialist workflows.
 - Independent review stages fan out up to `QUDRON_MAX_PARALLEL_REVIEWS` (default 16; hard ceiling 32). Actual upstream calls remain governed by the shared SQLite-backed global model-call slot limit.
 - Queue workers default to eight and remain capped at eight in this runtime. Provider RPM/TPM, quota, latency, network health and host resources remain binding. Queue capacity is not a guarantee of throughput.

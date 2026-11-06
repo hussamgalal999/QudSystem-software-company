@@ -65,8 +65,8 @@ class AgentProtocolTests(unittest.TestCase):
         )
 
     def test_idempotency_key_is_unambiguous_when_identifiers_contain_delimiters(self):
-        first = stable_idempotency_key("a\\x1fb", "c", "d")
-        second = stable_idempotency_key("a", "b\\x1fc", "d")
+        first = stable_idempotency_key("a\x1fb", "c", "d")
+        second = stable_idempotency_key("a", "b\x1fc", "d")
         self.assertNotEqual(first, second)
 
 

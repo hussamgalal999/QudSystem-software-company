@@ -175,6 +175,15 @@ class ProviderRoutingTests(unittest.TestCase):
         payload = json.loads(seen[0].data.decode("utf-8"))
         self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
 
+    def test_public_task_type_becomes_internal_with_prior_context_or_sensitive_prompt(self):
+        public_job = self.job()
+        self.assertEqual(worker.classify_job_data(public_job), "public")
+        self.assertEqual(worker.classify_job_data(public_job, "prior stage private notes"), "internal")
+
+        sensitive_job = self.job()
+        sensitive_job["prompt"] = "Research this contact: jane@example.com"
+        self.assertEqual(worker.classify_job_data(sensitive_job), "internal")
+
     def test_http_request_does_not_include_unconfigured_credentials(self):
         route_without_key = ProviderRoute(
             route_id="local", provider_id="local", profile="balanced",

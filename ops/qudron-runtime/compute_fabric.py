@@ -225,8 +225,8 @@ class SQLiteComputeLeaseStore:
         db = self._connect()
         try:
             lease_count = db.execute(
-                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?)",
-                (provider_id, *self.ACTIVE_STATES),
+                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?) AND expires_at>?",
+                (provider_id, *self.ACTIVE_STATES, current),
             ).fetchone()[0]
             reservation_count = db.execute(
                 "SELECT COUNT(*) FROM compute_reservations WHERE provider_id=? AND expires_at>?",
@@ -267,8 +267,8 @@ class SQLiteComputeLeaseStore:
                 db.commit()
                 return None
             active = db.execute(
-                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?)",
-                (provider_id, *self.ACTIVE_STATES),
+                "SELECT COUNT(*) FROM compute_leases WHERE provider_id=? AND state IN (?,?) AND expires_at>?",
+                (provider_id, *self.ACTIVE_STATES, now),
             ).fetchone()[0]
             reserved = db.execute(
                 "SELECT COUNT(*) FROM compute_reservations WHERE provider_id=? AND expires_at>?",
@@ -280,8 +280,8 @@ class SQLiteComputeLeaseStore:
             if quota_remaining_seconds is not None:
                 active_rows = db.execute(
                     """SELECT metadata_json,expires_at,created_at FROM compute_leases
-                       WHERE provider_id=? AND state IN (?,?)""",
-                    (provider_id, *self.ACTIVE_STATES),
+                       WHERE provider_id=? AND state IN (?,?) AND expires_at>?""",
+                    (provider_id, *self.ACTIVE_STATES, now),
                 ).fetchall()
                 active_runtime = 0
                 for row in active_rows:
@@ -536,7 +536,7 @@ class ComputeFabric:
                     max(0, lease.expires_at - time.time()),
                 )))
                 for provider_id, lease in self._leases.values()
-                if provider_id == provider.provider_id
+                if provider_id == provider.provider_id and lease.expires_at > time.time()
             )
             reserved_runtime = self._reservations_runtime.get(provider.provider_id, 0)
             if active_runtime + reserved_runtime + request.min_runtime_seconds > provider.quota_remaining_seconds:

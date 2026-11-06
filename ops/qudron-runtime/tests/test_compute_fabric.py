@@ -130,6 +130,17 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(NoEligibleCompute):
             await self.fabric.acquire(request(min_gpu_vram_gb=24, min_runtime_seconds=600))
 
+
+    async def test_quota_only_exhaustion_rejects_vram_qualified_provider(self):
+        self.fabric.register_provider(provider(
+            "quota-empty", gpu_vram_gb=16, quota_remaining_seconds=30,
+        ))
+        with self.assertRaises(NoEligibleCompute):
+            await self.fabric.acquire(request(
+                min_gpu_vram_gb=12, min_runtime_seconds=600,
+            ))
+        self.assertEqual(self.adapter.acquired, [])
+
     async def test_short_provider_lease_is_rejected_and_compensating_release_runs(self):
         class ShortLeaseAdapter(FakeComputeAdapter):
             async def acquire(self, provider_descriptor, request_descriptor):

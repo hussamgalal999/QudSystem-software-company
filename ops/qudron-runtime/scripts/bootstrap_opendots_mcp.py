@@ -13,6 +13,8 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 from typing import Any
 
 OPENDOTS_URL = os.getenv("OPENDOTS_INTERNAL_URL", "http://opendots:4310").rstrip("/")
@@ -36,14 +38,49 @@ def read_secret(env_name: str, path: Path) -> str:
         return ""
 
 
+def _valid_internal_service_url(url: str, service: str, port: int) -> bool:
+    try:
+        parsed = urlsplit(url)
+        if parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
+            return False
+        if is_allowed_credential_endpoint(url):
+            return True
+        return (
+            parsed.scheme == "http" and parsed.hostname == service
+            and parsed.port == port
+        )
+    except ValueError:
+        return False
+
+
+def _validate_bootstrap_targets() -> None:
+    if not _valid_internal_service_url(OPENDOTS_URL, "opendots", 4310):
+        raise BootstrapError("OPENDOTS_INTERNAL_URL must be HTTPS, loopback, or the exact opendots:4310 Compose service")
+    if not _valid_internal_service_url(QUDRON_MCP_URL, "qudron", 8765):
+        raise BootstrapError("QUDRON_MCP_URL must be HTTPS, loopback, or the exact qudron:8765 Compose service")
+
+
 def request_json(url: str, token: str, method: str = "GET",
                  payload: dict[str, Any] | None = None) -> Any:
+    if not _valid_internal_service_url(OPENDOTS_URL, "opendots", 4310):
+        raise BootstrapError("OpenDots service endpoint is not approved")
+    try:
+        base = urlsplit(OPENDOTS_URL)
+        target = urlsplit(url)
+        if (
+            target.scheme != base.scheme or target.netloc != base.netloc
+            or target.username is not None or target.password is not None
+            or target.query or target.fragment
+        ):
+            raise BootstrapError("OpenDots request target differs from the validated service origin")
+    except ValueError:
+        raise BootstrapError("OpenDots request URL is invalid") from None
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=15) as response:
+    with open_credential_request(req, timeout=15, endpoint_validated=True) as response:
         raw = response.read(1_000_001)
         if len(raw) > 1_000_000:
             raise BootstrapError("OpenDots API response exceeded the bootstrap size limit")
@@ -210,6 +247,7 @@ def ensure_qudron_pages(space_id: str, owner_token: str) -> dict[str, int]:
 
 
 def main() -> int:
+    _validate_bootstrap_targets()
     owner_token = read_secret("OPENDOTS_OWNER_TOKEN", OWNER_TOKEN_FILE)
     qudron_token = read_secret("QUDRON_API_TOKEN", QUDRON_TOKEN_FILE)
     if len(owner_token) < 24:

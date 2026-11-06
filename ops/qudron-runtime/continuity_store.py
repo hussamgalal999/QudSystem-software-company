@@ -515,6 +515,7 @@ class ContinuityStore:
     ) -> None:
         now = _now()
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             changed = db.execute(
                 """UPDATE agent_runs
                    SET status='completed',output=?,error=NULL,updated_at=?,
@@ -548,6 +549,7 @@ class ContinuityStore:
                     (uuid.uuid4().hex, project, agent_id, "short", "task_outcome",
                      memory_note.strip()[:2500], now, expires),
                 )
+            db.commit()
 
     def fail_stage(
         self, *, job_id: str, project: str, agent_id: str, stage: str,
@@ -555,6 +557,7 @@ class ContinuityStore:
     ) -> None:
         now = _now()
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             changed = db.execute(
                 """UPDATE agent_runs SET status='failed',error=?,updated_at=?,
                        claim_token=NULL,lease_until=NULL
@@ -572,6 +575,7 @@ class ContinuityStore:
                 db, project=project, agent_id=agent_id, status="blocked",
                 task_id=job_id, next_action=error[:1000], now=now,
             )
+            db.commit()
 
     def remember(
         self, *, project: str, agent_id: str, content: str,

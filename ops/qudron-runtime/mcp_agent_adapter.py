@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+
+from endpoint_security import is_allowed_credential_endpoint
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -32,8 +34,8 @@ class MCPToolAgentAdapter:
         self, agent: AgentDescriptor, method: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         endpoint = (agent.endpoint_ref or "").strip()
-        if not endpoint.startswith(("https://", "http://127.0.0.1", "http://localhost")):
-            raise MCPAdapterError("MCP endpoint must use HTTPS or loopback HTTP")
+        if not is_allowed_credential_endpoint(endpoint):
+            raise MCPAdapterError("MCP endpoint must use HTTPS or an exact loopback HTTP endpoint")
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         token_env = str(agent.metadata.get("token_env", "")).strip()
         if token_env:

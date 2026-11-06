@@ -185,11 +185,18 @@ class WindowsNode:
             """)
 
     def health(self) -> dict[str, Any]:
+        ui_available = False
+        if sys.platform == "win32":
+            try:
+                import pywinauto  # noqa: F401
+                ui_available = True
+            except Exception:
+                ui_available = False
         return {
             "service": "qudron-windows-node",
             "platform": sys.platform,
             "interactive_user_session_required": True,
-            "ui_automation_available": sys.platform == "win32",
+            "ui_automation_available": ui_available,
             "capabilities": sorted(READ_ACTIONS | MUTATING_ACTIONS),
             "allowed_application_count": len(self.allowed_apps),
         }
@@ -242,6 +249,19 @@ class WindowsNode:
             raise WindowsNodeError("parameters must be a JSON object")
         if action not in READ_ACTIONS | MUTATING_ACTIONS:
             raise WindowsNodeError("Action is not allowlisted")
+        if action == "windows.type_text":
+            process_id = params.get("process_id")
+            automation_id = params.get("automation_id")
+            control_type = params.get("control_type")
+            text_value = params.get("text")
+            if isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0:
+                raise WindowsNodeError("type_text requires a positive integer process_id")
+            if not isinstance(automation_id, str) or not automation_id.strip():
+                raise WindowsNodeError("type_text requires a non-empty automation_id")
+            if control_type != "Edit":
+                raise WindowsNodeError("type_text requires the exact Edit control type")
+            if not isinstance(text_value, str) or len(text_value) > 4000:
+                raise WindowsNodeError("type_text requires a string of at most 4,000 characters")
 
         db = self._connect()
         try:
@@ -311,10 +331,8 @@ class WindowsNode:
                 )
             else:
                 raw = self.automation.type_text(
-                    int(params.get("process_id", 0)),
-                    str(params.get("automation_id", "")),
-                    str(params.get("control_type", "")),
-                    str(params.get("text", "")),
+                    params["process_id"], params["automation_id"],
+                    params["control_type"], params["text"],
                 )
             safe = self._safe_result(action, raw)
             response = {

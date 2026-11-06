@@ -31,7 +31,7 @@ class ModelRoutingTests(unittest.TestCase):
 
     def test_agent_profile_routes_to_external_model_endpoint(self):
         captured = {}
-        def fake_urlopen(request, timeout):
+        def fake_urlopen(request, timeout=0, **kwargs):
             captured["url"] = request.full_url
             captured["timeout"] = timeout
             captured["payload"] = json.loads(request.data.decode())

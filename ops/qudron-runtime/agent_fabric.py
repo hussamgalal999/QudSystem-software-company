@@ -128,7 +128,7 @@ class AgentFabric:
         self._unknown_submission_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
         # Covers the admission wait and the provider submit await, before a remote
         # task lease can be recorded. Descriptor identity must remain stable here.
-        self._pending_submissions: set[str] = set()
+        self._pending_submissions: dict[str, int] = {}
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: AgentAdapter) -> None:
@@ -148,6 +148,16 @@ class AgentFabric:
             asyncio.Semaphore(self.policy.maximum_parallel_per_provider),
         )
         self._in_flight.setdefault(descriptor.provider_id, 0)
+
+    def _mark_submission_pending(self, agent_id: str) -> None:
+        self._pending_submissions[agent_id] = self._pending_submissions.get(agent_id, 0) + 1
+
+    def _clear_submission_pending(self, agent_id: str) -> None:
+        count = self._pending_submissions.get(agent_id, 0)
+        if count <= 1:
+            self._pending_submissions.pop(agent_id, None)
+        else:
+            self._pending_submissions[agent_id] = count - 1
 
     def update_agent(self, descriptor: AgentDescriptor) -> None:
         if descriptor.agent_id not in self._agents:
@@ -271,7 +281,7 @@ class AgentFabric:
             adapter = self._adapters[agent.adapter]
             provider_slot = self._provider_slots[agent.provider_id]
             agent_slot = self._agent_slots[agent.agent_id]
-            self._pending_submissions.add(agent.agent_id)
+            self._mark_submission_pending(agent.agent_id)
             try:
                 await provider_slot.acquire()
                 try:
@@ -280,7 +290,7 @@ class AgentFabric:
                     provider_slot.release()
                     raise
             except BaseException:
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 raise
             acquired = True
             try:

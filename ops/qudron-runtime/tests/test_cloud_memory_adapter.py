@@ -60,7 +60,7 @@ class CloudMemoryAdapterTests(unittest.TestCase):
                 raise TimeoutError("response lost after acceptance")
             return FakeResponse({"ok": True, "inserted": True, "event_id": "event-1"})
         client = CloudMemoryClient("https://memory.example.com", "t" * 40)
-        with patch("cloud_memory_adapter.urlopen", side_effect=fake_urlopen):
+        with patch("cloud_memory_adapter.open_credential_request", side_effect=fake_urlopen):
             first = flush_outbox(self.store, client)
             # The production outbox applies exponential backoff after failure.
             # Advance only this test record to its due time before the retry.
@@ -110,7 +110,7 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         def fail(*_, **__):
             raise TimeoutError("offline")
         client = CloudMemoryClient("https://memory.example.com", "t" * 40)
-        with patch("cloud_memory_adapter.urlopen", side_effect=fail):
+        with patch("cloud_memory_adapter.open_credential_request", side_effect=fail):
             result = flush_outbox(self.store, client)
         self.assertEqual(result["failed"], 1)
         self.assertEqual(result["pending"], 1)

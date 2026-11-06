@@ -136,6 +136,7 @@ class TaskEnvelope:
     risk_level: str = "low"
     requires_approval: bool = False
     approved_by: str | None = None
+    approval_token: str | None = None
     retry_safe: bool = True
     max_attempts: int = 3
     deadline_epoch: float | None = None
@@ -159,7 +160,10 @@ class TaskEnvelope:
 
     @property
     def approved(self) -> bool:
-        return not self.requires_approval or bool(self.approved_by)
+        # A caller-controlled label is audit metadata, not proof of approval.
+        # Dispatchers must verify and consume approval_token with the trusted
+        # approval service before releasing a task that requires approval.
+        return not self.requires_approval
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

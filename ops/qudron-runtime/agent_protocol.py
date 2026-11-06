@@ -227,7 +227,9 @@ class AgentTaskResult:
 
 def stable_idempotency_key(project_id: str, task_id: str, stage: str) -> str:
     """Stable key for retries and duplicate submissions of the same stage."""
-    raw = "\x1f".join((project_id, task_id, stage))
+    # Encode the tuple structurally so embedded delimiters cannot create
+    # the same pre-hash string for two different identifier triples.
+    raw = json.dumps([project_id, task_id, stage], ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

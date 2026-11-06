@@ -280,6 +280,13 @@ def redact_sensitive_text(value: str) -> str:
     text = str(value)
     text = re.sub(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]", text)
     text = re.sub(r"(?<!\d)(?:\+?20|0)?1[0125]\d{8}(?!\d)", "[REDACTED_PHONE]", text)
+    # Also redact common internationally formatted numbers, e.g. +1 555 123 4567.
+    # Requiring separators avoids treating unformatted IDs as phone numbers.
+    text = re.sub(
+        r"(?<!\\w)\\+?\\d{1,3}(?:[\\s().-])(?:\\d[\\s().-]*){6,13}\\d(?!\\w)",
+        "[REDACTED_PHONE]",
+        text,
+    )
     text = re.sub(r"(?<!\d)\d{14}(?!\d)", "[REDACTED_NATIONAL_ID]", text)
     text = re.sub(r"(?<!\d)\d{13,19}(?!\d)", "[REDACTED_PAYMENT_NUMBER]", text)
     text = re.sub(r"(?i)\b(sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{20,})\b", "[REDACTED_SECRET]", text)

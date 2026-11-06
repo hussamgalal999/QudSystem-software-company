@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 from continuity_store import ContinuityStore
 
@@ -45,6 +46,50 @@ class ContinuityStoreTests(unittest.TestCase):
             job_id="job-claim", project="qudron", agent_id="worker",
             stage="analyze", claim_token=recovered["claim_token"], output="current",
         )
+
+    def test_lost_parent_job_lease_blocks_stale_stage_completion(self):
+        future = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(timespec="seconds")
+        with self.store.connect() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY, status TEXT, locked_by TEXT, lock_until TEXT
+                )"""
+            )
+            db.execute(
+                "INSERT OR REPLACE INTO jobs(id,status,locked_by,lock_until) VALUES(?,?,?,?)",
+                ("job-lease-owner", "running", "worker-one", future),
+            )
+        claim = self.store.begin_stage(
+            job_id="job-lease-owner", project="qudron", agent_id="worker",
+            stage="research", job_lease_owner="worker-one",
+        )
+        with self.store.connect() as db:
+            db.execute(
+                "UPDATE jobs SET locked_by=? WHERE id=?",
+                ("worker-two", "job-lease-owner"),
+            )
+        with self.assertRaisesRegex(RuntimeError, "Job lease lost"):
+            self.store.complete_stage(
+                job_id="job-lease-owner", project="qudron", agent_id="worker",
+                stage="research", claim_token=claim["claim_token"],
+                output="stale worker output", job_lease_owner="worker-one",
+            )
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT status,output FROM agent_runs WHERE job_id=? AND agent_id=? AND stage=?",
+                ("job-lease-owner", "worker", "research"),
+            ).fetchone()
+        self.assertEqual(row["status"], "running")
+        self.assertIsNone(row["output"])
+        self.assertTrue(self.store.abandon_stage_claim(
+            job_id="job-lease-owner", project="qudron", agent_id="worker",
+            stage="research", claim_token=claim["claim_token"],
+        ))
+        next_claim = self.store.begin_stage(
+            job_id="job-lease-owner", project="qudron", agent_id="worker",
+            stage="research", job_lease_owner="worker-two",
+        )
+        self.assertTrue(next_claim["claimed"])
 
     def test_stage_completion_rolls_back_run_event_and_memory_as_one_transaction(self):
         claim = self.store.begin_stage(

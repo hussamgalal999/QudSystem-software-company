@@ -138,7 +138,7 @@ def validate_brand_destination(
  label=" ".join(str(content_brand or "").casefold().replace("_"," ").split())
  if not label:
   raise MetricoolError("Content brand is required before creating a Metricool draft")
- normalized_text=" ".join(re.sub(r"[^\\w\\s]", " ", str(text or "").casefold()).split())
+ normalized_text=" ".join(re.sub(r"[^\w\s]", " ", str(text or "").casefold()).split())
  if label not in {"vision guard","vision guard systems"} and any(
   marker in normalized_text for marker in _VISION_GUARD_MARKERS
  ):

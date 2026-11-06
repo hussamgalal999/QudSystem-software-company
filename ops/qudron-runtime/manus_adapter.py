@@ -70,7 +70,11 @@ class ManusAdapter:
         headers = self._headers()
         request = Request(url, data=data, headers=headers, method=method)
         last_error = "unknown error"
-        for attempt in range(self.retries + 1):
+        # Retry only idempotent reads. Manus task creation and follow-up are
+        # non-idempotent POSTs; a lost response must not create duplicate work
+        # or duplicate credit consumption.
+        max_attempts = self.retries + 1 if method.upper() in {"GET", "HEAD"} else 1
+        for attempt in range(max_attempts):
             try:
                 with urlopen(request, timeout=self.timeout) as response:
                     raw = response.read(2_000_001)
@@ -83,11 +87,11 @@ class ManusAdapter:
                 return result
             except HTTPError as exc:
                 last_error = f"HTTP {exc.code}"
-                if exc.code not in {429, 500, 502, 503, 504} or attempt >= self.retries:
+                if exc.code not in {429, 500, 502, 503, 504} or attempt >= max_attempts - 1:
                     raise ManusAPIError(f"Manus request failed: {last_error}") from exc
             except (URLError, TimeoutError, json.JSONDecodeError) as exc:
                 last_error = type(exc).__name__
-                if attempt >= self.retries:
+                if attempt >= max_attempts - 1:
                     raise ManusAPIError(f"Manus request failed: {last_error}") from exc
             time.sleep(min(8, 2 ** attempt))
         raise ManusAPIError(f"Manus request failed: {last_error}")

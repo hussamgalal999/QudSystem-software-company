@@ -1595,6 +1595,7 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     max_agents = configured_max_agents(task_type)
 
     continuity = ContinuityStore(DB_PATH)
+    job_lease_owner = str(job["locked_by"]) if job["locked_by"] else None
     # Customer/financial workflows keep no intermediate model output in agent
     # checkpoints or memories. Their resumable metadata is retained, but content
     # is re-executed rather than persisted in an extra memory store.
@@ -1609,7 +1610,8 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         )
         instance_id = str(instance["instance_id"])
         stage_claim = continuity.begin_stage(
-            job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage
+            job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage,
+            job_lease_owner=job_lease_owner,
         )
         if stage_claim.get("completed"):
             continuity.transition_agent_instance(
@@ -1663,15 +1665,27 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
             )
             continuity.complete_stage(
                 job_id=str(job["id"]), project=project, agent_id=agent_id,
-                stage=stage, claim_token=claim_token,
+                stage=stage, claim_token=claim_token, job_lease_owner=job_lease_owner,
                 output=None if sensitive_task else output, memory_note=safe_note,
             )
         except Exception as exc:
             safe_error = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200]
-            continuity.fail_stage(
-                job_id=str(job["id"]), project=project, agent_id=agent_id,
-                stage=stage, claim_token=claim_token, error=safe_error,
-            )
+            try:
+                continuity.fail_stage(
+                    job_id=str(job["id"]), project=project, agent_id=agent_id,
+                    stage=stage, claim_token=claim_token, error=safe_error,
+                    job_lease_owner=job_lease_owner,
+                )
+            except RuntimeError as stage_write_error:
+                logging.warning(
+                    "Could not persist stage failure for %s/%s after ownership changed: %s",
+                    agent_id, stage, stage_write_error,
+                )
+                continuity.abandon_stage_claim(
+                    job_id=str(job["id"]), project=project, agent_id=agent_id,
+                    stage=stage, claim_token=claim_token,
+                    reason="Parent job lease lost; stale worker abandoned its stage claim",
+                )
             continuity.transition_agent_instance(
                 instance_id, "failed", error=safe_error,
                 model_profile=profile, provider_id=provider_id, model_name=model_name,

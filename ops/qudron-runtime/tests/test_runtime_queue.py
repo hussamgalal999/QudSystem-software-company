@@ -228,16 +228,23 @@ class RuntimeQueueTests(unittest.TestCase):
         self.assertEqual(row["result_path"], "/tmp/owned-result.md")
 
 
-    def test_runtime_status_reports_routine_and_cvpen_swarm_caps(self):
+    def test_runtime_status_reports_dynamic_task_admission_and_shared_call_limits(self):
         with patch.object(worker, "SWARM_ENABLED", True), \
-             patch.object(worker, "MAX_SWARM_AGENTS", 5), \
-             patch.object(worker, "MAX_CVPEN_AGENTS", 10), \
-             patch.object(worker, "MAX_PARALLEL_REVIEWS", 8):
+             patch.object(worker, "MAX_ROLE_ASSIGNMENTS_PER_TASK", 10_000), \
+             patch.object(worker, "MAX_PARALLEL_REVIEWS", 16):
             snapshot = worker.status_snapshot()
-        self.assertEqual(snapshot["max_agents_per_task"], 5)
-        self.assertEqual(snapshot["max_agents_per_cvpen_job"], 10)
-        self.assertEqual(snapshot["max_parallel_reviews"], 8)
+        self.assertEqual(snapshot["max_role_assignments_per_task"], 10_000)
+        self.assertEqual(snapshot["max_agents_per_task"], 10_000)
+        self.assertEqual(snapshot["max_agents_per_cvpen_job"], 10_000)
+        self.assertEqual(snapshot["max_parallel_reviews"], 16)
 
+
+
+    def test_cloud_memory_context_is_disabled_without_owner_configuration(self):
+        with patch.dict(worker.os.environ, {
+            "QUDRON_MEMORY_URL": "", "QUDRON_MEMORY_TOKEN": "",
+        }, clear=False):
+            self.assertEqual(worker.retrieve_cloud_memory_context("qudron"), "")
 
     def test_global_model_call_slots_enforce_shared_concurrency_cap(self):
         with patch.object(worker, "MAX_CONCURRENT_MODEL_CALLS", 2), \

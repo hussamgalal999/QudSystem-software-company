@@ -3,19 +3,22 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import urllib.error
 
 import qudron_worker as worker
+from provider_resilience import ProviderRoute
 
 class FakeResponse:
     def __enter__(self):
         return self
     def __exit__(self, exc_type, exc, tb):
         return False
-    def read(self):
-        return json.dumps({
+    def read(self, size=-1):
+        payload = json.dumps({
             "choices":[{"message":{"content":"routed response"}}],
             "usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}
         }).encode()
+        return payload if size is None or size < 0 else payload[:size]
 
 class ModelRoutingTests(unittest.TestCase):
     def setUp(self):
@@ -30,7 +33,7 @@ class ModelRoutingTests(unittest.TestCase):
 
     def test_agent_profile_routes_to_external_model_endpoint(self):
         captured = {}
-        def fake_urlopen(request, timeout):
+        def fake_urlopen(request, timeout=0, **kwargs):
             captured["url"] = request.full_url
             captured["timeout"] = timeout
             captured["payload"] = json.loads(request.data.decode())
@@ -44,7 +47,7 @@ class ModelRoutingTests(unittest.TestCase):
             "LLM_FAST_OUTPUT_USD_PER_1M":"1",
             "QUDRON_MONTHLY_MODEL_BUDGET_USD":"1"
         }, clear=True):
-            with patch("qudron_worker.urllib.request.urlopen", side_effect=fake_urlopen):
+            with patch("qudron_worker.open_credential_request", side_effect=fake_urlopen):
                 response = worker.call_llm(
                     {"id":"job-model-test","role":"Research","task_type":"research","title":"Test","prompt":"Do the work"},
                     {"id":"research_analyst","name":"Research Analyst","profile":"fast",
@@ -60,9 +63,92 @@ class ModelRoutingTests(unittest.TestCase):
         self.assertEqual(usage["daily"]["calls"], 1)
         self.assertEqual(usage["daily"]["total_tokens"], 150)
         self.assertAlmostEqual(usage["daily"]["cost_usd"], 0.00015, places=8)
+        self.assertEqual(usage["attempts_daily"]["attempts"], 1)
+        self.assertEqual(usage["attempts_daily"]["succeeded"], 1)
+        self.assertEqual(usage["attempts_daily"]["uncertain_billing"], 0)
+        self.assertEqual(usage["recent_attempts"][0]["billing_state"], "estimated")
+        self.assertAlmostEqual(usage["recent_attempts"][0]["reported_cost_usd"], 0.00015, places=8)
 
 
 
+
+    def test_failed_primary_attempt_is_audited_before_successful_fallback(self):
+        routes = [
+            ProviderRoute(
+                route_id="primary", provider_id="primary", profile="fast",
+                base_url="https://primary.example/v1", model="primary-model",
+                api_key="primary-test-key", input_usd_per_1m=1, output_usd_per_1m=1,
+                accepted_data_classes=("public", "internal"), priority=0, is_primary=True,
+            ),
+            ProviderRoute(
+                route_id="fallback", provider_id="fallback", profile="fast",
+                base_url="https://fallback.example/v1", model="fallback-model",
+                api_key="fallback-test-key", input_usd_per_1m=1, output_usd_per_1m=1,
+                accepted_data_classes=("public", "internal"), priority=10,
+            ),
+        ]
+        calls = []
+        def fake_open(request, timeout=0, **kwargs):
+            calls.append(request.full_url)
+            if len(calls) == 1:
+                raise urllib.error.URLError("simulated connection loss after send")
+            return FakeResponse()
+
+        with (
+            patch.dict("os.environ", {"QUDRON_MONTHLY_MODEL_BUDGET_USD": "1"}, clear=True),
+            patch.object(worker, "load_provider_routes", return_value=routes),
+            patch.object(worker, "eligible_routes", return_value=routes),
+            patch.object(worker, "open_credential_request", side_effect=fake_open),
+        ):
+            answer = worker.call_llm(
+                {"id": "fallback-job", "role": "Research", "task_type": "research",
+                 "title": "Fallback test", "prompt": "Do safe research."},
+                {"id": "research_analyst", "profile": "fast"},
+                "Produce a short result.", "", "",
+            )
+
+        self.assertEqual(answer, "routed response")
+        self.assertEqual(calls, [
+            "https://primary.example/v1/chat/completions",
+            "https://fallback.example/v1/chat/completions",
+        ])
+        usage = worker.model_usage_snapshot()
+        self.assertEqual(usage["attempts_daily"]["attempts"], 2)
+        self.assertEqual(usage["attempts_daily"]["failed"], 1)
+        self.assertEqual(usage["attempts_daily"]["succeeded"], 1)
+        self.assertEqual(usage["attempts_daily"]["uncertain_billing"], 1)
+        self.assertGreater(usage["uncertain_cost_exposure_daily_usd"], 0)
+        states = {row["provider_id"]: (row["status"], row["billing_state"])
+                  for row in usage["recent_attempts"]}
+        self.assertEqual(states["primary"], ("failed", "unknown"))
+        self.assertEqual(states["fallback"], ("succeeded", "estimated"))
+
+    def test_uncertain_attempt_exposure_is_reserved_against_monthly_budget(self):
+        with patch.dict("os.environ", {
+            "LLM_BALANCED_INPUT_USD_PER_1M": "1",
+            "LLM_BALANCED_OUTPUT_USD_PER_1M": "1",
+            "QUDRON_MONTHLY_MODEL_BUDGET_USD": "0.004",
+        }, clear=True):
+            reservation = worker.reserve_model_budget(
+                "uncertain-job", "writer", "balanced", "model-x", 1000
+            )
+            attempt_id = worker.start_model_call_attempt(
+                "uncertain-job", "writer", "balanced", "provider-x", "model-x", reservation
+            )
+            worker.finish_model_call_attempt(
+                attempt_id, status="failed", billing_state="unknown",
+                error_class="network_unavailable",
+            )
+            worker.release_model_budget_reservation(reservation)
+
+            with self.assertRaisesRegex(RuntimeError, "monthly model budget reached"):
+                worker.reserve_model_budget(
+                    "next-job", "reviewer", "balanced", "model-x", 1000
+                )
+
+        usage = worker.model_usage_snapshot()
+        self.assertEqual(usage["attempts_daily"]["uncertain_billing"], 1)
+        self.assertGreater(usage["uncertain_cost_exposure_monthly_usd"], 0)
 
     def test_cvpen_creation_fails_closed_without_per_order_budget(self):
         with patch.dict("os.environ", {}, clear=True):

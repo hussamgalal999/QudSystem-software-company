@@ -84,16 +84,89 @@ def load_agent_registry(path: str | Path | None = None) -> dict[str, Any]:
             raise ValueError(f"Invalid or empty team: {team}")
     return raw
 
+# Cross-functional reviewers used to complete a ten-role quality panel when a
+# task-specific team is smaller. Domain producer/finalizer roles are preserved.
+CROSS_FUNCTIONAL_REVIEWER_IDS = (
+    "evidence_checker",
+    "privacy_qa",
+    "policy_checker",
+    "fact_checker",
+    "qa_engineer",
+    "reliability_engineer",
+    "data_analyst",
+    "strategy_council",
+    "compliance_reviewer",
+)
+
+
 def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
-                     max_agents: int = 3) -> list[dict[str, Any]]:
-    if max_agents < 1:
+                     max_agents: int | None = None) -> list[dict[str, Any]]:
+    """Plan at least ten distinct roles by default, with bounded review fan-out.
+
+    All domain roles in the selected team are retained unless an explicit
+    task-scoped max_agents cap is supplied. Shorter teams are extended with
+    cross-functional reviewers; role definitions are not claims of live model
+    sessions or separate worker processes.
+    """
+    if max_agents is not None and max_agents < 1:
         raise ValueError("max_agents must be >= 1")
     registry = registry or DEFAULT_AGENT_REGISTRY
     by_id = {agent["id"]: agent for agent in registry["agents"]}
     team = registry["teams"].get(task_type) or registry["teams"].get("research")
     if not team:
         raise ValueError(f"No agents configured for task type: {task_type}")
-    selected = team[:max_agents]
+
+    target_count = max(10, len(team))
+    if max_agents is not None:
+        target_count = min(target_count, max_agents)
+    base = list(team[:target_count])
+    if not base:
+        raise ValueError(f"No agents selected for task type: {task_type}")
+    if target_count == 1:
+        plan = [dict(by_id[base[0]])]
+        plan[0]["execution_stage"] = "produce"
+        plan[0]["assignment_source"] = "task_team"
+        return plan
+
+    producer_id = base[0]
+    if len(base) >= 2:
+        finalizer_id = base[-1]
+        reviewer_ids = list(base[1:-1])
+    else:
+        finalizer_id = None
+        reviewer_ids = []
+
+    if finalizer_id is None:
+        finalizer_id = next(
+            (role_id for role_id in reversed(CROSS_FUNCTIONAL_REVIEWER_IDS)
+             if role_id in by_id and role_id != producer_id),
+            None,
+        )
+    if finalizer_id is None:
+        raise ValueError("Registry has no distinct finalizer role for the selected task")
+
+    required_reviewers = target_count - 2
+    used = {producer_id, finalizer_id, *reviewer_ids}
+    supplemental_ids: set[str] = set()
+    # Prefer the stable cross-functional QA panel, then draw from the
+    # remaining registered specialists if a domain team overlaps that panel.
+    candidate_ids = list(CROSS_FUNCTIONAL_REVIEWER_IDS)
+    candidate_ids.extend(role_id for role_id in by_id if role_id not in candidate_ids)
+    for role_id in candidate_ids:
+        if len(reviewer_ids) >= required_reviewers:
+            break
+        if role_id in by_id and role_id not in used:
+            reviewer_ids.append(role_id)
+            used.add(role_id)
+            if role_id not in base:
+                supplemental_ids.add(role_id)
+
+    if len(reviewer_ids) < required_reviewers:
+        raise ValueError(
+            f"Registry cannot supply {target_count} unique roles for task type: {task_type}"
+        )
+
+    selected = [producer_id, *reviewer_ids, finalizer_id]
     plan = [dict(by_id[agent_id]) for agent_id in selected]
     for index, agent in enumerate(plan):
         if index == 0:
@@ -102,13 +175,17 @@ def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
             agent["execution_stage"] = "finalize"
         else:
             agent["execution_stage"] = "review"
+        agent["assignment_source"] = (
+            "cross_functional_review" if agent["id"] in supplemental_ids
+            else "task_team"
+        )
     return plan
 
 def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], str, str], str],
                   registry: dict[str, Any] | None = None, memory_context: str = "",
-                  max_agents: int = 3, max_context_chars: int = 12000,
+                  max_agents: int | None = None, max_context_chars: int = 12000,
                   max_parallel_reviews: int = 8) -> str:
-    """Run a producer, bounded independent review swarm in parallel, then a finalizer."""
+    """Run the complete configured team with resource-bounded parallel reviews."""
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
     producer = next((agent for agent in plan if agent["execution_stage"] == "produce"), None)
     reviewers = [agent for agent in plan if agent["execution_stage"] == "review"]
@@ -203,6 +280,13 @@ def redact_sensitive_text(value: str) -> str:
     text = str(value)
     text = re.sub(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]", text)
     text = re.sub(r"(?<!\d)(?:\+?20|0)?1[0125]\d{8}(?!\d)", "[REDACTED_PHONE]", text)
+    # Also redact common internationally formatted numbers, e.g. +1 555 123 4567.
+    # Requiring separators avoids treating unformatted IDs as phone numbers.
+    text = re.sub(
+        r"(?<!\w)\+?\d{1,3}(?:[\s().-])(?:\d[\s().-]*){6,13}\d(?!\w)",
+        "[REDACTED_PHONE]",
+        text,
+    )
     text = re.sub(r"(?<!\d)\d{14}(?!\d)", "[REDACTED_NATIONAL_ID]", text)
     text = re.sub(r"(?<!\d)\d{13,19}(?!\d)", "[REDACTED_PAYMENT_NUMBER]", text)
     text = re.sub(r"(?i)\b(sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{20,})\b", "[REDACTED_SECRET]", text)

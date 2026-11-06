@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-11-05",
+  "as_of": "2026-11-06",
   "currency": "USD per 1M tokens",
   "policy": "Candidates only; all disabled until owner installs provider keys, sets spend caps, validates data terms and runs probes.",
   "providers": [
@@ -11,7 +11,7 @@
       "models": [
         {
           "id": "deepseek-flash",
-          "display_name": "DeepSeek V4.1 Flash 1017",
+          "display_name": "DeepSeek-V4.1-Flash-1017",
           "context_tokens": 1048576,
           "input_modalities": [
             "text",
@@ -28,7 +28,7 @@
           ],
           "conservative_input_usd_per_1m": 0.3,
           "output_usd_per_1m": 1.2,
-          "price_note": "Peak input/output rates used for conservative budget estimation; off-peak rates are half, cache-hit rates are lower.",
+          "price_note": "Peak cache-miss input $0.30 / 1M tokens and output $1.20 / 1M tokens; off-peak and cache-hit rates are lower. Revalidate before enabling.",
           "enabled": false,
           "source": "https://api-docs.deepseek.com/quick_start/pricing/"
         },
@@ -54,7 +54,14 @@
           "enabled": false,
           "source": "https://api-docs.deepseek.com/quick_start/pricing/"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "DEEPSEEK_API_KEY_FILE"
     },
     {
       "provider": "Xiaomi MiMo",
@@ -99,7 +106,14 @@
           "enabled": false,
           "source": "https://mimo.mi.com/docs/en-US/pricing"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "api-key",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "MIMO_API_KEY_FILE"
     },
     {
       "provider": "OpenRouter / Meta",
@@ -146,7 +160,14 @@
           "enabled": false,
           "source": "https://openrouter.ai/meta/muse-spark-open/"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "OPENROUTER_API_KEY_FILE"
     },
     {
       "provider": "Anthropic",
@@ -213,7 +234,15 @@
           "enabled": false,
           "source": "https://platform.claude.com/docs/en/models/overview"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "x-api-key",
+        "probe_api_version": "2023-06-01",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "ANTHROPIC_API_KEY_FILE"
     },
     {
       "provider": "OpenAI",
@@ -312,7 +341,14 @@
           "enabled": false,
           "source": "https://developers.openai.com/api/docs/models"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "bearer",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "OPENAI_API_KEY_FILE"
     },
     {
       "provider": "Google Gemini",
@@ -383,7 +419,14 @@
           "enabled": false,
           "source": "https://ai.google.dev/gemini-api/docs/models"
         }
-      ]
+      ],
+      "discovery": {
+        "enabled": true,
+        "probe_path": "/models",
+        "probe_auth_header": "x-goog-api-key",
+        "description": "Read-only model catalogue probe; does not perform inference or activate any model."
+      },
+      "auth_file_env": "GEMINI_API_KEY_FILE"
     }
   ]
 }

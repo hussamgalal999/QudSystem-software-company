@@ -16,6 +16,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from urllib.parse import urlsplit
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 
 TELEGRAM_API = "https://api.telegram.org"
 DEFAULT_QUDRON_URL = "http://qudron:8765"
@@ -70,19 +72,54 @@ class TelegramGateway:
         self.owner_ids = parse_owner_ids(os.getenv("TELEGRAM_OWNER_CHAT_IDS", ""))
         self.api_token = os.getenv("QUDRON_API_TOKEN", "").strip()
         self.qudron_url = os.getenv("QUDRON_INTERNAL_URL", DEFAULT_QUDRON_URL).rstrip("/")
+        if not self._is_allowed_qudron_base(self.qudron_url):
+            raise ValueError("QUDRON_INTERNAL_URL must be HTTPS, loopback, or the exact qudron:8765 Compose service")
         self.timeout = max(5, min(30, int(os.getenv("TELEGRAM_HTTP_TIMEOUT", "15"))))
         self.offset = 0
         self.notification_db_path = Path(os.getenv('QUDRON_TELEGRAM_STATE_DB', '/app/data/telegram_gateway.sqlite3'))
         self.last_completion_poll = 0.0
 
+    @staticmethod
+    def _is_allowed_qudron_base(url: str) -> bool:
+        if is_allowed_credential_endpoint(url):
+            return True
+        try:
+            parsed = urlsplit(url)
+            return (
+                parsed.scheme == "http" and parsed.hostname == "qudron"
+                and parsed.port == 8765 and parsed.username is None
+                and parsed.password is None and not parsed.query and not parsed.fragment
+            )
+        except ValueError:
+            return False
+
+    def _is_approved_request_url(self, url: str) -> bool:
+        try:
+            parsed = urlsplit(url)
+            if parsed.username is not None or parsed.password is not None or parsed.fragment:
+                return False
+            api = urlsplit(TELEGRAM_API)
+            if parsed.scheme == "https" and parsed.hostname == api.hostname and parsed.port in (None, 443):
+                return True
+            internal = urlsplit(self.qudron_url)
+            return (
+                parsed.scheme == internal.scheme and parsed.netloc == internal.netloc
+                and parsed.path.startswith(internal.path or "/")
+                and not parsed.fragment
+            )
+        except ValueError:
+            return False
+
     def _request(self, url: str, payload: dict[str, Any] | None = None,
                  headers: dict[str, str] | None = None, timeout: int | None = None) -> Any:
+        if not self._is_approved_request_url(url):
+            raise ValueError("Telegram gateway request URL is not an approved service")
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             url, data=data, headers={"Content-Type": "application/json", **(headers or {})},
             method="GET" if data is None else "POST",
         )
-        with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
+        with open_credential_request(request, timeout=timeout or self.timeout, endpoint_validated=True) as response:
             result = json.loads(response.read().decode("utf-8"))
         if isinstance(result, dict) and result.get("ok") is False:
             raise RuntimeError("remote_api_rejected_request")
@@ -144,7 +181,7 @@ class TelegramGateway:
             f"{self.qudron_url}/jobs/{urllib.parse.quote(job_id, safe='')}/result",
             headers={"Authorization": f"Bearer {self.api_token}"},
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+        with open_credential_request(request, timeout=self.timeout, endpoint_validated=True) as response:
             return response.read().decode("utf-8", errors="replace")
 
     def poll_completion_notifications(self) -> int:

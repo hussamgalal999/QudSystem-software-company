@@ -1,9 +1,12 @@
 """Metered read-only live web search and fetch through DeepSeek's official API."""
 from __future__ import annotations
-import ipaddress,json,os,sqlite3,urllib.error,urllib.parse,urllib.request
+import ipaddress,json,os,sqlite3,urllib.error,urllib.parse
 from pathlib import Path
 from urllib.parse import urlsplit
+from urllib.request import Request
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 BASE="https://api.deepseek.com/v1/tools"
+if not is_allowed_credential_endpoint(BASE):raise RuntimeError("DeepSeek API endpoint is not allowed")
 COST_PER_SUCCESS_USD=0.00075
 class WebResearchError(RuntimeError):pass
 
@@ -27,9 +30,9 @@ def _request(path,payload):
  key=os.getenv("DEEPSEEK_API_KEY","").strip()
  if not key:raise WebResearchError("DEEPSEEK_API_KEY is not configured in the host secret manager")
  reservation=_reserve_call(path.rsplit("/",1)[-1])
- req=urllib.request.Request(BASE+path,data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
+ req=Request(BASE+path,data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
  try:
-  with urllib.request.urlopen(req,timeout=60) as response:data=json.loads(response.read().decode())
+  with open_credential_request(req,timeout=60,endpoint_validated=True) as response:data=json.loads(response.read().decode())
  except urllib.error.HTTPError as exc:
   raise WebResearchError(f"DeepSeek web API returned HTTP {exc.code}") from None
  except (urllib.error.URLError,TimeoutError):

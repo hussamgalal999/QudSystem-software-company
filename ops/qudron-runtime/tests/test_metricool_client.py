@@ -14,7 +14,7 @@ class MetricoolTests(unittest.TestCase):
  def client(self):return mc.MetricoolClient("secret","123","456")
  def test_scheduled_posts_use_official_range_params(self):
   captured={}
-  def fake(req,timeout):
+  def fake(req,timeout=0,**kwargs):
    captured["url"]=req.full_url;captured["auth"]=req.get_header("X-mc-auth");return FakeResponse()
   with patch("metricool_client.open_credential_request",side_effect=fake):
    result=self.client().list_scheduled_posts("2026-11-01T00:00:00","2026-11-30T23:59:59")

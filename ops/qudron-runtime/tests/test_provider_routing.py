@@ -224,7 +224,8 @@ class ProviderRoutingTests(unittest.TestCase):
         )
         self.assertNotIn("jane@example.com", note)
         self.assertNotIn("+1 555 123 4567", note)
-        self.assertIn("[REDACTED]", note)
+        self.assertIn("[REDACTED_EMAIL]", note)
+        self.assertIn("[REDACTED_PHONE]", note)
 
     def test_public_task_type_becomes_internal_with_prior_context_or_sensitive_prompt(self):
         public_job = self.job()

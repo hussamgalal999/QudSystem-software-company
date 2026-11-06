@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 from a2a_adapter import A2AHttpAdapter, _RejectRedirectHandler
 from mcp_agent_adapter import MCPToolAgentAdapter
-from mcp_agent_adapter import MCPToolAgentAdapter
 from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, DataClass, ExecutionMode, TaskEnvelope, TaskStatus,
 )
@@ -175,6 +174,30 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             [("initialize", False), ("notifications/initialized", True), ("tools/call", False)],
         )
         self.assertEqual(handle.remote_task_id, "remote-1")
+
+    def test_mcp_session_id_is_reused_after_initialize(self):
+        adapter = MCPToolAgentAdapter()
+        descriptor = AgentDescriptor(
+            agent_id="mcp-session", display_name="MCP Session",
+            provider_id="mcp-provider", adapter="mcp",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="mcp_authorized",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="https://mcp.example.com/tenant/agent",
+        )
+        requests = []
+        def fake_urlopen(request, timeout=0):
+            requests.append(request)
+            payload = json.loads(request.data)
+            result = {"protocolVersion": adapter.protocol_version} if payload["method"] == "initialize" else {}
+            headers = {"Mcp-Session-Id": "session-123"} if payload["method"] == "initialize" else {}
+            return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result}, headers)
+        with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
+            adapter._request_sync(descriptor, "initialize", {"protocolVersion": adapter.protocol_version})
+            adapter._request_sync(descriptor, "notifications/initialized", {}, notification=True)
+            adapter._request_sync(descriptor, "tools/list", {})
+        self.assertEqual(requests[2].get_header("Mcp-session-id"), "session-123")
+        self.assertNotIn("id", json.loads(requests[1].data))
 
     def test_a2a_refuses_plain_remote_http(self):
         agent = AgentDescriptor(

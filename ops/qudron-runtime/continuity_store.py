@@ -191,8 +191,43 @@ class ContinuityStore:
         self, db: sqlite3.Connection, *, project: str, agent_id: str,
         status: str, task_id: str | None, next_action: str, now: str,
     ) -> None:
-        # D1 uses one stable key per project/role pair so parallel project
-        # instances do not overwrite each other's checkpoint summaries.
+        # Cloud memory has one summary row per project/role. Aggregate all
+        # task-scoped instances before publishing that summary so completing
+        # one job cannot mark a role idle while another job is still active.
+        instances = db.execute(
+            "SELECT job_id,status,stage FROM agent_instances WHERE project=? AND role_id=?",
+            (project, agent_id),
+        ).fetchall()
+        active_states = {"queued", "assigned", "running", "paused"}
+        active = [row for row in instances if str(row["status"]) in active_states]
+        failed = [row for row in instances if str(row["status"]) == "failed"]
+        if active:
+            states = {str(row["status"]) for row in active}
+            if states.intersection({"running", "assigned"}):
+                status = "running"
+            elif "paused" in states:
+                status = "blocked"
+            else:
+                status = "queued"
+            task_ids = sorted({str(row["job_id"]) for row in active})
+            task_id = task_ids[0] if len(task_ids) == 1 else None
+            active_stages = sorted({str(row["stage"]) for row in active})
+            next_action = (
+                f"{len(active)} active task-scoped instance(s) across {len(task_ids)} job(s); "
+                f"stages: {', '.join(active_stages[:8])}. Latest event: {next_action[:240]}"
+            )
+        elif failed:
+            status = "blocked"
+            task_id = None
+            next_action = (
+                f"{len(failed)} failed task-scoped instance(s); inspect task-level events. "
+                f"Latest event: {next_action[:240]}"
+            )
+        elif instances:
+            status = "idle"
+            task_id = None
+            next_action = "No active task-scoped instances; await next assignment."
+        # If no instance row exists yet, preserve the explicit lifecycle status.
         scoped_id = f"{project}/{agent_id}"
         self._queue_cloud(
             db, uuid.uuid4().hex, "/v1/agents",
@@ -263,7 +298,10 @@ class ContinuityStore:
             "running": {"succeeded", "failed", "paused", "cancelled", "replaced"},
             "paused": {"queued", "assigned", "running", "cancelled", "retired"},
             "failed": {"queued", "running", "succeeded", "replaced", "retired"},
-            "succeeded": {"retired"},
+            # A sensitive stage may finish without a persisted output checkpoint.
+            # If that task is retried, begin_stage grants a new fenced claim and the
+            # same task-scoped instance must be allowed to re-enter running.
+            "succeeded": {"running", "retired"},
             "cancelled": {"retired"},
             "replaced": {"retired"},
             "retired": set(),

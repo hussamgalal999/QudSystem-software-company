@@ -577,8 +577,10 @@ class ComputeFabric:
                 # exposing it to callers or releasing the reservation.
                 if lease.provider_id != provider.provider_id:
                     raise ComputeFabricError("Adapter returned a mismatched provider identity")
-                if lease.expires_at <= time.time():
-                    raise ComputeFabricError("Adapter returned an already-expired compute lease")
+                if lease.expires_at - time.time() < request.min_runtime_seconds:
+                    raise ComputeFabricError(
+                        "Adapter returned a compute lease shorter than the requested minimum runtime"
+                    )
                 if lease.lease_id in self._leases:
                     raise ComputeFabricError("Duplicate active compute lease ID")
                 if self.lease_store:

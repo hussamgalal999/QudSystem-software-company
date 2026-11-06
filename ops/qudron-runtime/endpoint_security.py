@@ -35,7 +35,9 @@ def is_allowed_credential_endpoint(url: str) -> bool:
     if hostname == "localhost":
         return True
     try:
-        address = ipaddress.ip_address(hostname.split("%", 1)[0])
+        if "%" in hostname:
+        return False
+    address = ipaddress.ip_address(hostname)
     except ValueError:
         return False
     # Any IP address classified by the standard library as loopback is
@@ -44,7 +46,7 @@ def is_allowed_credential_endpoint(url: str) -> bool:
 
 
 
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 class RejectCredentialRedirectHandler(HTTPRedirectHandler):
@@ -68,5 +70,8 @@ def open_credential_request(
         raise TypeError("request must be urllib.request.Request")
     if not endpoint_validated and not is_allowed_credential_endpoint(request.full_url):
         raise ValueError("Credential request endpoint is not allowed")
-    opener = build_opener(RejectCredentialRedirectHandler())
+    if urlsplit(request.full_url).scheme.lower() == "http":
+        opener = build_opener(ProxyHandler({}), RejectCredentialRedirectHandler())
+    else:
+        opener = build_opener(RejectCredentialRedirectHandler())
     return opener.open(request, timeout=max(1, min(300, float(timeout))))

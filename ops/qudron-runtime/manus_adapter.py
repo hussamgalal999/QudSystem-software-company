@@ -152,6 +152,21 @@ class ManusAdapter:
             )
         return normalized
 
+    @staticmethod
+    def _safe_event_checkpoint(event: dict[str, Any]) -> dict[str, Any]:
+        """Persist only event identity/status metadata, never message bodies or attachments."""
+        safe: dict[str, Any] = {}
+        for key in ("id", "type", "timestamp"):
+            value = event.get(key)
+            if isinstance(value, (str, int, float)) and str(value).strip():
+                safe[key] = value
+        status_update = event.get("status_update")
+        if isinstance(status_update, dict):
+            agent_status = status_update.get("agent_status")
+            if agent_status in {"running", "stopped", "waiting", "error"}:
+                safe["agent_status"] = agent_status
+        return safe
+
     def list_messages(
         self, task_id: str, *, order: str = "desc", limit: int = 20,
         verbose: bool = False, start_event_id: str | None = None,
@@ -197,9 +212,20 @@ class ManusAdapter:
             "has_more": bool(result.get("has_more", False)),
         }
         if self.store:
+            persisted_checkpoint = {
+                "task_id": task_id,
+                "status": status,
+                "last_event_id": last_event_id,
+                "next_cursor": result.get("next_cursor"),
+                "has_more": bool(result.get("has_more", False)),
+                "events": [
+                    self._safe_event_checkpoint(item)
+                    for item in messages if isinstance(item, dict)
+                ],
+            }
             self.store.update_external_task(
                 provider="manus", external_task_id=task_id, status=status,
-                last_event_id=last_event_id, result=normalized,
+                last_event_id=last_event_id, result=persisted_checkpoint,
             )
         return normalized
 

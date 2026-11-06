@@ -248,7 +248,8 @@ class ProviderResilienceTests(unittest.TestCase):
         }
         seen = []
         def fake_open(request, timeout=0):
-            seen.append((request.full_url, request.get_header("X-goog-api-key"), request.get_method()))
+            headers = {name.lower(): value for name, value in request.header_items()}
+            seen.append((request.full_url, headers.get("x-goog-api-key"), request.get_method()))
             return FakeResponse({
                 "models": [{"name": "models/gemini-3.8-flash", "displayName": "Gemini 3.8 Flash"}]
             })

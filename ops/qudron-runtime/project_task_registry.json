@@ -430,8 +430,8 @@
       "status": "implemented_unverified",
       "priority": "P0",
       "evidence": "ops/qudron-runtime/qudron_worker.py; model_provider_catalog.json",
-      "current_state": "Generic endpoint profiles and FreeLLM gateway exist; no full multi-provider policy-aware quality router is live.",
-      "acceptance_criteria": "Eligibility tests prevent paid/weak/incompatible providers from receiving tasks and all fallbacks are auditable.",
+      "current_state": "Generic endpoint profiles and FreeLLM gateway exist; no full multi-provider policy-aware quality router is live. The current worker fails closed with a provider-configuration error when no qualified provider exists; durable NEEDS_PROVIDER queue state is not implemented.",
+      "acceptance_criteria": "Eligibility tests prevent paid/weak/incompatible providers from receiving tasks; all fallbacks are auditable; provider absence preserves a task in a durable NEEDS_PROVIDER state rather than generic retry/failure churn.",
       "verification_profile": [
         "official_model_identity",
         "authorized_access_and_terms",
@@ -1229,12 +1229,28 @@
         "failure_and_recovery_under_load",
         "scale_report_reproducibility"
       ]
+    },
+    {
+      "id": "quality-contract-validator",
+      "area": "Governance",
+      "title": "Machine-validate task-specific critical gates, gate weights and required maturity",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "docs/QUALITY_VERIFICATION_FRAMEWORK.md",
+      "current_state": "The acceptance specification now defines mandatory_gates, critical_gates, gate_weights and required_maturity, but the project registry does not yet enforce these fields or reject incomplete task contracts.",
+      "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. A validator rejects unknown gate IDs and missing fields; unit tests cover invalid IDs, missing weights, invalid maturity and score reproducibility.",
+      "verification_profile": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ]
     }
   ],
   "computed_status_counts": {
     "implemented_pending_ci": 9,
     "ci_verified": 1,
-    "planned": 11,
+    "planned": 12,
     "blocked_owner": 10,
     "target_unmeasured": 2,
     "not_started": 15,
@@ -1244,6 +1260,6 @@
     "needs_owner_review": 1,
     "pending_ci": 1
   },
-  "total_tasks": 63,
+  "total_tasks": 64,
   "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria."
 }

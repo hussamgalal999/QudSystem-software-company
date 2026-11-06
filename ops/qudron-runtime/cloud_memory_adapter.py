@@ -10,10 +10,10 @@ import json
 import os
 from typing import Any
 
-from endpoint_security import is_allowed_credential_endpoint
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from continuity_store import ContinuityStore
 
@@ -70,7 +70,7 @@ class CloudMemoryClient:
             self.base_url + endpoint, data=data, headers=headers, method=method
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
+            with open_credential_request(request, timeout=self.timeout_seconds) as response:
                 raw = response.read(1_000_001)
                 if len(raw) > 1_000_000:
                     raise CloudMemoryError("Cloud-memory response exceeded 1 MB")
@@ -116,7 +116,7 @@ class CloudMemoryClient:
             method="GET",
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
+            with open_credential_request(request, timeout=self.timeout_seconds) as response:
                 raw = response.read(1_000_001)
                 if len(raw) > 1_000_000:
                     raise CloudMemoryError("Cloud-memory context exceeded 1 MB")

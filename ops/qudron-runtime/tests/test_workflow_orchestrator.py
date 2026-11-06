@@ -31,6 +31,17 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+
+    def test_consensus_quorum_must_be_within_dependency_count(self):
+        for invalid in (-1, 0, 3, True, 1.5):
+            with self.subTest(quorum=invalid):
+                with self.assertRaisesRegex(ValueError, "quorum_required"):
+                    WorkflowNode(
+                        "reduce", "Reducer", "Reduce votes",
+                        dependencies=("a", "b"),
+                        metadata={"reducer": True, "quorum_required": invalid},
+                    )
+
     async def test_consensus_reducer_runs_after_quorum_despite_failed_vote(self):
         nodes = expand_execution_mode(
             ExecutionMode.CONSENSUS,

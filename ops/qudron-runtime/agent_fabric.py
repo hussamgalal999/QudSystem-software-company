@@ -126,6 +126,9 @@ class AgentFabric:
         self._in_flight: dict[str, int] = {}
         self._active_task_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
         self._unknown_submission_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
+        # Covers the admission wait and the provider submit await, before a remote
+        # task lease can be recorded. Descriptor identity must remain stable here.
+        self._pending_submissions: set[str] = set()
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: AgentAdapter) -> None:
@@ -153,7 +156,8 @@ class AgentFabric:
             raise ValueError(f"Adapter is not registered: {descriptor.adapter}")
         current = self._agents[descriptor.agent_id]
         has_active_remote_work = (
-            any(key[0] == descriptor.agent_id for key in self._active_task_leases)
+            descriptor.agent_id in self._pending_submissions
+            or any(key[0] == descriptor.agent_id for key in self._active_task_leases)
             or any(key[0] == descriptor.agent_id for key in self._unknown_submission_leases)
         )
         if has_active_remote_work and (
@@ -274,6 +278,7 @@ class AgentFabric:
                 provider_slot.release()
                 raise
             acquired = True
+            self._pending_submissions.add(agent.agent_id)
             try:
                 async with self._lock:
                     self._in_flight[agent.provider_id] = self._in_flight.get(agent.provider_id, 0) + 1
@@ -285,6 +290,7 @@ class AgentFabric:
                 finally:
                     async with self._lock:
                         self._in_flight[agent.provider_id] -= 1
+                    self._pending_submissions.discard(agent.agent_id)
                 if handle.provider_id != agent.provider_id:
                     raise AgentFabricError("Adapter returned a mismatched provider identity")
 
@@ -308,6 +314,7 @@ class AgentFabric:
                     route_reason="; ".join(failures) if failures else "highest eligible capability score",
                 )
             except asyncio.TimeoutError as exc:
+                self._pending_submissions.discard(agent.agent_id)
                 # A timed-out submit may still be executing in a worker thread
                 # or may already exist remotely. Keep the admission slot until
                 # an explicit reconciliation identifies the remote outcome.
@@ -321,6 +328,7 @@ class AgentFabric:
                     "reconcile the remote task before retrying or failing over"
                 ) from exc
             except asyncio.CancelledError:
+                self._pending_submissions.discard(agent.agent_id)
                 if acquired:
                     async with self._lock:
                         self._unknown_submission_leases[(agent.agent_id, task.task_id)] = (
@@ -329,6 +337,7 @@ class AgentFabric:
                     acquired = False
                 raise
             except (ProviderUnavailable, ConnectionError) as exc:
+                self._pending_submissions.discard(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()
@@ -336,6 +345,7 @@ class AgentFabric:
                 failures.append(f"{agent.agent_id}:{type(exc).__name__}")
                 continue
             except Exception:
+                self._pending_submissions.discard(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()

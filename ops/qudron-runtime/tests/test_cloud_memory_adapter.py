@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cloud_memory_adapter import (
-    CloudMemoryClient, CloudMemoryError, flush_from_environment, flush_outbox,
+    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment, flush_outbox,
 )
 from continuity_store import ContinuityStore
 

@@ -40,7 +40,8 @@ from cloud_memory_adapter import (
     CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
 )
 from provider_resilience import (
-    ProviderHealthStore, eligible_routes, load_provider_routes,
+    ProviderCatalogueStore, ProviderHealthStore, catalogue_discovery_snapshot,
+    eligible_routes, load_provider_routes, probe_due_catalogue_providers,
     probe_due_routes, route_health_snapshot,
 )
 
@@ -490,10 +491,15 @@ def mcp_get_models() -> dict[str, Any]:
         if not isinstance(provider, dict):
             continue
         auth_env = str(provider.get("auth_env", ""))
+        auth_file_env = str(provider.get("auth_file_env", ""))
+        auth_value = os.getenv(auth_env, "").strip() if auth_env else ""
+        if not auth_value and auth_file_env:
+            auth_path = os.getenv(auth_file_env, "").strip()
+            auth_value = _read_secret_file(auth_path) if auth_path else ""
         models = provider.get("models", [])
         providers.append({
             "provider": provider.get("provider"),
-            "auth_configured": bool(auth_env and os.getenv(auth_env, "").strip()),
+            "auth_configured": bool(auth_value),
             "candidate_models": [
                 {
                     "id": model.get("id"),
@@ -552,6 +558,14 @@ def mcp_get_models() -> dict[str, Any]:
             # to guess credentials or try an undocumented provider route.
             continue
     route_by_id = {item["route_id"]: item for item in route_health_snapshot(DB_PATH)}
+    catalogue_by_provider = {
+        item["provider_id"]: item for item in catalogue_discovery_snapshot(DB_PATH)
+    }
+    for provider in providers:
+        provider["live_catalogue_discovery"] = catalogue_by_provider.get(
+            str(provider.get("provider", "")),
+            {"status": "not_probed", "models": []},
+        )
     route_status = []
     seen_routes = set()
     for route in configured_routes:
@@ -574,7 +588,8 @@ def mcp_get_models() -> dict[str, Any]:
         "providers": providers,
         "configured_execution_routes": route_status,
         "provider_health": route_health_snapshot(DB_PATH),
-        "note": "A provider key, configured route or model catalogue entry is not proof of live inference. Health probes are read-only model-list requests; no paid inference request is made by this inspection tool.",
+        "catalogue_discovery": catalogue_discovery_snapshot(DB_PATH),
+        "note": "A configured key or discovered model is not proof of paid quota or successful inference. Discovery uses only read-only official model-list endpoints; it never activates models or makes paid inference calls.",
     }
 
 
@@ -1987,6 +2002,20 @@ def provider_health_loop() -> None:
                     "Provider route probe: provider=%s profile=%s model=%s status=%s latency_ms=%s",
                     report["provider_id"], report["profile"], report["model"],
                     report["status"], report["latency_ms"],
+                )
+            catalogue_interval = max(
+                900, min(86_400, int(os.getenv("QUDRON_PROVIDER_DISCOVERY_INTERVAL_SECONDS", "21600")))
+            )
+            catalogue_reports = probe_due_catalogue_providers(
+                APP_DIR / "model_provider_catalog.json",
+                ProviderCatalogueStore(DB_PATH),
+                environ=os.environ, secret_reader=_read_secret_file,
+                interval_seconds=catalogue_interval, timeout_seconds=timeout,
+            )
+            for report in catalogue_reports:
+                logging.info(
+                    "Provider catalogue discovery: provider=%s status=%s models=%s",
+                    report["provider_id"], report["status"], report["model_count"],
                 )
         except Exception as exc:
             # Probe logs must never include authorization headers, URLs with secrets,

@@ -142,6 +142,7 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS jobs (
           id TEXT PRIMARY KEY, job_key TEXT UNIQUE, title TEXT NOT NULL,
           role TEXT NOT NULL, task_type TEXT NOT NULL, prompt TEXT NOT NULL,
+          data_class TEXT NOT NULL DEFAULT 'internal',
           status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
           run_after TEXT NOT NULL, locked_by TEXT, lock_until TEXT,
           result_path TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -716,6 +717,9 @@ def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     prompt = str(payload.get("prompt", "")).strip()
     role = str(payload.get("role", "Qudron Task Agent")).strip()
     key = str(payload.get("idempotency_key", "")).strip()
+    data_class = str(payload.get("data_class", "internal")).strip().lower()
+    if data_class not in {"public", "internal", "confidential", "restricted"}:
+        raise ValueError("data_class must be public, internal, confidential, or restricted")
     if not title or len(title) > 160:
         raise ValueError("title is required and must be <= 160 characters")
     if not prompt or len(prompt) > 8000:
@@ -725,7 +729,7 @@ def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,120}", key):
         raise ValueError("idempotency_key must be 8-120 safe ASCII characters")
     return {"task_type": task_type, "title": title, "prompt": prompt,
-            "role": role, "idempotency_key": key}
+            "role": role, "idempotency_key": key, "data_class": data_class}
 
 
 def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -749,10 +753,10 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
             raise ValueError("queue_capacity_reached: Qudron's pending-job limit has been reached")
         db.execute(
             """INSERT INTO jobs
-            (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+            (id,job_key,title,role,task_type,prompt,data_class,status,attempts,run_after,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,'pending',0,?,?,?)""",
             (job_id, job_key, item["title"], item["role"], item["task_type"],
-             item["prompt"], now, now, now),
+             item["prompt"], item["data_class"], now, now, now),
         )
         db.commit()
     return {"id": job_id, "status": "pending", "title": item["title"]}, True
@@ -801,10 +805,10 @@ def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
             job_id = uuid.uuid4().hex
             db.execute(
                 """INSERT INTO jobs
-                (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+                (id,job_key,title,role,task_type,prompt,data_class,status,attempts,run_after,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,'pending',0,?,?,?)""",
                 (job_id, job_key, item["title"], item["role"], item["task_type"],
-                 item["prompt"], now, now, now),
+                 item["prompt"], item["data_class"], now, now, now),
             )
             result_by_key[item["idempotency_key"]] = {
                 "created": True,
@@ -1319,8 +1323,17 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
         )
 
 
-def classify_job_data(job: sqlite3.Row, prior_context: str = "") -> str:
-    """Conservative classification before any provider route is selected."""
+def classify_job_data(
+    job: sqlite3.Row | Mapping[str, Any],
+    prior_context: str = "",
+    memory_context: str = "",
+) -> str:
+    """Use the owner-declared task class, with conservative context escalation.
+
+    Unknown/legacy jobs are internal. Public is an explicit owner declaration,
+    never inferred from a task type or a phrase in its prompt. Private prior
+    context or memory always escalates public content to internal.
+    """
     task_type = str(job["task_type"])
     if task_type in {
         "cvpen_cv_creation", "cvpen_ats_audit",
@@ -1328,8 +1341,19 @@ def classify_job_data(job: sqlite3.Row, prior_context: str = "") -> str:
     }:
         return "confidential"
 
+    try:
+        declared = str(job["data_class"]).strip().lower()
+    except (KeyError, IndexError):
+        declared = "internal"
+    if declared not in {"public", "internal", "confidential", "restricted"}:
+        declared = "internal"
+    if declared in {"confidential", "restricted"}:
+        return declared
+
     prompt = str(job["prompt"] or "")
-    combined = prompt + "\n" + str(prior_context or "")
+    prior = str(prior_context or "")
+    memory = str(memory_context or "")
+    combined = prompt + "\n" + prior + "\n" + memory
     lowered = combined.lower()
     restricted_markers = (
         "confidential", "internal-only", "internal only", "non-public",
@@ -1338,14 +1362,12 @@ def classify_job_data(job: sqlite3.Row, prior_context: str = "") -> str:
         "access token", "api key", "secret key",
     )
     if (
-        str(prior_context or "").strip()
+        (declared == "public" and (prior.strip() or memory.strip()))
         or any(marker in lowered for marker in restricted_markers)
         or redact_sensitive_text(combined) != combined
     ):
         return "internal"
-    if task_type in PUBLIC_KEYLESS_TASK_TYPES:
-        return "public"
-    return "internal"
+    return declared
 
 
 def call_llm(
@@ -1366,7 +1388,7 @@ def call_llm(
             "Configure an owner-approved route; do not use browser cookies or undocumented sessions."
         )
 
-    data_class = classify_job_data(job, prior_context)
+    data_class = classify_job_data(job, prior_context, memory_context)
     health_store = ProviderHealthStore(DB_PATH)
     candidates = eligible_routes(routes, health_store, data_class=data_class)
     if not candidates:

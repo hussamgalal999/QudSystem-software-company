@@ -149,6 +149,54 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         await self.fabric.release(lease)
 
 
+    async def test_quota_reservations_are_atomic_across_fabric_instances(self):
+        class BlockingAdapter(FakeComputeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.started = asyncio.Event()
+                self.release_allocation = asyncio.Event()
+            async def acquire(self, provider_descriptor, request_descriptor):
+                self.acquired.append((provider_descriptor.provider_id, request_descriptor.request_id))
+                self.started.set()
+                await self.release_allocation.wait()
+                return ComputeLease(
+                    provider_id=provider_descriptor.provider_id,
+                    lease_id="quota-lease-" + request_descriptor.request_id,
+                    resource_id="gpu-quota",
+                    expires_at=time.time() + request_descriptor.min_runtime_seconds + 60,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "quota-leases.sqlite3"
+            first = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            blocking = BlockingAdapter()
+            first.register_adapter("fake", blocking)
+            first.register_provider(provider(
+                quota_remaining_seconds=600, max_concurrent_leases=3,
+            ))
+
+            second = ComputeFabric(lease_store=SQLiteComputeLeaseStore(database))
+            second_adapter = FakeComputeAdapter()
+            second.register_adapter("fake", second_adapter)
+            second.register_provider(provider(
+                quota_remaining_seconds=600, max_concurrent_leases=3,
+            ))
+
+            first_task = asyncio.create_task(first.acquire(request(
+                request_id="quota-first", min_runtime_seconds=400,
+            )))
+            await blocking.started.wait()
+            with self.assertRaises(ComputeProviderUnavailable):
+                await second.acquire(request(
+                    request_id="quota-second", min_runtime_seconds=400,
+                ))
+            self.assertEqual(second_adapter.acquired, [])
+
+            blocking.release_allocation.set()
+            lease = await first_task
+            self.assertEqual(lease.metadata["reserved_runtime_seconds"], 400)
+            await first.release(lease)
+
     async def test_sqlite_lease_survives_restart_and_blocks_provider_capacity(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "compute-leases.sqlite3"

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from telegram_gateway import format_status, format_usage, parse_command, parse_owner_ids
 

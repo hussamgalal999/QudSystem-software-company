@@ -1,4 +1,4 @@
-import json, unittest
+import json, os, unittest
 from unittest.mock import patch
 import metricool_client as mc
 
@@ -28,12 +28,12 @@ class MetricoolTests(unittest.TestCase):
   mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
   def fake(req,timeout=0,**kwargs):
    captured["body"]=json.loads(req.data);return FakeResponse()
-  with patch("metricool_client.open_credential_request",side_effect=fake):
-   self.client().create_review_draft(
-    "Draft copy","2026-11-20T10:00:00",
-    content_brand="QudSystem",destination_id="fb-page-1",
-    approved_brand_destinations=mapping,
-   )
+  with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
+   with patch("metricool_client.open_credential_request",side_effect=fake):
+    self.client().create_review_draft(
+     "Draft copy","2026-11-20T10:00:00",
+     content_brand="QudSystem",destination_id="fb-page-1",
+    )
   self.assertTrue(captured["body"]["draft"])
   self.assertFalse(captured["body"]["autoPublish"])
  def test_metricool_draft_fails_closed_without_brand_destination_mapping(self):
@@ -46,22 +46,23 @@ class MetricoolTests(unittest.TestCase):
    mocked.assert_not_called()
  def test_vision_guard_caption_cannot_be_misclassified_to_qudsystem(self):
   mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
-  with patch("metricool_client.open_credential_request") as mocked:
-   with self.assertRaisesRegex(mc.MetricoolError,"Vision Guard"):
-    self.client().create_review_draft(
-     "Vision Guard Systems — Your Security, Our Priority",
-     "2026-11-20T10:00:00",content_brand="QudSystem",
-     destination_id="fb-page-1",approved_brand_destinations=mapping,
-    )
-   mocked.assert_not_called()
+  with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
+   with patch("metricool_client.open_credential_request") as mocked:
+    with self.assertRaisesRegex(mc.MetricoolError,"Vision Guard"):
+     self.client().create_review_draft(
+      "Vision Guard Systems — Your Security, Our Priority",
+      "2026-11-20T10:00:00",content_brand="QudSystem",
+      destination_id="fb-page-1",
+     )
+    mocked.assert_not_called()
  def test_metricool_draft_rejects_wrong_destination_even_for_approved_brand(self):
   mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
-  with self.assertRaisesRegex(mc.MetricoolError,"does not match"):
-   self.client().create_review_draft(
-    "QudSystem product update","2026-11-20T10:00:00",
-    content_brand="QudSystem",destination_id="wrong-page",
-    approved_brand_destinations=mapping,
-   )
+  with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
+   with self.assertRaisesRegex(mc.MetricoolError,"does not match"):
+    self.client().create_review_draft(
+     "QudSystem product update","2026-11-20T10:00:00",
+     content_brand="QudSystem",destination_id="wrong-page",
+    )
  def test_vision_guard_requires_its_own_exact_approved_destination(self):
   mapping={"vision guard systems":{"brand_id":"vg-brand","destination_id":"vg-page"}}
   mc.validate_brand_destination(

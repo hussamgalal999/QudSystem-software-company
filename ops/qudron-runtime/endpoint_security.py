@@ -38,4 +38,6 @@ def is_allowed_credential_endpoint(url: str) -> bool:
         address = ipaddress.ip_address(hostname.split("%", 1)[0])
     except ValueError:
         return False
-    return address.is_loopback
+    # Only the canonical loopback endpoints are trusted for bearer-token
+    # transport; do not broaden this to every address in 127.0.0.0/8.
+    return address in {ipaddress.ip_address("127.0.0.1"), ipaddress.ip_address("::1")}

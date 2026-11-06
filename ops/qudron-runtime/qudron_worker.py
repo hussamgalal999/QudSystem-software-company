@@ -60,9 +60,12 @@ MAX_PENDING_JOBS = max(1000, min(1_000_000, int(os.getenv("QUDRON_MAX_PENDING_JO
 MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS", "1200"))))
 MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
-MAX_CVPEN_AGENTS = max(1, min(10, int(os.getenv("QUDRON_MAX_CVPEN_AGENTS", "10"))))
-MAX_PARALLEL_REVIEWS = max(1, min(8, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "8"))))
+# This is a task admission guard, not a role catalogue or live-model concurrency claim.
+# Multiple tasks may each create their own role-scoped execution records.
+MAX_AGENT_INSTANCES_PER_TASK = max(
+    1, min(10_000, int(os.getenv("QUDRON_MAX_AGENT_INSTANCES_PER_TASK", "10000")))
+)
+MAX_PARALLEL_REVIEWS = max(1, min(32, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "16"))))
 MAX_CONCURRENT_MODEL_CALLS = max(1, min(32, int(os.getenv("QUDRON_MAX_CONCURRENT_MODEL_CALLS", "16"))))
 MODEL_CALL_SLOT_TIMEOUT_SECONDS = max(5, min(900, int(os.getenv("QUDRON_MODEL_CALL_SLOT_TIMEOUT_SECONDS", "120"))))
 AGENT_REGISTRY: dict[str, Any] = {}
@@ -1303,10 +1306,10 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         except WebResearchError:
             memory_context += "\n\nLIVE WEB RESEARCH UNAVAILABLE: no live sources were retrieved. Mark current claims unverified and do not invent citations."
     registry = AGENT_REGISTRY or load_agent_registry(AGENT_REGISTRY_PATH)
-    if SWARM_ENABLED and str(job["task_type"]) == "cvpen_cv_creation":
-        max_agents = MAX_CVPEN_AGENTS
-    else:
-        max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
+    # Do not silently truncate a specialist team to five or ten roles. The plan
+    # uses every configured role; this task-scoped ceiling is a separate safety
+    # control, while provider calls remain bounded by the shared model-call gate.
+    max_agents = MAX_AGENT_INSTANCES_PER_TASK if SWARM_ENABLED else 1
 
     continuity = ContinuityStore(DB_PATH)
     task_type = str(job["task_type"])
@@ -1516,8 +1519,11 @@ def status_snapshot() -> dict[str, Any]:
         "project_task_registry": {"counts_by_status": registry_tasks, "task_count": sum(registry_tasks.values())},
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
-        "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
-        "max_agents_per_cvpen_job": MAX_CVPEN_AGENTS if SWARM_ENABLED else 1,
+        "max_agent_instances_per_task": MAX_AGENT_INSTANCES_PER_TASK if SWARM_ENABLED else 1,
+        # Compatibility aliases for existing status consumers. Both now report
+        # the same generic task admission guard; there is no CVPen-only role cap.
+        "max_agents_per_task": MAX_AGENT_INSTANCES_PER_TASK if SWARM_ENABLED else 1,
+        "max_agents_per_cvpen_job": MAX_AGENT_INSTANCES_PER_TASK if SWARM_ENABLED else 1,
         "max_parallel_reviews": MAX_PARALLEL_REVIEWS if SWARM_ENABLED else 1,
         "max_concurrent_model_calls": MAX_CONCURRENT_MODEL_CALLS,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),

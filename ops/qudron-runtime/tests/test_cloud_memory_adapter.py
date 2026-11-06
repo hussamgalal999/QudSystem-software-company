@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cloud_memory_adapter import (
-    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment, flush_outbox,
+    CloudMemoryClient, CloudMemoryError, UNTRUSTED_MEMORY_HEADER, context_packet_to_text, flush_from_environment, flush_outbox, merge_local_and_cloud_context,
 )
 from continuity_store import ContinuityStore
 
@@ -33,6 +33,15 @@ class CloudMemoryAdapterTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+
+
+    def test_untrusted_memory_warning_survives_combined_context_truncation(self):
+        local = "L" * 700
+        cloud = UNTRUSTED_MEMORY_HEADER + ("C" * 700)
+        merged = merge_local_and_cloud_context(local, cloud, max_chars=500)
+        self.assertLessEqual(len(merged), 500)
+        self.assertIn(UNTRUSTED_MEMORY_HEADER, merged)
+        self.assertTrue(merged.endswith("C" * 100))
 
     def test_json_encoded_memory_blobs_are_omitted_from_prompt(self):
         packet = {

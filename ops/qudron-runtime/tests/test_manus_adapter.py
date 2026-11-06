@@ -64,7 +64,7 @@ class ManusAdapterTests(unittest.TestCase):
             "ok": True,
             "messages": [
                 {
-                    "id": "evt-1", "type": "message", "timestamp": 123,
+                    "id": "evt-1", "type": "status_update", "timestamp": 123,
                     "message": {"content": "Private contact jane@example.com"},
                     "attachments": [{"name": "private-cv.pdf"}],
                     "status_update": {"agent_status": "running"},

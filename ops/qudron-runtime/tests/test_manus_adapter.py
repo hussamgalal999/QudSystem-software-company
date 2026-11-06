@@ -3,6 +3,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from approval_service import ApprovalService
 from urllib.error import HTTPError
 from unittest.mock import patch
 
@@ -66,6 +69,33 @@ class ManusAdapterTests(unittest.TestCase):
         self.assertEqual(result["last_event_id"], "evt-1")
 
 
+
+    def test_send_message_requires_scoped_one_time_owner_approval(self):
+        with self.assertRaisesRegex(ManusAPIError, "Owner approval is required"):
+            self.adapter.send_message("task-1", "Continue the task.")
+        self.assertFalse(self.requests)
+
+        approvals = ApprovalService(
+            "b" * 40, Path(self.temp.name) / "manus-approvals.sqlite3"
+        )
+        adapter = ManusAdapter(
+            "test-token", store=self.store, approval_service=approvals,
+        )
+        token = approvals.issue(
+            action="manus.task.send_message",
+            resource_id="task-1",
+            approved_by="owner",
+        )
+        with patch.object(adapter, "_request", return_value={"ok": True}) as request_call:
+            result = adapter.send_message(
+                "task-1", "Continue the task.", approval_token=token,
+            )
+        self.assertEqual(result, {"ok": True})
+        request_call.assert_called_once()
+        with self.assertRaisesRegex(ManusAPIError, "invalid, expired"):
+            adapter.send_message(
+                "task-1", "Replay must be blocked.", approval_token=token,
+            )
 
     def test_post_is_not_retried_after_ambiguous_server_failure(self):
         adapter = ManusAdapter("test-secret", retries=3)

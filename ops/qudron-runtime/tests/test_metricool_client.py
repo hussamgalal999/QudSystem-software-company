@@ -36,6 +36,10 @@ class MetricoolTests(unittest.TestCase):
     )
   self.assertTrue(captured["body"]["draft"])
   self.assertFalse(captured["body"]["autoPublish"])
+  self.assertEqual(
+   captured["body"]["providers"],
+   [{"network":"facebook","id":"fb-page-1"}],
+  )
  def test_metricool_draft_fails_closed_without_brand_destination_mapping(self):
   with patch("metricool_client.open_credential_request") as mocked:
    with self.assertRaises(mc.MetricoolError):

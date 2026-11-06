@@ -25,7 +25,7 @@ class MetricoolTests(unittest.TestCase):
   with self.assertRaises(ValueError):self.client().list_published_posts("x","a","b")
  def test_create_post_is_draft_and_not_autopublished(self):
   captured={}
-  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
+  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
   def fake(req,timeout=0,**kwargs):
    captured["body"]=json.loads(req.data);return FakeResponse()
   with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
@@ -64,18 +64,28 @@ class MetricoolTests(unittest.TestCase):
      content_brand="QudSystem",destination_id="wrong-page",
     )
  def test_vision_guard_requires_its_own_exact_approved_destination(self):
-  mapping={"vision guard systems":{"brand_id":"vg-brand","destination_id":"vg-page"}}
+  mapping={"vision guard systems":{"brand_id":"vg-brand","destination_id":"vg-page","network":"facebook"}}
   mc.validate_brand_destination(
    text="Your Security, Our Priority — Vision Guard Systems",
    content_brand="Vision Guard Systems",brand_id="vg-brand",
-   destination_id="vg-page",approved_brand_destinations=mapping,
+   destination_id="vg-page",network="facebook",approved_brand_destinations=mapping,
   )
   with self.assertRaises(mc.MetricoolError):
    mc.validate_brand_destination(
     text="أمانك مسؤوليتنا — كاميرات مراقبة",
     content_brand="Vision Guard Systems",brand_id="7777628",
-    destination_id="437731146095517",approved_brand_destinations=mapping,
+    destination_id="437731146095517",network="facebook",approved_brand_destinations=mapping,
    )
+
+ def test_metricool_destination_mapping_cannot_be_reused_for_another_network(self):
+  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
+  with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
+   with self.assertRaisesRegex(mc.MetricoolError,"brand/destination/network"):
+    self.client().create_review_draft(
+     "QudSystem product update","2026-11-20T10:00:00",
+     network="youtube",content_brand="QudSystem",destination_id="fb-page-1",
+    )
+
  def test_analytics_summary_aggregates_metrics(self):
   result=mc.summarize_posts([{"text":"a","metrics":{"reach":20,"likes":2}},{"content":"b","metrics":{"reach":30,"comments":3}}])
   self.assertEqual(result["totals"]["reach"],50)

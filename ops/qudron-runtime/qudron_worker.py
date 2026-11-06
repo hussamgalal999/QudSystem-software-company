@@ -1492,6 +1492,22 @@ def call_llm(
     )
 
 
+def build_agent_memory_note(
+    *, job: Mapping[str, Any], task_type: str, stage: str,
+    output: str, sensitive_task: bool,
+) -> str:
+    safe_title = redact_sensitive_text(str(job.get("title", ""))).strip()[:160]
+    note = (
+        f"Completed {task_type} stage '{stage}' for job {job.get('id', '')} "
+        f"({safe_title})."
+    )
+    if not sensitive_task:
+        safe_excerpt = redact_sensitive_text(output).strip()[:1200]
+        if safe_excerpt:
+            note += "\nRedacted outcome excerpt: " + safe_excerpt
+    return note
+
+
 def execute_job_swarm(job: sqlite3.Row) -> str:
     if str(job["task_type"]) == "capability_mining":
         if not os.getenv("GITHUB_OWNER", "").strip() or not os.getenv("GITHUB_TOKEN", "").strip():
@@ -1599,14 +1615,10 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
             )
             if not isinstance(output, str) or not output.strip():
                 raise RuntimeError(f"Agent returned empty output: {agent_id}")
-            safe_note = (
-                f"Completed {task_type} stage '{stage}' for job {job['id']} "
-                f"({str(job['title'])[:160]})."
+            safe_note = build_agent_memory_note(
+                job=job, task_type=task_type, stage=stage,
+                output=output, sensitive_task=sensitive_task,
             )
-            if not sensitive_task:
-                safe_excerpt = redact_sensitive_text(output).strip()[:1200]
-                if safe_excerpt:
-                    safe_note += "\nRedacted outcome excerpt: " + safe_excerpt
             continuity.complete_stage(
                 job_id=str(job["id"]), project=project, agent_id=agent_id,
                 stage=stage, claim_token=claim_token,

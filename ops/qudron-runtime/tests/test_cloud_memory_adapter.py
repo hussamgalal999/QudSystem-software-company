@@ -64,6 +64,7 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         payload = json.loads(calls[0].data)
         self.assertEqual(payload["event_id"], "event-1")
         self.assertEqual(self.store.cloud_outbox_snapshot()["sent"], 1)
+        self.assertEqual(result["pending"], 0)
 
     def test_failed_cloud_sync_keeps_record_for_retry(self):
         now = "2026-11-05T12:00:00+00:00"
@@ -80,7 +81,45 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         with patch("cloud_memory_adapter.urlopen", side_effect=fail):
             result = flush_outbox(self.store, client)
         self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["pending"], 1)
         self.assertEqual(self.store.cloud_outbox_snapshot()["pending"], 1)
+
+
+    def test_context_packet_to_text_keeps_allowlisted_recovery_fields_only(self):
+        from cloud_memory_adapter import context_packet_to_text
+
+        packet = {
+            "project": {"project_id": "qudron", "name": "Qudron", "api_key": "do-not-copy"},
+            "tasks": [{
+                "task_id": "job-1", "title": "Restore memory", "status": "blocked",
+                "next_action": "Connect local outbox", "prompt": "raw sensitive prompt",
+            }],
+            "recent_events": [{
+                "event_type": "checkpoint_saved", "actor": "qudron-runtime",
+                "summary": "A verified checkpoint was stored.",
+            }],
+            "active_decisions": [{
+                "title": "Keep SQLite authoritative", "decision": "SQLite remains execution source of truth",
+                "rationale": "Cloud sync is optional.",
+            }],
+            "conversation_notes": [{"summary": "Owner approved bounded continuity notes."}],
+        }
+        text = context_packet_to_text(packet)
+        self.assertIn("Qudron", text)
+        self.assertIn("Restore memory", text)
+        self.assertIn("SQLite remains execution source of truth", text)
+        self.assertNotIn("do-not-copy", text)
+        self.assertNotIn("raw sensitive prompt", text)
+        self.assertIn("untrusted", text)
+
+    def test_context_packet_to_text_is_bounded_and_handles_empty_payloads(self):
+        from cloud_memory_adapter import context_packet_to_text
+
+        self.assertEqual(context_packet_to_text({}), "")
+        text = context_packet_to_text({
+            "recent_events": [{"summary": "x" * 5000, "event_type": "test"}],
+        }, max_chars=500)
+        self.assertLessEqual(len(text), 500)
 
     def test_unsupported_outbox_route_is_rejected(self):
         client = CloudMemoryClient("https://memory.example.com", "t" * 40)

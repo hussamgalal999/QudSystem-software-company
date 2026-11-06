@@ -319,7 +319,7 @@ class AgentFabric:
                             raise AgentFabricError("Remote task already owns an admission lease")
                         self._active_task_leases[key] = (provider_slot, agent_slot)
                     acquired = False
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 return DispatchReceipt(
                     agent_id=agent.agent_id,
                     provider_id=agent.provider_id,
@@ -328,7 +328,7 @@ class AgentFabric:
                     route_reason="; ".join(failures) if failures else "highest eligible capability score",
                 )
             except asyncio.TimeoutError as exc:
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 # A timed-out submit may still be executing in a worker thread
                 # or may already exist remotely. Keep the admission slot until
                 # an explicit reconciliation identifies the remote outcome.
@@ -342,7 +342,7 @@ class AgentFabric:
                     "reconcile the remote task before retrying or failing over"
                 ) from exc
             except asyncio.CancelledError:
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 if acquired:
                     async with self._lock:
                         self._unknown_submission_leases[(agent.agent_id, task.task_id)] = (
@@ -351,7 +351,7 @@ class AgentFabric:
                     acquired = False
                 raise
             except (ProviderUnavailable, ConnectionError) as exc:
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()
@@ -359,7 +359,7 @@ class AgentFabric:
                 failures.append(f"{agent.agent_id}:{type(exc).__name__}")
                 continue
             except Exception:
-                self._pending_submissions.discard(agent.agent_id)
+                self._clear_submission_pending(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()

@@ -39,8 +39,9 @@ from continuity_store import ContinuityStore
 from cloud_memory_adapter import (
     CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
 )
+from endpoint_security import open_credential_request
 from provider_resilience import (
-    ProviderCatalogueStore, ProviderHealthStore, catalogue_discovery_snapshot,
+    ProviderCatalogueStore, ProviderHealthStore, ProviderRouteError, _base_url, catalogue_discovery_snapshot,
     eligible_routes, load_provider_routes, probe_due_catalogue_providers,
     probe_due_routes, route_health_snapshot,
 )
@@ -525,7 +526,11 @@ def mcp_get_models() -> dict[str, Any]:
             ],
         })
 
-    base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    raw_base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    try:
+        base_url = _base_url(raw_base_url, allow_private_http=True) if raw_base_url else ""
+    except ProviderRouteError:
+        base_url = ""
     model_url = base_url + ("/models" if base_url.endswith("/v1") else "/v1/models") if base_url else ""
     gateway = {
         "configured": bool(base_url),
@@ -542,7 +547,7 @@ def mcp_get_models() -> dict[str, Any]:
             headers["Authorization"] = f"Bearer {key}"
         try:
             request = urllib.request.Request(model_url, headers=headers, method="GET")
-            with urllib.request.urlopen(request, timeout=5) as response:
+            with open_credential_request(request, timeout=5, endpoint_validated=True) as response:
                 data = json.loads(response.read(1_000_001).decode("utf-8"))
             gateway["catalogue_reachable"] = True
             gateway["status"] = "catalogue_reachable_inference_unverified"
@@ -1447,7 +1452,7 @@ def call_llm(
                 data=payload, headers=headers, method="POST",
             )
             try:
-                with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
+                with open_credential_request(request, timeout=LLM_TIMEOUT, endpoint_validated=True) as response:
                     raw = response.read(4_000_001)
                     if len(raw) > 4_000_000:
                         raise RuntimeError("provider_response_too_large")

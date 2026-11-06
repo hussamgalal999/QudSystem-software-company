@@ -49,7 +49,7 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             return NodeExecutionResult("succeeded", row["node_id"])
 
         result = await self.orchestrator.run(definition, executor)
-        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(result["status"], "succeeded", result)
         self.assertEqual(reducer_inputs["required"], 2)
         self.assertEqual(reducer_inputs["succeeded"], ["a", "b"])
         self.assertEqual(reducer_inputs["failed"], ["c"])

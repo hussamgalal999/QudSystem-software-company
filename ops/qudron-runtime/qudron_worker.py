@@ -81,6 +81,10 @@ EXTERNAL_API_TASK_TYPES = {
     "research", "social_post_draft", "video_script", "translation",
     "seo_plan", "lead_research", "product_review", "engineering_review",
     "strategy_review", "risk_review",
+    "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+    "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+    "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+    "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
 }
 
 ALLOWED_TASK_TYPES = {
@@ -89,6 +93,10 @@ ALLOWED_TASK_TYPES = {
     "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
     "product_review", "engineering_review", "strategy_review", "risk_review",
     "incident_triage", "capability_mining",
+    "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+    "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+    "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+    "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"

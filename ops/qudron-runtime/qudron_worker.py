@@ -1427,7 +1427,7 @@ def classify_job_data(
             return default
 
     task_type = str(field("task_type", "research")).strip().lower()
-    declared = str(field("data_class", "public" if task_type == "research" else "internal")).strip().lower()
+    declared = str(field("data_class", "internal")).strip().lower()
     allowed = {"public", "internal", "confidential", "restricted"}
     if declared not in allowed:
         declared = "internal"
@@ -1491,6 +1491,7 @@ def validate_keyless_payload(job: sqlite3.Row | dict[str, Any], user_text: str, 
     # scan the complete outbound text above for explicit markers and PII.
     classification_job = job
     if isinstance(job, dict) and "data_class" not in job and str(job.get("task_type", "research")) == "research":
+        # Legacy direct callers may submit only a research task and its public text.
         classification_job = {**job, "data_class": "public"}
     classification = classify_job_data(classification_job)
     if classification != "public":
@@ -1675,9 +1676,17 @@ def call_llm(
             except (TypeError, ValueError):
                 provider_cost_valid = False
             billing_state = "reported" if provider_cost_valid else ("estimated" if recorded_cost is not None else "unknown")
+            try:
+                safe_recorded_cost = (
+                    float(recorded_cost)
+                    if recorded_cost is not None and math.isfinite(float(recorded_cost)) and float(recorded_cost) >= 0
+                    else None
+                )
+            except (TypeError, ValueError):
+                safe_recorded_cost = None
             finish_model_call_attempt(
                 attempt_id, status="succeeded", billing_state=billing_state,
-                reported_cost_usd=recorded_cost,
+                reported_cost_usd=safe_recorded_cost,
             )
             attempt_id = None
             reservation_id = None

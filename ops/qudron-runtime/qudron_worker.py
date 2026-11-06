@@ -1299,14 +1299,30 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
         )
 
 
-def classify_job_data(job: sqlite3.Row) -> str:
-    """Conservative data classification used before provider route selection."""
+def classify_job_data(job: sqlite3.Row, prior_context: str = "") -> str:
+    """Conservative classification before any provider route is selected."""
     task_type = str(job["task_type"])
     if task_type in {
         "cvpen_cv_creation", "cvpen_ats_audit",
         "customer_support_reply", "payment_reconciliation",
     }:
         return "confidential"
+
+    prompt = str(job["prompt"] or "")
+    combined = prompt + "\n" + str(prior_context or "")
+    lowered = combined.lower()
+    restricted_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if (
+        str(prior_context or "").strip()
+        or any(marker in lowered for marker in restricted_markers)
+        or redact_sensitive_text(combined) != combined
+    ):
+        return "internal"
     if task_type in PUBLIC_KEYLESS_TASK_TYPES:
         return "public"
     return "internal"
@@ -1330,7 +1346,7 @@ def call_llm(
             "Configure an owner-approved route; do not use browser cookies or undocumented sessions."
         )
 
-    data_class = classify_job_data(job)
+    data_class = classify_job_data(job, prior_context)
     health_store = ProviderHealthStore(DB_PATH)
     candidates = eligible_routes(routes, health_store, data_class=data_class)
     if not candidates:

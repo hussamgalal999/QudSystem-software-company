@@ -12,17 +12,27 @@ def approval_resource(action: str, parameters: dict[str, Any]) -> str:
     if action == "windows.launch_app":
         return str(parameters.get("app_alias", ""))
     if action in {"windows.invoke_control", "windows.type_text"}:
+        process_id = parameters.get("process_id")
+        window_title = parameters.get("window_title")
+        automation_id = parameters.get("automation_id")
+        control_type = parameters.get("control_type")
+        if isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0:
+            raise ValueError("UI approval requires a positive integer process_id")
+        if not isinstance(window_title, str) or not window_title.strip():
+            raise ValueError("UI approval requires an exact window_title")
+        if not isinstance(automation_id, str) or not automation_id.strip():
+            raise ValueError("UI approval requires an automation_id")
+        if not isinstance(control_type, str) or not control_type.strip():
+            raise ValueError("UI approval requires a control_type")
         text_digest = ""
         if action == "windows.type_text":
-            text_digest = hashlib.sha256(
-                str(parameters.get("text", "")).encode("utf-8")
-            ).hexdigest()
+            text_value = parameters.get("text")
+            if not isinstance(text_value, str) or len(text_value) > 4000:
+                raise ValueError("UI text approval requires bounded string content")
+            text_digest = hashlib.sha256(text_value.encode("utf-8")).hexdigest()
         return ":".join((
-            str(parameters.get("process_id", "")),
-            str(parameters.get("window_title", "")),
-            str(parameters.get("automation_id", "")),
-            str(parameters.get("control_type", "")),
-            text_digest,
+            str(process_id), window_title.strip(), automation_id.strip(),
+            control_type.strip(), text_digest,
         ))
     raise ValueError("This action does not require a write approval")
 

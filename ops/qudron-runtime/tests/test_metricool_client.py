@@ -77,6 +77,16 @@ class MetricoolTests(unittest.TestCase):
     destination_id="437731146095517",network="facebook",approved_brand_destinations=mapping,
    )
 
+
+ def test_vision_guard_tagline_with_punctuation_cannot_be_misclassified(self):
+  mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
+  with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):
+   with self.assertRaisesRegex(mc.MetricoolError,"Vision Guard"):
+    self.client().create_review_draft(
+     "Your Security, Our Priority","2026-11-20T10:00:00",
+     content_brand="QudSystem",destination_id="fb-page-1",
+    )
+
  def test_metricool_destination_mapping_cannot_be_reused_for_another_network(self):
   mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1","network":"facebook"}}
   with patch.dict(os.environ, {"QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS": json.dumps(mapping)}):

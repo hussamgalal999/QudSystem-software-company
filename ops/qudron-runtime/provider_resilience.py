@@ -155,7 +155,14 @@ def load_provider_routes(
             host = (urlsplit(safe_base).hostname or "configured").lower()
             anonymous = bool(anonymous_detector and anonymous_detector(safe_base))
             route_id = f"primary:{profile}:{host}:{model}"[:240]
-            accepted = ("public",) if anonymous else ("public", "internal")
+            configured_classes = tuple(
+                item.strip().lower()
+                for item in str(env.get("QUDRON_PROVIDER_DATA_CLASSES", "public,internal")).split(",")
+                if item.strip()
+            )
+            if not configured_classes or not set(configured_classes).issubset(_ALLOWED_DATA_CLASSES):
+                configured_classes = ("public", "internal")
+            accepted = ("public",) if anonymous else configured_classes
             routes.append(ProviderRoute(
                 route_id=route_id,
                 provider_id=host,

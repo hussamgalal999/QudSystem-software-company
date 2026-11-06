@@ -38,10 +38,11 @@ class AgentProtocolTests(unittest.TestCase):
             requires_approval=True,
         )
         self.assertFalse(task.approved)
+        # Arbitrary caller-supplied text is not an authenticated approval.
         approved = TaskEnvelope.from_dict({
             **task.to_dict(), "approved_by": "owner"
         })
-        self.assertTrue(approved.approved)
+        self.assertFalse(approved.approved)
 
     def test_agent_descriptor_rejects_invalid_quality_and_concurrency(self):
         with self.assertRaises(ValueError):
@@ -62,6 +63,11 @@ class AgentProtocolTests(unittest.TestCase):
             stable_idempotency_key("qudron", "job-1", "review"),
             stable_idempotency_key("qudron", "job-2", "review"),
         )
+
+    def test_idempotency_key_is_unambiguous_when_identifiers_contain_delimiters(self):
+        first = stable_idempotency_key("a\\x1fb", "c", "d")
+        second = stable_idempotency_key("a", "b\\x1fc", "d")
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

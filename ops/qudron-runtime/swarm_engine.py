@@ -147,12 +147,19 @@ def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
 
     required_reviewers = target_count - 2
     used = {producer_id, finalizer_id, *reviewer_ids}
-    for role_id in CROSS_FUNCTIONAL_REVIEWER_IDS:
+    supplemental_ids: set[str] = set()
+    # Prefer the stable cross-functional QA panel, then draw from the
+    # remaining registered specialists if a domain team overlaps that panel.
+    candidate_ids = list(CROSS_FUNCTIONAL_REVIEWER_IDS)
+    candidate_ids.extend(role_id for role_id in by_id if role_id not in candidate_ids)
+    for role_id in candidate_ids:
         if len(reviewer_ids) >= required_reviewers:
             break
         if role_id in by_id and role_id not in used:
             reviewer_ids.append(role_id)
             used.add(role_id)
+            if role_id not in base:
+                supplemental_ids.add(role_id)
 
     if len(reviewer_ids) < required_reviewers:
         raise ValueError(
@@ -168,10 +175,10 @@ def build_swarm_plan(task_type: str, registry: dict[str, Any] | None = None,
             agent["execution_stage"] = "finalize"
         else:
             agent["execution_stage"] = "review"
-        if agent["id"] in CROSS_FUNCTIONAL_REVIEWER_IDS and agent["id"] not in base:
-            agent["assignment_source"] = "cross_functional_review"
-        else:
-            agent["assignment_source"] = "task_team"
+        agent["assignment_source"] = (
+            "cross_functional_review" if agent["id"] in supplemental_ids
+            else "task_team"
+        )
     return plan
 
 def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], str, str], str],

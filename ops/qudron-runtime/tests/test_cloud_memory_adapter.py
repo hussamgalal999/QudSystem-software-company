@@ -54,15 +54,24 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         calls = []
         def fake_urlopen(request, timeout=0):
             calls.append(request)
+            if len(calls) == 1:
+                # Simulate the response being lost after the remote service may
+                # already have accepted the event. Retry must reuse the key.
+                raise TimeoutError("response lost after acceptance")
             return FakeResponse({"ok": True, "inserted": True, "event_id": "event-1"})
         client = CloudMemoryClient("https://memory.example.com", "t" * 40)
         with patch("cloud_memory_adapter.urlopen", side_effect=fake_urlopen):
+            first = flush_outbox(self.store, client)
             result = flush_outbox(self.store, client)
+        self.assertEqual(first["failed"], 1)
+        self.assertEqual(first["pending"], 1)
         self.assertEqual(result["sent"], 1)
         self.assertEqual(result["failed"], 0)
-        self.assertEqual(len(calls), 1)
-        payload = json.loads(calls[0].data)
+        self.assertEqual(len(calls), 2)
+        payload = json.loads(calls[1].data)
         self.assertEqual(payload["event_id"], "event-1")
+        self.assertEqual(calls[0].get_header("Idempotency-key"), "event-1")
+        self.assertEqual(calls[1].get_header("Idempotency-key"), "event-1")
         self.assertEqual(self.store.cloud_outbox_snapshot()["sent"], 1)
         self.assertEqual(result["pending"], 0)
 

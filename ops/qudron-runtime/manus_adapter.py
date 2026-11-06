@@ -13,8 +13,9 @@ import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 from approval_service import ApprovalService
 from continuity_store import ContinuityStore
 
@@ -39,6 +40,8 @@ class ManusAdapter:
         self.credential = credential.strip()
         self.credential_type = credential_type
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
+        if not is_allowed_credential_endpoint(self.base_url):
+            raise ManusAPIError("Manus API endpoint must use HTTPS or exact loopback HTTP")
         self.timeout = max(5, min(120, int(timeout)))
         self.retries = max(0, min(4, int(retries)))
         self.store = store
@@ -79,7 +82,7 @@ class ManusAdapter:
         max_attempts = self.retries + 1 if method.upper() in {"GET", "HEAD"} else 1
         for attempt in range(max_attempts):
             try:
-                with urlopen(request, timeout=self.timeout) as response:
+                with open_credential_request(request, timeout=self.timeout) as response:
                     raw = response.read(2_000_001)
                     if len(raw) > 2_000_000:
                         raise ManusAPIError("Manus response exceeded the 2 MB safety limit")

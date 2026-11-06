@@ -128,6 +128,19 @@ class ProviderRoutingTests(unittest.TestCase):
                 )
         network.assert_not_called()
 
+
+    def test_global_data_class_policy_applies_to_every_fallback_route(self):
+        private_route = route(
+            "private-route", "private", "private-model",
+            "https://private.example/v1", accepted=("public", "internal", "confidential"),
+        )
+        with patch.dict("os.environ", {"QUDRON_PROVIDER_DATA_CLASSES": "public,internal"}, clear=False):
+            eligible = eligible_routes(
+                [private_route], ProviderHealthStore(worker.DB_PATH),
+                data_class="confidential",
+            )
+        self.assertEqual(eligible, [])
+
     def test_budget_exhaustion_stops_all_routes_without_fallback(self):
         first = route("primary", "one", "model-one", "https://one.example/v1", primary=True)
         second = route("backup", "two", "model-two", "https://two.example/v1")
@@ -135,7 +148,7 @@ class ProviderRoutingTests(unittest.TestCase):
             patch.object(worker, "load_provider_routes", return_value=[first, second]),
             patch.object(worker, "reserve_model_budget", side_effect=RuntimeError(
                 "Qudron daily model budget reached"
-            )),
+            )) as reserve,
             patch("urllib.request.urlopen") as network,
         ):
             with self.assertRaisesRegex(RuntimeError, "daily model budget reached"):
@@ -144,6 +157,7 @@ class ProviderRoutingTests(unittest.TestCase):
                     "Research.", "", "",
                 )
         network.assert_not_called()
+        reserve.assert_called_once()
 
     def test_anonymous_route_omits_private_memory_channel(self):
         route_without_key = ProviderRoute(

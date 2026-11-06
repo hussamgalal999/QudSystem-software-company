@@ -17,6 +17,7 @@ The registry and the provider-neutral fabric are foundations; they do not provis
 - Independent review stages fan out up to `QUDRON_MAX_PARALLEL_REVIEWS` (default 16; hard ceiling 32). Actual upstream calls remain governed by the shared SQLite-backed global model-call slot limit.
 - Queue workers default to eight and remain capped at eight in this runtime. Provider RPM/TPM, quota, latency, network health and host resources remain binding. Queue capacity is not a guarantee of throughput.
 - Eight five-role waves are registered to cover the original 40-specialist programme. They are separate task/workflow units, not a claim that 40 model requests run simultaneously.
+- The remaining eight of the 48 registered identities are specialist extensions outside the original 40-role wave plan: `mobile_operator` and `android_security_researcher`/`security_test_analyst` serve Android operations/security; `model_access_scout` serves provider access discovery; `external_swarm_orchestrator` and `manus_task_operator` serve external dispatch; `cloud_platform_engineer` serves platform operations; and `continuity_librarian` serves memory/continuity review. Their dedicated registry teams remain independently selectable.
 - The workflow DAG engine supports up to 128 concurrent ready nodes per workflow. This is a scheduler admission ceiling, not a provider or hardware capacity claim.
 
 ## Free and authorized provider gate

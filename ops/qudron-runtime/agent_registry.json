@@ -216,6 +216,30 @@
       "name": "CV Privacy Reviewer",
       "profile": "reasoning",
       "responsibilities": "Flag unnecessary national IDs, full addresses, sensitive disclosures and excess personal data while preserving contact information genuinely needed for applications."
+    },
+    {
+      "id": "model_provider_engineer",
+      "name": "Model Provider & Routing Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Configure and validate approved ChatGPT/OpenAI model IDs, API compatibility, routing profiles, provider rate limits, and exact token-cost accounting; never bypass budget gates."
+    },
+    {
+      "id": "security_architect",
+      "name": "Qudron Security Architect",
+      "profile": "reasoning",
+      "responsibilities": "Threat-model the runtime, MCP boundary, identity, secrets, tenant isolation, prompt injection, and authorization; block unsafe exposure."
+    },
+    {
+      "id": "platform_engineer",
+      "name": "Platform & Deployment Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Design reproducible Docker/Cloudflare deployment, health checks, persistent state, backup/restore, observability, and rollback; never provision paid resources without approval."
+    },
+    {
+      "id": "opendots_integration_engineer",
+      "name": "OpenDots Control-Plane Integration Engineer",
+      "profile": "reasoning",
+      "responsibilities": "Maintain the independent OpenDots-to-Qudron Commander MCP contract, capability discovery, task status/report retrieval, token rotation, and safe voice/control handoff."
     }
   ],
   "teams": {
@@ -298,6 +322,76 @@
       "reliability_engineer",
       "qa_engineer",
       "evidence_checker"
+    ],
+    "qudron_core_delivery": [
+      "product_manager",
+      "software_engineer",
+      "model_provider_engineer",
+      "security_architect",
+      "qa_engineer"
+    ],
+    "qudron_control_plane": [
+      "operations_commander",
+      "opendots_integration_engineer",
+      "platform_engineer",
+      "reliability_engineer",
+      "security_architect"
+    ],
+    "qudron_wave_01_architecture": [
+      "operations_commander",
+      "strategy_council",
+      "product_manager",
+      "research_analyst",
+      "evidence_checker"
+    ],
+    "qudron_wave_02_runtime_models": [
+      "software_engineer",
+      "reliability_engineer",
+      "qa_engineer",
+      "data_analyst",
+      "model_provider_engineer"
+    ],
+    "qudron_wave_03_security_governance": [
+      "security_architect",
+      "privacy_qa",
+      "compliance_reviewer",
+      "policy_checker",
+      "fact_checker"
+    ],
+    "qudron_wave_04_opendots_experience": [
+      "opendots_integration_engineer",
+      "customer_success",
+      "localization_specialist",
+      "language_qa",
+      "brand_quality"
+    ],
+    "qudron_wave_05_platform_release": [
+      "platform_engineer",
+      "technical_seo",
+      "creative_qa",
+      "video_producer",
+      "seo_strategist"
+    ],
+    "qudron_wave_06_market_commercial": [
+      "brand_strategist",
+      "copywriter",
+      "market_research",
+      "sales_qualifier",
+      "finance_ops"
+    ],
+    "qudron_wave_07_cvpen_product": [
+      "career_strategist",
+      "cv_writer",
+      "ats_specialist",
+      "cv_qa",
+      "cv_grammar_editor"
+    ],
+    "qudron_wave_08_quality_payment": [
+      "cv_role_match_reviewer",
+      "cv_achievement_reviewer",
+      "cv_readability_reviewer",
+      "cv_privacy_reviewer",
+      "payment_verifier"
     ]
   }
 }

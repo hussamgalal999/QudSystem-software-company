@@ -64,6 +64,26 @@ class ManusAdapterTests(unittest.TestCase):
         self.assertEqual(result["status"], "running")
         self.assertEqual(result["last_event_id"], "evt-1")
 
+
+
+    def test_post_is_not_retried_after_ambiguous_server_failure(self):
+        adapter = ManusAdapter("test-secret", retries=3)
+        failure = HTTPError("https://api.manus.ai/v2/task.create", 503, "busy", {}, None)
+        with patch("manus_adapter.urlopen", side_effect=failure) as request:
+            with self.assertRaisesRegex(ManusAPIError, "HTTP 503"):
+                adapter._request("POST", "/v2/task.create", {"title": "once"})
+        self.assertEqual(request.call_count, 1)
+
+    def test_get_retains_bounded_retry_behavior(self):
+        adapter = ManusAdapter("test-secret", retries=1)
+        failure = HTTPError("https://api.manus.ai/v2/task.detail", 503, "busy", {}, None)
+        with (
+            patch("manus_adapter.urlopen", side_effect=[failure, FakeResponse({"ok": True})]) as request,
+            patch("manus_adapter.time.sleep"),
+        ):
+            self.assertEqual(adapter._request("GET", "/v2/task.detail"), {"ok": True})
+        self.assertEqual(request.call_count, 2)
+
     def test_adapter_is_opt_in_and_fails_closed_without_secret(self):
         with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "false"}, clear=False):
             with self.assertRaises(ManusAPIError):

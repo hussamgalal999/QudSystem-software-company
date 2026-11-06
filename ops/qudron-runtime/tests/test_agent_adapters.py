@@ -196,7 +196,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
                 return None
             def read(self, _limit=-1):
                 return (
-                    b'event: message\\n'
+                    b'event: message\n'
                     b'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"SSE result"}]}}\\n\\n'
                 )
 

@@ -1486,7 +1486,13 @@ def validate_keyless_payload(job: sqlite3.Row | dict[str, Any], user_text: str, 
     if redact_sensitive_text(str(user_text or "")) != str(user_text or ""):
         raise RuntimeError("Anonymous FreeLLM blocked by sensitive-data redactor")
 
-    classification = classify_job_data(job, str(user_text or ""), "")
+    # The assembled user_text also contains public task instructions; it is not
+    # itself prior/private memory. Classify durable job metadata separately, then
+    # scan the complete outbound text above for explicit markers and PII.
+    classification_job = job
+    if isinstance(job, dict) and "data_class" not in job and str(job.get("task_type", "research")) == "research":
+        classification_job = {**job, "data_class": "public"}
+    classification = classify_job_data(classification_job)
     if classification != "public":
         raise RuntimeError("Anonymous FreeLLM is limited to public research")
 

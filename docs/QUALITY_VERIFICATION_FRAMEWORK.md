@@ -213,6 +213,31 @@ Every task in `project_task_registry.json` carries a `verification_profile`. The
 - [ ] `backup_and_rollback_drill`
 - [ ] `release_manifest_and_signoff`
 
+
+### Per-task acceptance contract and validation
+
+Every task record must carry all of these fields before a score is published:
+
+- `verification_profile`: one named profile from this document.
+- `mandatory_gates`: a non-empty list of exact gate IDs selected from that profile.
+- `critical_gates`: a list of exact gate IDs; it must be a subset of `mandatory_gates`.
+- `required_maturity`: one of `M0` through `M7`.
+- `gate_weights`: a positive numeric weight for every mandatory gate, with no unknown keys; the weights must sum to 100 (tolerance 0.01).
+
+A registry validator must reject a task as `blocked` and refuse to calculate completion if any field is absent, if a gate ID is not in the selected profile, if a critical gate is not mandatory, if a mandatory gate has no weight, or if the weight sum is invalid. Do not silently apply a profile-wide default after results are known.
+
+Minimum required maturity by area (raise it when the task has higher operational risk):
+
+| Area | Minimum maturity | Reason |
+|---|---:|---|
+| Runtime / Workforce / Continuity / Product Engineering | M3 for code-only acceptance; M4 for connected components | CI is necessary, integration is a separate gate |
+| External Swarm / Manus / Model Supply / Android | M4; M5 for any capability claimed live | Mocks do not prove provider/device access |
+| Capacity / Infrastructure / Release | M6 | Sustained operation, restore, rollback and load evidence are required |
+| Governance / Android Security / CVPen / Commercial / Growth / Communications | M5; M6 for production/customer-facing operation | Authorization, privacy, payment and real-account evidence are required |
+| Portfolio | M4 for inventory automation; M5 for claims about private or inaccessible repositories | An incomplete inventory cannot be reported as full coverage |
+
+Until the task registry contains and validates these fields, this document is an acceptance specification, not evidence that every existing registry item is already machine-validated.
+
 ## Scoring model
 
 For each task, evaluate each applicable gate as:

@@ -392,11 +392,13 @@ class AgentFabric:
             raise KeyError(agent_id)
         if handle.provider_id != agent.provider_id:
             raise AgentFabricError("Remote task handle belongs to a different provider")
-        updated = await self._adapters[agent.adapter].follow_up(agent, handle, message)
+        updated = await asyncio.wait_for(
+            self._adapters[agent.adapter].follow_up(agent, handle, message),
+            timeout=self.policy.request_timeout_seconds,
+        )
         if updated.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
             await self._release_task_lease(agent_id, handle.remote_task_id)
         return updated
-
     async def cancel(
         self, agent_id: str, handle: AgentTaskHandle
     ) -> AgentTaskHandle:
@@ -405,7 +407,10 @@ class AgentFabric:
             raise KeyError(agent_id)
         if handle.provider_id != agent.provider_id:
             raise AgentFabricError("Remote task handle belongs to a different provider")
-        updated = await self._adapters[agent.adapter].cancel(agent, handle)
+        updated = await asyncio.wait_for(
+            self._adapters[agent.adapter].cancel(agent, handle),
+            timeout=self.policy.request_timeout_seconds,
+        )
         if updated.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
             await self._release_task_lease(agent_id, handle.remote_task_id)
         return updated

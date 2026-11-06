@@ -136,7 +136,7 @@ class PywinautoAutomation:
                 if str(window.window_text()) != window_title:
                     continue
                 control = window.child_window(
-                    auto_id=automation_id.strip(), control_type="Edit"
+                    auto_id=automation_id, control_type="Edit"
                 )
                 if not control.exists(timeout=2):
                     continue

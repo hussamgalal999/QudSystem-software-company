@@ -167,7 +167,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(adapter, "_request_sync", side_effect=fake_request):
             handle = await adapter.submit(descriptor, TaskEnvelope(
                 project_id="qudron", task_id="task-1", title="Research",
-                instruction="Find public facts.", task_type="research",
+                instruction="Find public facts.", required_skills=("research",),
                 idempotency_key="mcp-task-0001",
             ))
         self.assertEqual(
@@ -196,11 +196,11 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         def fake_urlopen(request, timeout=0):
             payload = json.loads(request.data)
-            result = {} if payload["method"] == "initialize" else {
+            result = {"protocolVersion": "2025-06-18"} if payload["method"] == "initialize" else {} if payload["method"] == "notifications/initialized" else {
                 "content": [{"type": "text", "text": '{"id":"remote-async-1"}'}],
                 "isError": False,
             }
-            return FakeResponse({"jsonrpc": "2.0", "id": payload["id"], "result": result})
+            return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result})
         with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
             handle = await MCPToolAgentAdapter().submit(agent, self.task)
         self.assertEqual(handle.remote_task_id, "remote-async-1")
@@ -223,15 +223,19 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             payload = json.loads(request.data)
             calls.append(payload)
             if payload["method"] == "initialize":
-                return FakeResponse({"jsonrpc": "2.0", "id": payload["id"], "result": {}})
-            return FakeResponse({"jsonrpc": "2.0", "id": payload["id"], "result": {
+                result = {"protocolVersion": "2025-06-18"}
+            elif payload["method"] == "notifications/initialized":
+                result = {}
+            else:
+                result = {
                 "content": [{"type": "text", "text": '{"job_id":"remote-job-1"}'}],
                 "isError": False,
-            }})
+            }
+            return FakeResponse({"jsonrpc": "2.0", "id": payload.get("id"), "result": result})
         with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
             handle = await MCPToolAgentAdapter().submit(agent, self.task)
         self.assertEqual(handle.remote_task_id, "remote-job-1")
-        self.assertEqual([c["method"] for c in calls], ["initialize", "tools/call"])
+        self.assertEqual([c["method"] for c in calls], ["initialize", "notifications/initialized", "tools/call"])
         self.assertEqual(calls[1]["params"]["name"], "qudron_submit_job")
 
 

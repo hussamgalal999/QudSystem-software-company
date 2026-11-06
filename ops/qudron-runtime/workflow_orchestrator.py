@@ -341,21 +341,40 @@ class WorkflowStore:
     def approve_node(self, workflow_id: str, node_id: str, approval_token: str) -> None:
         if self.approval_service is None:
             raise WorkflowError("Authenticated approval service is not configured")
-        approval = self.approval_service.verify_and_consume(
-            approval_token,
-            action="workflow.node.approve",
-            resource_id=f"{workflow_id}/{node_id}",
-        )
-        if not approval:
-            raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
-        with self.connect() as db:
+        db = self.connect()
+        try:
+            # Lock and validate the target before consuming the one-time token.
+            # This prevents a typo/stale target from burning an otherwise valid approval.
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT requires_approval,status,approved_by
+                   FROM workflow_nodes WHERE workflow_id=? AND node_id=?""",
+                (workflow_id, node_id),
+            ).fetchone()
+            if not row or not row["requires_approval"]:
+                raise WorkflowError("Approval target was not found or does not require approval")
+            if row["status"] not in {"queued", "waiting_for_approval"}:
+                raise WorkflowError("Approval target is not awaiting approval")
+            approval = self.approval_service.verify_and_consume(
+                approval_token,
+                action="workflow.node.approve",
+                resource_id=f"{workflow_id}/{node_id}",
+            )
+            if not approval:
+                raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
             changed = db.execute(
                 """UPDATE workflow_nodes SET approved_by=?,status='queued',updated_at=?
                    WHERE workflow_id=? AND node_id=? AND requires_approval=1""",
                 (str(approval["approved_by"])[:160], time.time(), workflow_id, node_id),
             ).rowcount
-        if changed != 1:
-            raise WorkflowError("Approval target was not found or does not require approval")
+            if changed != 1:
+                raise WorkflowError("Approval target changed while approval was being applied")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def start_node(self, workflow_id: str, node_id: str, owner_key: str) -> int:
         """Atomically claim a queued node for one specific execution attempt."""

@@ -80,16 +80,22 @@ class _ResizableSemaphore:
         self._active = 0
         self._condition = asyncio.Condition()
 
-    async def __aenter__(self):
+    async def acquire(self):
         async with self._condition:
             await self._condition.wait_for(lambda: self._active < self._limit)
             self._active += 1
-        return self
 
-    async def __aexit__(self, exc_type, exc, traceback):
+    async def release(self):
         async with self._condition:
             self._active = max(0, self._active - 1)
             self._condition.notify_all()
+
+    async def __aenter__(self):
+        await self.acquire()
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        await self.release()
 
     def resize(self, value: int) -> None:
         self._limit = max(1, int(value))
@@ -118,6 +124,8 @@ class AgentFabric:
         self._agent_slots: dict[str, _ResizableSemaphore] = {}
         self._provider_slots: dict[str, asyncio.Semaphore] = {}
         self._in_flight: dict[str, int] = {}
+        self._active_task_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
+        self._unknown_submission_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: AgentAdapter) -> None:
@@ -245,21 +253,39 @@ class AgentFabric:
             adapter = self._adapters[agent.adapter]
             provider_slot = self._provider_slots[agent.provider_id]
             agent_slot = self._agent_slots[agent.agent_id]
+            await provider_slot.acquire()
             try:
-                async with provider_slot:
-                    async with agent_slot:
-                        async with self._lock:
-                            self._in_flight[agent.provider_id] = self._in_flight.get(agent.provider_id, 0) + 1
-                        try:
-                            handle = await asyncio.wait_for(
-                                adapter.submit(agent, task),
-                                timeout=self.policy.request_timeout_seconds,
-                            )
-                        finally:
-                            async with self._lock:
-                                self._in_flight[agent.provider_id] -= 1
+                await agent_slot.acquire()
+            except Exception:
+                provider_slot.release()
+                raise
+            acquired = True
+            try:
+                async with self._lock:
+                    self._in_flight[agent.provider_id] = self._in_flight.get(agent.provider_id, 0) + 1
+                try:
+                    handle = await asyncio.wait_for(
+                        adapter.submit(agent, task),
+                        timeout=self.policy.request_timeout_seconds,
+                    )
+                finally:
+                    async with self._lock:
+                        self._in_flight[agent.provider_id] -= 1
                 if handle.provider_id != agent.provider_id:
                     raise AgentFabricError("Adapter returned a mismatched provider identity")
+
+                terminal = {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+                if handle.status in terminal:
+                    provider_slot.release()
+                    await agent_slot.release()
+                    acquired = False
+                else:
+                    key = (agent.agent_id, handle.remote_task_id)
+                    async with self._lock:
+                        if key in self._active_task_leases:
+                            raise AgentFabricError("Remote task already owns an admission lease")
+                        self._active_task_leases[key] = (provider_slot, agent_slot)
+                    acquired = False
                 return DispatchReceipt(
                     agent_id=agent.agent_id,
                     provider_id=agent.provider_id,
@@ -268,18 +294,63 @@ class AgentFabric:
                     route_reason="; ".join(failures) if failures else "highest eligible capability score",
                 )
             except asyncio.TimeoutError as exc:
-                # Cancellation of an adapter coroutine does not prove that a
-                # blocking thread or remote provider stopped its submission.
-                # The outcome is ambiguous: fail closed and reconcile this
-                # attempt before any cross-provider fallback can duplicate it.
+                # A timed-out submit may still be executing in a worker thread
+                # or may already exist remotely. Keep the admission slot until
+                # an explicit reconciliation identifies the remote outcome.
+                async with self._lock:
+                    self._unknown_submission_leases[(agent.agent_id, task.task_id)] = (
+                        provider_slot, agent_slot,
+                    )
+                acquired = False
                 raise ProviderUnavailable(
                     f"Submission outcome is unknown after timeout for {agent.agent_id}; "
                     "reconcile the remote task before retrying or failing over"
                 ) from exc
             except (ProviderUnavailable, ConnectionError) as exc:
+                if acquired:
+                    provider_slot.release()
+                    await agent_slot.release()
+                    acquired = False
                 failures.append(f"{agent.agent_id}:{type(exc).__name__}")
                 continue
+            except Exception:
+                if acquired:
+                    provider_slot.release()
+                    await agent_slot.release()
+                raise
         raise ProviderUnavailable("All eligible providers failed: " + ", ".join(failures))
+
+    async def _release_task_lease(self, agent_id: str, remote_task_id: str) -> None:
+        async with self._lock:
+            lease = self._active_task_leases.pop((agent_id, remote_task_id), None)
+        if lease:
+            provider_slot, agent_slot = lease
+            provider_slot.release()
+            await agent_slot.release()
+
+    async def reconcile_submission_timeout(
+        self, agent_id: str, task_id: str, handle: AgentTaskHandle | None = None
+    ) -> None:
+        """Owner/operator reconciliation for a timed-out, ambiguous submission.
+
+        Pass a discovered handle if the provider accepted the task. Pass None
+        only after confirming that no remote task was created.
+        """
+        key = (agent_id, task_id)
+        async with self._lock:
+            lease = self._unknown_submission_leases.pop(key, None)
+            if lease is None:
+                raise AgentFabricError("No unknown submission lease exists for this task")
+            if handle is not None:
+                agent = self._agents.get(agent_id)
+                if not agent or handle.provider_id != agent.provider_id:
+                    self._unknown_submission_leases[key] = lease
+                    raise AgentFabricError("Reconciled handle does not match the agent provider")
+                self._active_task_leases[(agent_id, handle.remote_task_id)] = lease
+        if handle is None or handle.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            provider_slot, agent_slot = lease
+            provider_slot.release()
+            await agent_slot.release()
 
     async def poll(
         self, agent_id: str, handle: AgentTaskHandle
@@ -290,9 +361,14 @@ class AgentFabric:
         if handle.provider_id != agent.provider_id:
             raise AgentFabricError("Remote task handle belongs to a different provider")
         adapter = self._adapters[agent.adapter]
-        return await asyncio.wait_for(
+        result = await asyncio.wait_for(
             adapter.poll(agent, handle), timeout=self.policy.request_timeout_seconds
         )
+        if result.provider_id != agent.provider_id or result.remote_task_id != handle.remote_task_id:
+            raise AgentFabricError("Adapter returned a mismatched remote task result")
+        if result.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            await self._release_task_lease(agent_id, handle.remote_task_id)
+        return result
 
     async def follow_up(
         self, agent_id: str, handle: AgentTaskHandle, message: str
@@ -302,7 +378,10 @@ class AgentFabric:
             raise KeyError(agent_id)
         if handle.provider_id != agent.provider_id:
             raise AgentFabricError("Remote task handle belongs to a different provider")
-        return await self._adapters[agent.adapter].follow_up(agent, handle, message)
+        updated = await self._adapters[agent.adapter].follow_up(agent, handle, message)
+        if updated.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            await self._release_task_lease(agent_id, handle.remote_task_id)
+        return updated
 
     async def cancel(
         self, agent_id: str, handle: AgentTaskHandle
@@ -312,4 +391,7 @@ class AgentFabric:
             raise KeyError(agent_id)
         if handle.provider_id != agent.provider_id:
             raise AgentFabricError("Remote task handle belongs to a different provider")
-        return await self._adapters[agent.adapter].cancel(agent, handle)
+        updated = await self._adapters[agent.adapter].cancel(agent, handle)
+        if updated.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            await self._release_task_lease(agent_id, handle.remote_task_id)
+        return updated

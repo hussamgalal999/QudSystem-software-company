@@ -40,6 +40,50 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertEqual(len(waves), 8)
         self.assertTrue(all(len(registry["teams"][name]) == 5 for name in waves))
 
+    def test_default_plan_gives_each_short_task_team_ten_unique_roles(self):
+        registry = load_agent_registry("agent_registry.json")
+        for task_type, members in registry["teams"].items():
+            with self.subTest(task_type=task_type):
+                plan = build_swarm_plan(task_type, registry=registry)
+                role_ids = [agent["id"] for agent in plan]
+                self.assertEqual(len(plan), max(10, len(members)))
+                self.assertEqual(len(role_ids), len(set(role_ids)))
+                self.assertTrue(set(members).issubset(set(role_ids)))
+                self.assertEqual(sum(a["execution_stage"] == "produce" for a in plan), 1)
+                self.assertEqual(sum(a["execution_stage"] == "finalize" for a in plan), 1)
+                if len(plan) == 10:
+                    self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+
+    def test_default_ten_role_swarm_runs_eight_reviews_in_parallel(self):
+        registry = load_agent_registry("agent_registry.json")
+        review_barrier = threading.Barrier(8)
+        lock = threading.Lock()
+        reviewers = []
+        final_context = {"value": ""}
+
+        def fake_call(agent, instruction, context):
+            stage = agent["execution_stage"]
+            if stage == "produce":
+                return "domain draft"
+            if stage == "review":
+                with lock:
+                    reviewers.append(agent["id"])
+                review_barrier.wait(timeout=4)
+                return f"independent review: {agent['id']}"
+            final_context["value"] = context
+            return "ten-role result"
+
+        result = execute_swarm(
+            {"task_type": "research"},
+            fake_call,
+            registry=registry,
+        )
+        self.assertIn("Agents invoked: 10", result)
+        self.assertIn("Independent reviews: 8", result)
+        self.assertEqual(len(reviewers), 8)
+        for role_id in reviewers:
+            self.assertIn(f"independent review: {role_id}", final_context["value"])
+
     def test_unknown_task_falls_back_to_research_team(self):
         self.assertEqual(build_swarm_plan("unknown")[0]["id"], "research_analyst")
 

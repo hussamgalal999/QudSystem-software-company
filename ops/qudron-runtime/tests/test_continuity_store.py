@@ -83,6 +83,69 @@ class ContinuityStoreTests(unittest.TestCase):
             project="cvpen", agent_id="cv_writer"
         ))
 
+
+    def test_agent_instance_id_is_distinct_from_role_and_creation_is_idempotent(self):
+        first = self.store.create_agent_instance(
+            job_id="job-instance", project="qudron", role_id="software_engineer",
+            stage="produce", model_profile="balanced",
+            provider_id="freellm", model_name="auto",
+        )
+        again = self.store.create_agent_instance(
+            job_id="job-instance", project="qudron", role_id="software_engineer",
+            stage="produce", model_profile="balanced",
+        )
+        different_task = self.store.create_agent_instance(
+            job_id="job-instance-2", project="qudron", role_id="software_engineer",
+            stage="produce",
+        )
+        self.assertNotEqual(first["instance_id"], first["role_id"])
+        self.assertEqual(first["instance_id"], again["instance_id"])
+        self.assertNotEqual(first["instance_id"], different_task["instance_id"])
+        self.assertEqual(first["status"], "queued")
+        self.assertEqual(first["provider_id"], "freellm")
+
+    def test_agent_instance_lifecycle_persists_and_counts_retries(self):
+        instance = self.store.create_agent_instance(
+            job_id="job-lifecycle", project="qudron", role_id="qa_engineer",
+            stage="review",
+        )
+        running = self.store.transition_agent_instance(
+            instance["instance_id"], "running", model_profile="reasoning",
+            provider_id="gemini.google.com", model_name="free-tier-model",
+        )
+        self.assertEqual(running["attempts"], 1)
+        failed = self.store.transition_agent_instance(
+            instance["instance_id"], "failed", error="mock provider timeout",
+        )
+        self.assertEqual(failed["status"], "failed")
+        retried = self.store.transition_agent_instance(
+            instance["instance_id"], "running",
+        )
+        self.assertEqual(retried["attempts"], 2)
+        completed = self.store.transition_agent_instance(
+            instance["instance_id"], "succeeded",
+        )
+        self.assertEqual(completed["status"], "succeeded")
+
+        restarted = ContinuityStore(self.db_path)
+        recovered = restarted.get_agent_instance(instance["instance_id"])
+        self.assertEqual(recovered["status"], "succeeded")
+        self.assertEqual(recovered["attempts"], 2)
+        self.assertEqual(recovered["provider_id"], "gemini.google.com")
+        snapshot = restarted.snapshot()
+        self.assertEqual(snapshot["agent_instance_counts"]["succeeded"], 1)
+        self.assertEqual(snapshot["active_agent_instances"], 0)
+
+    def test_agent_instance_rejects_invalid_lifecycle_transition(self):
+        instance = self.store.create_agent_instance(
+            job_id="job-invalid", project="qudron", role_id="qa_engineer",
+            stage="review",
+        )
+        self.store.transition_agent_instance(instance["instance_id"], "running")
+        self.store.transition_agent_instance(instance["instance_id"], "succeeded")
+        with self.assertRaises(ValueError):
+            self.store.transition_agent_instance(instance["instance_id"], "running")
+
     def test_external_agent_task_can_be_recovered_from_local_ledger(self):
         self.store.save_external_task(
             provider="manus", external_task_id="task-123",

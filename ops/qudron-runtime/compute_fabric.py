@@ -495,7 +495,11 @@ class ComputeFabric:
         # Store-backed admission is rechecked atomically by reserve() below.
         # Keep this synchronous candidate-ranking pass memory-only so it never
         # blocks the asyncio event loop on SQLite I/O.
-        active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
+        now = time.time()
+        active = sum(
+            1 for provider_id, lease in self._leases.values()
+            if provider_id == provider.provider_id and lease.expires_at > now
+        )
         reserved = self._reservations.get(provider.provider_id, 0)
         if active + reserved >= provider.max_concurrent_leases:
             return False, "provider_concurrency_limit"
@@ -775,7 +779,7 @@ class ComputeFabric:
 
     def snapshot(self) -> dict[str, Any]:
         persisted = self.lease_store.snapshot() if self.lease_store else {
-            "active_leases": len(self._leases),
+            "active_leases": sum(1 for _, lease in self._leases.values() if lease.expires_at > time.time()),
             "release_pending": 0,
             "reservations": sum(self._reservations.values()),
         }

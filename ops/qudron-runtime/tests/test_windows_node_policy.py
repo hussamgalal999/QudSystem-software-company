@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from windows_node.policy import approval_resource, sign_approval
-from windows_node.worker import WindowsNode, WindowsNodeError
+from windows_node.worker import WindowsNode, WindowsNodeError, PywinautoAutomation
 
 
 class FakeAutomation:
@@ -113,6 +113,49 @@ class WindowsNodePolicyTests(unittest.TestCase):
                 "approval": approval,
             })
         self.assertEqual(self.automation.invocations, [])
+
+    def test_pywinauto_text_entry_requires_exact_edit_control_and_writes_literal_text(self):
+        class FakeControl:
+            def __init__(self):
+                self.value = None
+                self.focused = False
+            def exists(self, timeout=0):
+                return True
+            def set_focus(self):
+                self.focused = True
+            def set_edit_text(self, value):
+                self.value = value
+
+        class FakeWindow:
+            def __init__(self, control):
+                self.control = control
+            def process_id(self):
+                return 123
+            def child_window(self, auto_id, control_type):
+                self.selector = (auto_id, control_type)
+                return self.control
+
+        class FakeDesktop:
+            def __init__(self, window):
+                self.window = window
+            def windows(self):
+                return [self.window]
+
+        control = FakeControl()
+        window = FakeWindow(control)
+        automation = PywinautoAutomation()
+        automation._desktop = lambda: FakeDesktop(window)
+
+        literal = "{ENTER} + ^ {TAB}"
+        result = automation.type_text(123, "search-box", "Edit", literal)
+        self.assertEqual(result["character_count"], len(literal))
+        self.assertEqual(control.value, literal)
+        self.assertTrue(control.focused)
+        self.assertEqual(window.selector, ("search-box", "Edit"))
+        with self.assertRaises(WindowsNodeError):
+            automation.type_text(123, "", "Edit", "must not type")
+        with self.assertRaises(WindowsNodeError):
+            automation.type_text(123, "search-box", "Button", "must not type")
 
     def test_worker_has_no_arbitrary_shell_action(self):
         with self.assertRaises(WindowsNodeError):

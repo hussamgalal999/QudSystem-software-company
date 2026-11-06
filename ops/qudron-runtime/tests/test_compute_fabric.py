@@ -117,6 +117,27 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(NoEligibleCompute):
             await self.fabric.acquire(request(min_gpu_vram_gb=24, min_runtime_seconds=600))
 
+    async def test_short_provider_lease_is_rejected_and_compensating_release_runs(self):
+        class ShortLeaseAdapter(FakeComputeAdapter):
+            async def acquire(self, provider_descriptor, request_descriptor):
+                self.acquired.append((provider_descriptor.provider_id, request_descriptor.request_id))
+                return ComputeLease(
+                    provider_id=provider_descriptor.provider_id,
+                    lease_id="short-lease",
+                    resource_id="gpu-instance-short",
+                    expires_at=time.time() + 10,
+                    endpoint_ref="https://compute.example.test/short",
+                )
+
+        fabric = ComputeFabric()
+        adapter = ShortLeaseAdapter()
+        fabric.register_adapter("fake", adapter)
+        fabric.register_provider(provider())
+        with self.assertRaises(ComputeProviderUnavailable):
+            await fabric.acquire(request(min_runtime_seconds=600))
+        self.assertEqual(adapter.released, [("kaggle", "short-lease")])
+        self.assertEqual(fabric.snapshot()["active_leases"], 0)
+
     async def test_unknown_lease_release_is_rejected(self):
         self.fabric.register_provider(provider())
         lease = await self.fabric.acquire(request())

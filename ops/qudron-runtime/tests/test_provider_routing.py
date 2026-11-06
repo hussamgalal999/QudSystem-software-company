@@ -59,6 +59,7 @@ class ProviderRoutingTests(unittest.TestCase):
             "task_type": task_type,
             "title": "Provider failover test",
             "prompt": "Use only public, non-sensitive test content.",
+            "data_class": "public",
         }
 
     def test_transient_primary_failure_fails_over_to_approved_route(self):
@@ -163,7 +164,25 @@ class ProviderRoutingTests(unittest.TestCase):
         network.assert_not_called()
         reserve.assert_called_once()
 
-    def test_anonymous_route_omits_private_memory_channel(self):
+    def test_anonymous_route_is_blocked_when_private_memory_is_present(self):
+        route_without_key = ProviderRoute(
+            route_id="local", provider_id="local", profile="balanced",
+            base_url="http://freellm:4000/v1", model="auto",
+            accepted_data_classes=("public",), anonymous=True, verified_free=True,
+            price_class="free", input_usd_per_1m=0, output_usd_per_1m=0,
+        )
+        with (
+            patch.object(worker, "load_provider_routes", return_value=[route_without_key]),
+            patch.object(worker, "open_credential_request") as network,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "data class 'internal'"):
+                worker.call_llm(
+                    self.job(), {"id": "research_analyst", "profile": "balanced"},
+                    "Summarize public facts.", "", "PRIVATE_ROLE_MEMORY_MARKER",
+                )
+        network.assert_not_called()
+
+    def test_anonymous_route_never_receives_private_memory_content(self):
         route_without_key = ProviderRoute(
             route_id="local", provider_id="local", profile="balanced",
             base_url="http://freellm:4000/v1", model="auto",
@@ -189,10 +208,11 @@ class ProviderRoutingTests(unittest.TestCase):
         ):
             worker.call_llm(
                 self.job(), {"id": "research_analyst", "profile": "balanced"},
-                "Summarize public facts.", "", "PRIVATE_ROLE_MEMORY_MARKER",
+                "Summarize public facts.", "", "",
             )
         payload = json.loads(seen[0].data.decode("utf-8"))
         self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
+        self.assertIn("[omitted: private Qudron memory is not sent to anonymous providers]", payload["messages"][1]["content"])
 
     def test_registered_qudron_waves_are_enabled_for_worker_and_authenticated_api_intake(self):
         registry = worker.load_agent_registry(worker.AGENT_REGISTRY_PATH)
@@ -231,10 +251,21 @@ class ProviderRoutingTests(unittest.TestCase):
         self.assertIn("[REDACTED_EMAIL]", note)
         self.assertIn("[REDACTED_PHONE]", note)
 
-    def test_public_task_type_becomes_internal_with_prior_context_or_sensitive_prompt(self):
+    def test_only_explicit_public_tasks_can_use_public_routes(self):
         public_job = self.job()
         self.assertEqual(worker.classify_job_data(public_job), "public")
         self.assertEqual(worker.classify_job_data(public_job, "prior stage private notes"), "internal")
+        self.assertEqual(worker.classify_job_data(public_job, "", "private role memory"), "internal")
+
+        old_job = {key: value for key, value in public_job.items() if key != "data_class"}
+        self.assertEqual(worker.classify_job_data(old_job), "internal")
+
+        internal_job = dict(public_job, data_class="internal")
+        self.assertEqual(worker.classify_job_data(internal_job), "internal")
+        confidential_job = dict(public_job, data_class="confidential")
+        self.assertEqual(worker.classify_job_data(confidential_job), "confidential")
+        restricted_job = dict(public_job, data_class="restricted")
+        self.assertEqual(worker.classify_job_data(restricted_job), "restricted")
 
         sensitive_job = self.job()
         sensitive_job["prompt"] = "Research this contact: jane@example.com"

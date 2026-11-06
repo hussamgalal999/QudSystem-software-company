@@ -145,6 +145,36 @@ class ProviderRoutingTests(unittest.TestCase):
                 )
         network.assert_not_called()
 
+    def test_anonymous_route_omits_private_memory_channel(self):
+        route_without_key = ProviderRoute(
+            route_id="local", provider_id="local", profile="balanced",
+            base_url="http://freellm:4000/v1", model="auto",
+            accepted_data_classes=("public",), anonymous=True, verified_free=True,
+            price_class="free", input_usd_per_1m=0, output_usd_per_1m=0,
+        )
+        seen = []
+        def fake_open(request, timeout=0):
+            seen.append(request)
+            return FakeResponse({
+                "choices": [{"message": {"content": "Public test result."}}],
+                "usage": {},
+            })
+        with (
+            patch.object(worker, "load_provider_routes", return_value=[route_without_key]),
+            patch.object(worker, "reserve_model_budget", return_value="reservation"),
+            patch.object(worker, "release_model_budget_reservation"),
+            patch.object(worker, "acquire_model_call_slot", return_value="slot"),
+            patch.object(worker, "release_model_call_slot"),
+            patch.object(worker, "record_model_usage"),
+            patch("urllib.request.urlopen", side_effect=fake_open),
+        ):
+            worker.call_llm(
+                self.job(), {"id": "research_analyst", "profile": "balanced"},
+                "Summarize public facts.", "", "PRIVATE_ROLE_MEMORY_MARKER",
+            )
+        payload = json.loads(seen[0].data.decode("utf-8"))
+        self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
+
     def test_http_request_does_not_include_unconfigured_credentials(self):
         route_without_key = ProviderRoute(
             route_id="local", provider_id="local", profile="balanced",

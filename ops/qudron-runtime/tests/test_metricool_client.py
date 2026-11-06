@@ -26,7 +26,7 @@ class MetricoolTests(unittest.TestCase):
  def test_create_post_is_draft_and_not_autopublished(self):
   captured={}
   mapping={"qudsystem":{"brand_id":"456","destination_id":"fb-page-1"}}
-  def fake(req,timeout):
+  def fake(req,timeout=0,**kwargs):
    captured["body"]=json.loads(req.data);return FakeResponse()
   with patch("metricool_client.open_credential_request",side_effect=fake):
    self.client().create_review_draft(

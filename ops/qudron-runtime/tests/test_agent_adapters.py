@@ -66,6 +66,51 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(redirected)
 
+    async def test_a2a_follow_up_preserves_direct_message_response(self):
+        adapter = A2AHttpAdapter()
+        agent_descriptor = agent("a2a", "a2a-provider", "a2a")
+        handle = AgentTaskHandle(
+            "a2a-provider", "task-1", TaskStatus.RUNNING,
+            metadata={"protocol": "a2a", "context_id": "context-1"},
+        )
+        with patch.object(adapter, "_request_sync", return_value={
+            "message": {
+                "messageId": "message-2",
+                "parts": [{"kind": "text", "text": "Follow-up completed."}],
+            }
+        }):
+            updated = await adapter.follow_up(agent_descriptor, handle, "Continue.")
+        self.assertEqual(updated.status, TaskStatus.SUCCEEDED)
+        self.assertEqual(updated.remote_task_id, "message-2")
+        self.assertEqual(updated.metadata["direct_message"], "Follow-up completed.")
+
+    async def test_a2a_poll_exposes_input_prompt_and_failure_details(self):
+        adapter = A2AHttpAdapter()
+        agent_descriptor = agent("a2a", "a2a-provider", "a2a")
+        handle = AgentTaskHandle("a2a-provider", "task-1", TaskStatus.RUNNING)
+        with patch.object(adapter, "_request_sync", return_value={
+            "id": "task-1",
+            "status": {
+                "state": "input-required",
+                "message": {"parts": [{"kind": "text", "text": "Which region should I use?"}]},
+            },
+        }):
+            waiting = await adapter.poll(agent_descriptor, handle)
+        self.assertTrue(waiting.needs_input)
+        self.assertEqual(waiting.input_prompt, "Which region should I use?")
+
+        with patch.object(adapter, "_request_sync", return_value={
+            "id": "task-1",
+            "status": {
+                "state": "failed",
+                "errorCode": "REMOTE_FAILURE",
+                "errorMessage": "Remote worker exited.",
+            },
+        }):
+            failed = await adapter.poll(agent_descriptor, handle)
+        self.assertEqual(failed.error_code, "REMOTE_FAILURE")
+        self.assertEqual(failed.error_message, "Remote worker exited.")
+
     def test_a2a_refuses_plain_remote_http(self):
         agent = AgentDescriptor(
             "bad", "Bad", "bad", "a2a", endpoint_ref="http://external.example.com"

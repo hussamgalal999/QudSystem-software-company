@@ -45,7 +45,7 @@ class ModelRoutingTests(unittest.TestCase):
             "LLM_FAST_OUTPUT_USD_PER_1M":"1",
             "QUDRON_MONTHLY_MODEL_BUDGET_USD":"1"
         }, clear=True):
-            with patch("qudron_worker.urllib.request.urlopen", side_effect=fake_urlopen):
+            with patch("qudron_worker.open_credential_request", side_effect=fake_urlopen):
                 response = worker.call_llm(
                     {"id":"job-model-test","role":"Research","task_type":"research","title":"Test","prompt":"Do the work"},
                     {"id":"research_analyst","name":"Research Analyst","profile":"fast",

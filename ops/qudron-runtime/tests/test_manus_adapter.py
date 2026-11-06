@@ -54,18 +54,35 @@ class ManusAdapterTests(unittest.TestCase):
         saved = self.store.external_task(provider="manus", external_task_id="task-abc")
         self.assertEqual(saved["local_job_id"], "job-0001")
 
-    def test_list_messages_persists_external_status_and_checkpoint(self):
+    def test_list_messages_persists_minimal_checkpoint_not_private_message_body(self):
+        self.store.save_external_task(
+            provider="manus", external_task_id="task-abc", agent_id="manus-agent",
+            local_job_id="job-abc", status="running",
+            task_url="https://manus.im/app/task-abc",
+        )
         response = {
             "ok": True,
             "messages": [
-                {"id": "evt-1", "type": "status_update",
-                 "status_update": {"agent_status": "running"}}
+                {
+                    "id": "evt-1", "type": "message", "timestamp": 123,
+                    "message": {"content": "Private contact jane@example.com"},
+                    "attachments": [{"name": "private-cv.pdf"}],
+                    "status_update": {"agent_status": "running"},
+                }
             ],
         }
         with patch("manus_adapter.urlopen", return_value=FakeResponse(response)):
             result = self.adapter.list_messages("task-abc")
         self.assertEqual(result["status"], "running")
         self.assertEqual(result["last_event_id"], "evt-1")
+        self.assertIn("Private contact jane@example.com", json.dumps(result))
+        stored = self.store.external_task(provider="manus", external_task_id="task-abc")
+        persisted = json.loads(stored["result_json"])
+        self.assertEqual(persisted["events"][0]["id"], "evt-1")
+        self.assertNotIn("message", persisted["events"][0])
+        self.assertNotIn("attachments", persisted["events"][0])
+        self.assertNotIn("jane@example.com", json.dumps(persisted))
+        self.assertNotIn("private-cv.pdf", json.dumps(persisted))
 
 
 

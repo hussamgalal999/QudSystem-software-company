@@ -36,8 +36,8 @@ def is_allowed_credential_endpoint(url: str) -> bool:
         return True
     try:
         if "%" in hostname:
-        return False
-    address = ipaddress.ip_address(hostname)
+            return False
+        address = ipaddress.ip_address(hostname)
     except ValueError:
         return False
     # Any IP address classified by the standard library as loopback is

@@ -155,6 +155,24 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         await fabric.reconcile_submission_timeout("worker", "job-timeout", handle=None)
         self.assertEqual(fabric._agent_slots["worker"]._active, 0)
 
+    async def test_follow_up_and_cancel_obey_fabric_request_timeout(self):
+        class HangingLifecycleAdapter(FakeAdapter):
+            async def follow_up(self, agent_descriptor, handle, message):
+                await asyncio.Event().wait()
+            async def cancel(self, agent_descriptor, handle):
+                await asyncio.Event().wait()
+
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=0.01))
+        adapter = HangingLifecycleAdapter()
+        fabric.register_adapter("fake", adapter)
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+        receipt = await fabric.dispatch(task(task_id="lifecycle-timeout", idempotency_key="lifecycle-timeout"))
+        with self.assertRaises(asyncio.TimeoutError):
+            await fabric.follow_up("worker", receipt.handle, "Continue.")
+        with self.assertRaises(asyncio.TimeoutError):
+            await fabric.cancel("worker", receipt.handle)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 1)
+
     async def test_free_policy_rejects_paid_route(self):
         fabric = AgentFabric()
         fabric.register_adapter("fake", FakeAdapter())

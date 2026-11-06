@@ -94,6 +94,39 @@ Official references:
 - **Cerebras Free:** an official free API tier is listed, but the public pricing page is old and its free-tier rate limits are described only as lower limits. Treat it as an experimental fallback until a current account quota is checked.
 
 Never use a free route as a reason to send confidential customer data to an endpoint without checking provider-specific terms.
+## Persistent provider-access resilience — 6 November 2026
+
+Qudron now has a bounded provider-access control plane for configured routes:
+
+1. **Discover and verify** — periodically performs read-only `GET /models` against explicitly configured endpoints, confirms the model ID, and records latency and availability. The probe does not spend inference tokens.
+2. **Circuit-break and recover** — stores route state in SQLite across restarts. 401/403, 429, network and server failures open a bounded circuit; the background monitor later re-tests the route instead of repeatedly sending user work into a known failure.
+3. **Route and fail over** — the worker can try an ordered chain of owner-approved OpenAI Chat Completions endpoints. The current route is recorded on the task-scoped agent instance. Each attempted route uses the shared concurrency gate, budget reservation and usage ledger.
+4. **Adapt without silent escalation** — no route may be added just because a website or model appears in public discovery. A fallback needs explicit owner approval, a supported protocol, exact price data (unless an entitlement is owner-verified free), a credential reference in the host secret manager, and an accepted data class.
+5. **Preserve data boundaries** — provider routes default to public/internal data only. CV, support and payment tasks are confidential; anonymous routes are public-only and never receive private Qudron memory.
+
+### Verified DeepSeek route reference
+
+As checked against DeepSeek's official API documentation on 6 November 2026:
+- The current Flash API identifier is `deepseek-flash`, served as **DeepSeek-V4.1-Flash-1017**.
+- The OpenAI-compatible base URL is `https://api.deepseek.com`; the read-only catalogue is `GET /models`; chat completion is `POST /chat/completions`.
+- The listed peak cache-miss input price is $0.30 per 1M tokens and output is $1.20 per 1M tokens. Off-peak and cache-hit rates are lower; Qudron uses conservative peak estimates in the sample config and should revalidate prices before activation.
+- DeepSeek documents both Chat Completions and Responses API. Qudron's current provider failover chain only activates the Chat Completions protocol; a Responses or Anthropic route is not silently treated as compatible.
+
+Official sources:
+- Model changelog and the V4.1-Flash-1017 update: https://api-docs.deepseek.com/updates/
+- Current model ID, base URL and agent integration: https://api-docs.deepseek.com/quick_start/agent_integrations/
+- Read-only model discovery: https://api-docs.deepseek.com/api/list-models/
+- Chat Completions request/response contract: https://api-docs.deepseek.com/api/create-chat-completion/
+- Current prices and rate windows: https://api-docs.deepseek.com/quick_start/pricing/
+
+### Boundaries and remaining work
+
+- Provider health is not provider quota. The owner account's current quota, region, billing state and terms must still be checked.
+- Public catalogue discovery never grants permission to use a model or an account.
+- Provider discovery currently covers the configured execution routes; adding new providers still requires a reviewed adapter/configuration and owner-approved credentials.
+- The current chat execution chain supports OpenAI Chat Completions. Anthropic, Gemini, OpenAI Responses, realtime, tools, vision and video require protocol-specific adapters and contract tests before activation.
+- There is no automatic account creation, subscription reuse, browser-cookie extraction, quota evasion, paid-plan activation or provider-term circumvention.
+
 ## Remote compute qualification — official evidence reviewed 2026-11-05
 
 These are task-bounded compute candidates, not confirmed persistent Qudron workers and not free Ollama servers. Their published limits are dynamic and must be rechecked against the signed-in account before each allocation.

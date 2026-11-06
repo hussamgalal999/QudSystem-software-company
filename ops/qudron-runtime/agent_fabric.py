@@ -294,7 +294,6 @@ class AgentFabric:
                 finally:
                     async with self._lock:
                         self._in_flight[agent.provider_id] -= 1
-                    self._pending_submissions.discard(agent.agent_id)
                 if handle.provider_id != agent.provider_id:
                     raise AgentFabricError("Adapter returned a mismatched provider identity")
 
@@ -310,6 +309,7 @@ class AgentFabric:
                             raise AgentFabricError("Remote task already owns an admission lease")
                         self._active_task_leases[key] = (provider_slot, agent_slot)
                     acquired = False
+                self._pending_submissions.discard(agent.agent_id)
                 return DispatchReceipt(
                     agent_id=agent.agent_id,
                     provider_id=agent.provider_id,

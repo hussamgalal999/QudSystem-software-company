@@ -469,6 +469,12 @@ class WorkflowOrchestrator:
             for item in json.loads(row["resource_claims_json"])
         )
         for attempt in range(1, int(row["max_attempts"]) + 1):
+            if attempt > 1:
+                # Each failed attempt releases its lease in finally. Reacquire
+                # every declared resource before starting a retry; otherwise
+                # another workflow can write the same resource in the gap.
+                while not self.store.acquire_resources(owner, claims, self.lease_seconds):
+                    await asyncio.sleep(min(0.1, max(0.01, self.lease_seconds / 20)))
             self.store.start_node(workflow_id, node_id)
             stop = asyncio.Event()
             heartbeat = asyncio.create_task(self._keep_lease(owner, stop))

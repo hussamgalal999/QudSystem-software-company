@@ -215,6 +215,10 @@ class ContinuityStoreTests(unittest.TestCase):
             local_job_id="job-004", agent_id="manus_operator",
             status="running", task_url="https://manus.im/app/task-123",
         )
+        self.store.update_external_task(
+            provider="manus", external_task_id="task-123",
+            status="running", last_event_id="evt-123",
+        )
         restarted = ContinuityStore(self.db_path)
         task = restarted.external_task(provider="manus", external_task_id="task-123")
         self.assertEqual(task["local_job_id"], "job-004")
@@ -223,10 +227,9 @@ class ContinuityStoreTests(unittest.TestCase):
             provider="manus", external_task_id="task-123",
             status="stopped", result={"summary": "verified"},
         )
-        self.assertEqual(
-            restarted.external_task(provider="manus", external_task_id="task-123")["status"],
-            "stopped",
-        )
+        recovered = restarted.external_task(provider="manus", external_task_id="task-123")
+        self.assertEqual(recovered["status"], "stopped")
+        self.assertEqual(recovered["last_event_id"], "evt-123")
 
 
 if __name__ == "__main__":

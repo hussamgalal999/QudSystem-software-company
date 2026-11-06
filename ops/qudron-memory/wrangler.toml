@@ -1,0 +1,16 @@
+name = "qudron-memory"
+main = "src/index.ts"
+compatibility_date = "2026-11-05"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qudron-memory"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[observability]
+enabled = true
+
+[vars]
+MEMORY_SCHEMA_VERSION = "1"
+MAX_BODY_BYTES = "65536"

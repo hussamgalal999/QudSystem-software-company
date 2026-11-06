@@ -1,0 +1,30 @@
+name: Qudron Cloud Memory CI
+on:
+  push:
+    branches: [main]
+    paths: ["ops/qudron-memory/**", ".github/workflows/qudron-memory-ci.yml"]
+  pull_request:
+    paths: ["ops/qudron-memory/**", ".github/workflows/qudron-memory-ci.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qudron-memory-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ops/qudron-memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        run: npm run typecheck
+      - name: Validate Worker bundle
+        run: npm run build

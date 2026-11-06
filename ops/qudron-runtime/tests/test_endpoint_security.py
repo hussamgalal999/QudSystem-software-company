@@ -13,6 +13,7 @@ class CredentialEndpointPolicyTests(unittest.TestCase):
         for url in (
             "http://localhost:8765/mcp",
             "http://127.0.0.1:8765/mcp",
+            "http://127.0.0.2:8765/mcp",
             "http://[::1]:8765/mcp",
         ):
             with self.subTest(url=url):
@@ -23,7 +24,6 @@ class CredentialEndpointPolicyTests(unittest.TestCase):
             "http://localhost.evil.test/mcp",
             "http://localhost.attacker.example/mcp",
             "http://127.0.0.1.evil.test/mcp",
-            "http://127.0.0.2:8765/mcp",
             "http://192.168.1.10:8765/mcp",
             "http://user:pass@127.0.0.1:8765/mcp",
             "file:///etc/passwd",

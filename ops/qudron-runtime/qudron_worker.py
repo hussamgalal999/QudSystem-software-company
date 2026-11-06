@@ -1414,30 +1414,39 @@ def is_anonymous_freellm_route(base_url: str) -> bool:
     return False
 
 
-def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) -> None:
-    if not is_anonymous_freellm_route(base_url):
-        return
-    try:
-        declared = str(job["data_class"]).strip().lower()
-    except (KeyError, IndexError):
+def classify_job_data(
+    job: sqlite3.Row | dict[str, Any],
+    prior_context: str = "",
+    memory_context: str = "",
+) -> str:
+    """Return the most restrictive data class justified by task metadata and context."""
+    def field(name: str, default: Any = "") -> Any:
+        try:
+            return job[name]
+        except (KeyError, IndexError, TypeError):
+            return default
+
+    task_type = str(field("task_type", "research")).strip().lower()
+    declared = str(field("data_class", "public" if task_type == "research" else "internal")).strip().lower()
+    allowed = {"public", "internal", "confidential", "restricted"}
+    if declared not in allowed:
         declared = "internal"
-    if declared not in {"public", "internal", "confidential", "restricted"}:
-        declared = "internal"
+
+    # Never downgrade an explicitly restricted or confidential classification.
     if declared == "restricted":
         return "restricted"
-    task_type = str(job["task_type"])
-    if task_type in {
+    sensitive_task_types = {
         "cvpen_cv_creation", "cvpen_ats_audit",
         "customer_support_reply", "payment_reconciliation",
-    }:
+        "engineering_review",
+    }
+    if task_type in sensitive_task_types:
         return "confidential"
     if declared == "confidential":
-        return declared
+        return "confidential"
 
-    prompt = str(job["prompt"] or "")
-    prior = str(prior_context or "")
-    memory = str(memory_context or "")
-    combined = prompt + "\n" + prior + "\n" + memory
+    prompt = str(field("prompt", "") or "")
+    combined = "\\n".join((prompt, str(prior_context or ""), str(memory_context or "")))
     lowered = combined.lower()
     restricted_markers = (
         "confidential", "internal-only", "internal only", "non-public",
@@ -1445,14 +1454,41 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
         "customer data", "payment evidence", "bank account", "password",
         "access token", "api key", "secret key",
     )
-    if (
-        (declared == "public" and (prior.strip() or memory.strip()))
-        or any(marker in lowered for marker in restricted_markers)
-        or redact_sensitive_text(combined) != combined
-    ):
+    if any(marker in lowered for marker in restricted_markers):
+        return "internal"
+    if redact_sensitive_text(combined) != combined:
+        return "internal"
+    if declared == "public" and (str(prior_context or "").strip() or str(memory_context or "").strip()):
         return "internal"
     return declared
 
+
+def validate_keyless_payload(job: sqlite3.Row | dict[str, Any], user_text: str, base_url: str) -> None:
+    """Fail closed unless an anonymous FreeLLM route receives public-only material."""
+    if not is_anonymous_freellm_route(base_url):
+        return
+    task_type = str(job.get("task_type", "research")) if isinstance(job, dict) else str(job["task_type"])
+    if task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation", "engineering_review",
+    }:
+        raise RuntimeError("Anonymous FreeLLM is limited to public research; this task type is not eligible")
+
+    lowered = str(user_text or "").lower()
+    explicit_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if any(marker in lowered for marker in explicit_markers):
+        raise RuntimeError("Anonymous FreeLLM blocked explicit confidential content")
+    if redact_sensitive_text(str(user_text or "")) != str(user_text or ""):
+        raise RuntimeError("Anonymous FreeLLM blocked by sensitive-data redactor")
+
+    classification = classify_job_data(job, str(user_text or ""), "")
+    if classification != "public":
+        raise RuntimeError("Anonymous FreeLLM is limited to public research")
 
 def call_llm(
     job: sqlite3.Row, agent: dict[str, Any], instruction: str,

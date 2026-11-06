@@ -35,7 +35,8 @@ class ContinuityStoreTests(unittest.TestCase):
 
 
     def test_legacy_running_stage_without_claim_token_is_immediately_reclaimable(self):
-        with sqlite3.connect(self.db_path) as db:
+        legacy_path = self.db_path.with_name("legacy-tokenless.sqlite3")
+        with sqlite3.connect(legacy_path) as db:
             db.execute("""
                 CREATE TABLE agent_runs (
                     job_id TEXT NOT NULL, project TEXT NOT NULL,

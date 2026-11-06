@@ -1,4 +1,5 @@
 import tempfile
+import sys
 import time
 import unittest
 from pathlib import Path
@@ -177,6 +178,33 @@ class WindowsNodePolicyTests(unittest.TestCase):
         self.assertTrue(result["reconciliation_required"])
         self.assertTrue(result["replayed"])
         self.assertEqual(self.automation.invocations, [])
+
+    def test_execute_rejects_missing_or_non_string_type_text_selectors(self):
+        base = {
+            "task_id": "task-invalid-type-text",
+            "idempotency_key": "idem-invalid-type-text",
+            "action": "windows.type_text",
+            "parameters": {
+                "process_id": 123, "automation_id": "search-box",
+                "control_type": "Edit", "text": "literal text",
+            },
+        }
+        for changes in (
+            {"automation_id": ""},
+            {"automation_id": ["not", "a", "string"]},
+            {"control_type": "Button"},
+            {"text": 123},
+            {"process_id": "123"},
+        ):
+            payload = {**base, "parameters": {**base["parameters"], **changes}}
+            with self.subTest(changes=changes):
+                with self.assertRaises(WindowsNodeError):
+                    self.node.execute(payload)
+        self.assertEqual(self.automation.invocations, [])
+
+    def test_health_reports_ui_automation_unavailable_without_windows_backend(self):
+        if sys.platform != "win32":
+            self.assertFalse(self.node.health()["ui_automation_available"])
 
     def test_worker_has_no_arbitrary_shell_action(self):
         with self.assertRaises(WindowsNodeError):

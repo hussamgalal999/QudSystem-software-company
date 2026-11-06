@@ -65,6 +65,30 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception):
             adapter._base(agent)
 
+    async def test_mcp_id_with_status_tool_remains_queued(self):
+        agent = AgentDescriptor(
+            agent_id="qudron-mcp-async", display_name="Qudron MCP Async Worker",
+            provider_id="qudron-local", adapter="mcp",
+            skills=("research",), enabled=True, health="healthy",
+            quality_score=0.9, access_mode="mcp_authorized_free",
+            price_class="free", last_verified_at=1.0,
+            endpoint_ref="http://127.0.0.1:8765/mcp",
+            metadata={"submit_tool": "submit", "status_tool": "status"},
+        )
+        def fake_urlopen(request, timeout=0):
+            payload = json.loads(request.data)
+            result = {} if payload["method"] == "initialize" else {
+                "content": [{"type": "text", "text": '{"id":"remote-async-1"}'}],
+                "isError": False,
+            }
+            return FakeResponse({"jsonrpc": "2.0", "id": payload["id"], "result": result})
+        with patch("mcp_agent_adapter.urlopen", side_effect=fake_urlopen):
+            handle = await MCPToolAgentAdapter().submit(agent, self.task)
+        self.assertEqual(handle.remote_task_id, "remote-async-1")
+        self.assertEqual(handle.status, TaskStatus.QUEUED)
+        self.assertIsNone(handle.metadata["immediate_text"])
+        self.assertEqual(handle.metadata["status_tool"], "status")
+
     async def test_mcp_tool_adapter_uses_explicit_tool_name(self):
         agent = AgentDescriptor(
             agent_id="qudron-mcp", display_name="Qudron MCP Worker",

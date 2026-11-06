@@ -30,7 +30,7 @@ The connected Dot exposes:
 
 The submit tool is explicitly non-read-only. OpenDots therefore marks it Ask first and presents the exact request to the owner before it is queued. It cannot use this MCP connection to publish to Facebook, send customer messages, process payments, access CV customer data, change provider accounts, or execute arbitrary shell commands. Those capabilities require their own narrowly scoped integrations and approval policies.
 
-The Qudron API token is generated into the dedicated `qudron-auth` Docker volume and is mounted read-only into the one-shot bootstrap container. OpenDots does not receive Qudron's task database, reports, GitHub token, Telegram bot token, or model-provider keys. The bootstrap reads the OpenDots owner token from the persistent `qudron-opendots-data` volume. No token is printed or committed to Git.
+The Qudron API token is generated into the dedicated `qudron-auth` Docker volume and is mounted read-only into the one-shot bootstrap container. OpenDots does not receive Qudron's task database, reports, GitHub token, Telegram bot token, or model-provider keys. The bootstrap reads the OpenDots owner token from the persistent `qudron-opendots-data` volume. No token is printed or committed to Git. The bootstrap retries while either private token file is being created during a cold start; it does not require a manual restart for this startup race.
 
 If the Qudron token is rotated or the existing MCP connection becomes unauthorized, bootstrap replaces only the named Qudron connection and refreshes its tool catalogue. Existing OpenDots user data and unrelated connections are preserved.
 

@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from a2a_adapter import A2AHttpAdapter
+from a2a_adapter import A2AHttpAdapter, _RejectRedirectHandler
 from mcp_agent_adapter import MCPToolAgentAdapter
 from agent_protocol import (
     AgentDescriptor, DataClass, ExecutionMode, TaskEnvelope, TaskStatus,
@@ -49,13 +49,22 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         ]
         def fake_urlopen(request, timeout=0):
             return FakeResponse(responses.pop(0))
-        with patch("a2a_adapter.urlopen", side_effect=fake_urlopen):
+        with patch("a2a_adapter._open_without_redirects", side_effect=fake_urlopen):
             adapter = A2AHttpAdapter()
             handle = await adapter.submit(agent, self.task)
             result = await adapter.poll(agent, handle)
         self.assertEqual(handle.remote_task_id, "remote-123")
         self.assertEqual(handle.status, TaskStatus.RUNNING)
         self.assertEqual(result.status, TaskStatus.SUCCEEDED)
+
+    def test_a2a_rejects_redirects_instead_of_forwarding_credentials(self):
+        from urllib.request import Request
+        handler = _RejectRedirectHandler()
+        request = Request("https://trusted-agent.example/task")
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://attacker.example/collect"
+        )
+        self.assertIsNone(redirected)
 
     def test_a2a_refuses_plain_remote_http(self):
         agent = AgentDescriptor(

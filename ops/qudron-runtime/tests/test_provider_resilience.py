@@ -11,6 +11,9 @@ from provider_resilience import (
     models_endpoint,
     probe_route,
     route_allowed_for_data,
+    ProviderCatalogueStore,
+    probe_catalogue_provider,
+    probe_due_catalogue_providers,
 )
 
 
@@ -231,6 +234,66 @@ class ProviderResilienceTests(unittest.TestCase):
         self.store.mark_call_failure(route, "http_429", now=3000)
         self.assertEqual(eligible_routes([route], self.store, data_class="internal", now=3001), [])
         self.assertEqual(eligible_routes([route], self.store, data_class="confidential", now=4000), [])
+
+
+    def test_official_catalogue_discovery_uses_provider_specific_auth_header(self):
+        provider = {
+            "provider": "Google Gemini",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "auth_env": "GEMINI_API_KEY",
+            "discovery": {
+                "enabled": True, "probe_path": "/models",
+                "probe_auth_header": "x-goog-api-key",
+            },
+        }
+        seen = []
+        def fake_open(request, timeout=0):
+            seen.append((request.full_url, request.get_header("X-goog-api-key"), request.get_method()))
+            return FakeResponse({
+                "models": [{"name": "models/gemini-3.8-flash", "displayName": "Gemini 3.8 Flash"}]
+            })
+        store = ProviderCatalogueStore(self.db_path)
+        result = probe_catalogue_provider(
+            provider, store, environ={"GEMINI_API_KEY": "catalogue-secret"},
+            opener=fake_open, now=5000,
+        )
+        self.assertEqual(seen[0], (
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            "catalogue-secret", "GET",
+        ))
+        self.assertEqual(result["status"], "healthy")
+        record = store.get("Google Gemini")
+        self.assertEqual(record["models"][0]["id"], "gemini-3.8-flash")
+        self.assertNotIn("catalogue-secret", json.dumps(record))
+
+    def test_catalogue_discovery_rechecks_missing_credentials_each_cycle(self):
+        store = ProviderCatalogueStore(self.db_path)
+        provider = {
+            "provider": "DeepSeek",
+            "base_url": "https://api.deepseek.com",
+            "auth_env": "DEEPSEEK_API_KEY",
+            "discovery": {
+                "enabled": True, "probe_path": "/models",
+                "probe_auth_header": "bearer",
+            },
+        }
+        catalogue_path = Path(self.temp.name) / "models.json"
+        catalogue_path.write_text(json.dumps({"providers": [provider]}), encoding="utf-8")
+        first = probe_due_catalogue_providers(
+            catalogue_path, store, environ={}, now=1000,
+        )
+        self.assertEqual(first[0]["status"], "credentials_not_configured")
+        calls = []
+        def fake_open(request, timeout=0):
+            calls.append(request)
+            return FakeResponse({"data": [{"id": "deepseek-flash"}]})
+        second = probe_due_catalogue_providers(
+            catalogue_path, store,
+            environ={"DEEPSEEK_API_KEY": "owner-secret"},
+            opener=fake_open, now=1010,
+        )
+        self.assertEqual(second[0]["status"], "healthy")
+        self.assertEqual(len(calls), 1)
 
     def test_success_closes_circuit_and_clears_failure_counter(self):
         route = load_provider_routes(

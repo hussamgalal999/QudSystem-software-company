@@ -7,7 +7,7 @@ Branch: `feat/qudron-continuity-memory-registry-2026-11-05`
 
 The current candidate registry contains **48 specialist role identities across 31 teams**. The owner requirement is 40+ specialties as a minimum, not a product-wide agent limit. A role definition is a reusable capability and prompt. A task-scoped agent instance is one assignment of that capability to one project/task. A task run is the durable execution record. A worker process is an operating-system process consuming queued work. A provider/model call is an individual inference request. None of these counts should be reported as another.
 
-The registry and the provider-neutral fabric are foundations; they do not provision one hosted model session per role. A configured free/authorized provider may serve many role assignments subject to its verified concurrency, quota and terms. When no qualified provider is available, tasks remain queued or fail with a visible provider-required state.
+The registry and the provider-neutral fabric are foundations; they do not provision one hosted model session per role. A configured free/authorized provider may serve many role assignments subject to its verified concurrency, quota and terms. When no qualified provider is available, the current worker fails closed with a recorded provider-configuration error and follows its retry/failure policy. A durable `NEEDS_PROVIDER` queue state is not yet implemented; do not claim that a task is safely waiting for provider capacity unless its persisted status proves that state.
 
 ## Dynamic task planning
 
@@ -43,6 +43,7 @@ The tests validate role-registry integrity, complete team planning, resource adm
 2. Wire the new agent fabric into the worker and MCP submission path, preserving provider-specific concurrency and fail-closed approval.
 3. Connect optional cloud memory retrieval to the runtime context packet, while retaining local SQLite as the execution source of truth.
 4. Add a load test that proves 40+ role assignments can be planned and admitted without hidden role truncation, with global provider-call limits enforced.
-5. Run owner-authorized live probes for each candidate provider and a physical Android Artemis E2E test before claiming those integrations are live.
+5. Implement and test a durable `NEEDS_PROVIDER` state so provider outages preserve tasks without generic failure/retry churn.
+6. Run owner-authorized live probes for each candidate provider and a physical Android Artemis E2E test before claiming those integrations are live.
 
 No merge or production activation is implied by this document.

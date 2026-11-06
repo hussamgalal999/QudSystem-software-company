@@ -29,6 +29,12 @@ TOOLS: list[dict[str, Any]] = [
                 "title": {"type": "string", "minLength": 1, "maxLength": 160},
                 "prompt": {"type": "string", "minLength": 1, "maxLength": 8000},
                 "role": {"type": "string", "maxLength": 100},
+                "data_class": {
+                    "type": "string",
+                    "enum": ["public", "internal", "confidential", "restricted"],
+                    "default": "internal",
+                    "description": "Owner-declared input sensitivity. Defaults to internal; public is explicit and is escalated to internal when private context/memory is attached."
+                },
                 "task_type": {
                     "type": "string",
                     "enum": [
@@ -69,6 +75,12 @@ TOOLS: list[dict[str, Any]] = [
                             "title": {"type": "string", "minLength": 1, "maxLength": 160},
                             "prompt": {"type": "string", "minLength": 1, "maxLength": 8000},
                             "role": {"type": "string", "maxLength": 100},
+                            "data_class": {
+                                "type": "string",
+                                "enum": ["public", "internal", "confidential", "restricted"],
+                                "default": "internal",
+                                "description": "Owner-declared input sensitivity. Defaults to internal."
+                            },
                             "task_type": {
                                 "type": "string",
                                 "enum": [

@@ -60,7 +60,6 @@ class MetricoolClient:
   *,
   content_brand:str|None=None,
   destination_id:str|None=None,
-  approved_brand_destinations:dict[str,dict[str,str]]|None=None,
  )->Any:
   if network not in NETWORKS:raise ValueError("Unsupported Metricool network")
   if not text.strip():raise ValueError("Post text is required")
@@ -70,7 +69,7 @@ class MetricoolClient:
    content_brand=content_brand,
    brand_id=self.blog_id,
    destination_id=destination_id,
-   approved_brand_destinations=approved_brand_destinations,
+   approved_brand_destinations=_load_owner_approved_brand_destinations(),
   )
   payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network}],"draft":True,"autoPublish":False}
   return self.request("POST","/v2/scheduler/posts",payload=payload)
@@ -109,6 +108,17 @@ _VISION_GUARD_MARKERS = (
  "security camera",
  "cctv",
 )
+
+def _load_owner_approved_brand_destinations()->dict[str,dict[str,str]]:
+ raw=os.getenv("QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS","").strip()
+ if not raw:return {}
+ try:
+  value=json.loads(raw)
+ except json.JSONDecodeError as exc:
+  raise MetricoolError("Owner Metricool brand/destination mapping is invalid JSON") from exc
+ if not isinstance(value,dict):
+  raise MetricoolError("Owner Metricool brand/destination mapping must be a JSON object")
+ return value
 
 def validate_brand_destination(
  *,

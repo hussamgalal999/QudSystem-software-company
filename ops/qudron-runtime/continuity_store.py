@@ -372,9 +372,11 @@ class ContinuityStore:
                 else:
                     snapshot_status = "blocked"
                 latest_active = active_role_instances[0]
-                task_id = str(latest_active["job_id"])
+                # Multiple concurrent instances share one role snapshot, so do
+                # not falsely select one job as the role's singular current task.
+                task_id = None
                 next_action = (
-                    f"{len(active_role_instances)} active instance(s); "
+                    f"{len(active_role_instances)} active task-scoped instance(s); "
                     f"latest stage {latest_active['stage']} is {latest_active['status']}"
                 )
             else:

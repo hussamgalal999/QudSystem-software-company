@@ -24,6 +24,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -830,6 +831,20 @@ def retrieve_memory_context(project: str, limit: int = 10) -> str:
     return "\n".join(lines)[:8000]
 
 
+def model_route_metadata(agent: dict[str, Any]) -> tuple[str, str, str]:
+    """Return non-secret routing identity for an agent assignment."""
+    profile = str(agent.get("profile", "balanced")).lower()
+    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
+              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).strip()
+    model_name = (os.getenv(f"{prefix}_MODEL") or LLM_MODEL).strip()[:160]
+    try:
+        provider_id = urlsplit(base_url).hostname or "unconfigured"
+    except ValueError:
+        provider_id = "invalid_endpoint"
+    return profile, provider_id[:160], model_name or "unresolved"
+
+
 def retrieve_cloud_memory_context(project: str, limit: int = 25) -> str:
     """Load optional bounded project context; local SQLite remains authoritative."""
     try:
@@ -1352,13 +1367,27 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
         agent_id = str(agent["id"])
         stage = str(agent.get("execution_stage", "execute"))
+        profile, provider_id, model_name = model_route_metadata(agent)
+        instance = continuity.create_agent_instance(
+            job_id=str(job["id"]), project=project, role_id=agent_id, stage=stage,
+            model_profile=profile, provider_id=provider_id, model_name=model_name,
+        )
+        instance_id = str(instance["instance_id"])
         cached = continuity.begin_stage(
             job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage
         )
         if cached is not None:
-            logging.info("Resumed completed agent stage %s/%s for job %s",
-                         agent_id, stage, job["id"])
+            continuity.transition_agent_instance(
+                instance_id, "succeeded", model_profile=profile,
+                provider_id=provider_id, model_name=model_name,
+            )
+            logging.info("Resumed completed agent instance %s for role %s/%s and job %s",
+                         instance_id, agent_id, stage, job["id"])
             return str(cached["output"])
+        continuity.transition_agent_instance(
+            instance_id, "running", model_profile=profile,
+            provider_id=provider_id, model_name=model_name,
+        )
 
         personal_memory = continuity.agent_memory_context(
             project=project, agent_id=agent_id, limit=6
@@ -1386,14 +1415,22 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
                 stage=stage, output=None if sensitive_task else output,
                 memory_note=safe_note,
             )
-            return output
         except Exception as exc:
+            safe_error = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200]
             continuity.fail_stage(
                 job_id=str(job["id"]), project=project, agent_id=agent_id,
-                stage=stage,
-                error=redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200],
+                stage=stage, error=safe_error,
+            )
+            continuity.transition_agent_instance(
+                instance_id, "failed", error=safe_error,
+                model_profile=profile, provider_id=provider_id, model_name=model_name,
             )
             raise
+        continuity.transition_agent_instance(
+            instance_id, "succeeded", model_profile=profile,
+            provider_id=provider_id, model_name=model_name,
+        )
+        return output
 
     return execute_swarm(
         {"task_type": job["task_type"], "title": job["title"], "prompt": job["prompt"]},

@@ -517,3 +517,244 @@ def probe_due_routes(
 
 def route_health_snapshot(database_path: str | Path, *, limit: int = 100) -> list[dict[str, Any]]:
     return ProviderHealthStore(database_path).snapshot(limit=limit)
+
+
+class ProviderCatalogueStore:
+    """Read-only model catalogue discovery snapshots, separate from inference routes."""
+
+    def __init__(self, database_path: str | Path):
+        self.path = Path(database_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS provider_catalogue_discovery (
+                    provider_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    models_json TEXT NOT NULL DEFAULT '[]',
+                    last_probe REAL,
+                    last_success REAL,
+                    latency_ms REAL,
+                    last_error_class TEXT,
+                    updated_at REAL NOT NULL
+                )
+            """)
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.path, timeout=20)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA busy_timeout=20000")
+        db.execute("PRAGMA journal_mode=WAL")
+        return db
+
+    def get(self, provider_id: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM provider_catalogue_discovery WHERE provider_id=?",
+                (provider_id,),
+            ).fetchone()
+        if not row:
+            return None
+        item = dict(row)
+        try:
+            item["models"] = json.loads(item.pop("models_json"))
+        except (TypeError, ValueError):
+            item["models"] = []
+        return item
+
+    def save(
+        self, provider_id: str, *, status: str, models: list[dict[str, Any]],
+        latency_ms: float | None, error_class: str | None = None,
+        now: float | None = None,
+    ) -> None:
+        stamp = time.time() if now is None else now
+        payload = json.dumps(models[:250], ensure_ascii=False, separators=(",", ":"))
+        with self._connect() as db:
+            db.execute(
+                """INSERT INTO provider_catalogue_discovery
+                   (provider_id,status,models_json,last_probe,last_success,latency_ms,
+                    last_error_class,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?)
+                   ON CONFLICT(provider_id) DO UPDATE SET
+                     status=excluded.status,models_json=excluded.models_json,
+                     last_probe=excluded.last_probe,
+                     last_success=COALESCE(excluded.last_success,provider_catalogue_discovery.last_success),
+                     latency_ms=excluded.latency_ms,last_error_class=excluded.last_error_class,
+                     updated_at=excluded.updated_at""",
+                (
+                    provider_id, status, payload, stamp,
+                    stamp if status == "healthy" else None, latency_ms,
+                    error_class, stamp,
+                ),
+            )
+
+    def snapshot(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT provider_id FROM provider_catalogue_discovery ORDER BY updated_at DESC LIMIT ?",
+                (max(1, min(500, int(limit))),),
+            ).fetchall()
+        return [item for row in rows if (item := self.get(str(row["provider_id"]))) is not None]
+
+
+def _catalogue_auth_headers(
+    provider: dict[str, Any], key: str
+) -> dict[str, str]:
+    mode = str(provider.get("probe_auth_header", "bearer")).lower()
+    if mode == "bearer":
+        return {"Authorization": f"Bearer {key}"}
+    if mode == "api-key":
+        return {"api-key": key}
+    if mode == "x-api-key":
+        version = str(provider.get("probe_api_version", "2023-06-01"))
+        return {"x-api-key": key, "anthropic-version": version}
+    if mode == "x-goog-api-key":
+        return {"x-goog-api-key": key}
+    raise ProviderRouteError("Unsupported provider catalogue authentication mode")
+
+
+def probe_catalogue_provider(
+    provider: dict[str, Any],
+    store: ProviderCatalogueStore,
+    *,
+    environ: dict[str, str] | None = None,
+    secret_reader: Callable[[str], str] | None = None,
+    opener: Callable[..., Any] = urlopen,
+    timeout_seconds: int = 6,
+    now: float | None = None,
+) -> dict[str, Any]:
+    """Discover currently available model IDs using an official read-only endpoint."""
+    env = dict(os.environ if environ is None else environ)
+    provider_id = str(provider.get("provider", "")).strip()[:120]
+    discovery = provider.get("discovery", {})
+    if not provider_id or not isinstance(discovery, dict) or not _bool(discovery.get("enabled")):
+        return {"provider_id": provider_id, "status": "discovery_disabled", "model_count": 0}
+    auth_env = str(provider.get("auth_env", "")).strip()
+    key = _read_key(
+        env, direct_name=auth_env,
+        file_name=str(provider.get("auth_file_env", "")),
+        secret_reader=secret_reader,
+    )
+    if not key:
+        store.save(
+            provider_id, status="credentials_not_configured", models=[],
+            latency_ms=None, error_class=None, now=now,
+        )
+        return {"provider_id": provider_id, "status": "credentials_not_configured", "model_count": 0}
+    try:
+        base = _base_url(provider.get("base_url"))
+        path = str(discovery.get("probe_path", "/models"))
+        if not path.startswith("/") or "?" in path or "#" in path or ".." in path:
+            raise ProviderRouteError("Provider catalogue path is invalid")
+        headers = {
+            "Accept": "application/json",
+            **_catalogue_auth_headers(provider, key),
+        }
+    except ProviderRouteError as exc:
+        store.save(
+            provider_id, status="configuration_invalid", models=[],
+            latency_ms=None, error_class=type(exc).__name__, now=now,
+        )
+        return {"provider_id": provider_id, "status": "configuration_invalid", "model_count": 0}
+
+    started = time.monotonic()
+    error_class = None
+    discovered: list[dict[str, Any]] = []
+    try:
+        request = Request(base.rstrip("/") + path, headers=headers, method="GET")
+        with opener(request, timeout=max(2, min(15, int(timeout_seconds)))) as response:
+            code = int(getattr(response, "status", 200))
+            if code < 200 or code >= 300:
+                error_class = f"http_{code}"
+            else:
+                raw = response.read(1_000_001)
+                if len(raw) > 1_000_000:
+                    error_class = "catalogue_too_large"
+                else:
+                    payload = json.loads(raw.decode("utf-8"))
+                    items = (
+                        payload.get("data", payload.get("models", []))
+                        if isinstance(payload, dict) else []
+                    )
+                    if not isinstance(items, list):
+                        error_class = "catalogue_schema_invalid"
+                    else:
+                        for item in items[:250]:
+                            if not isinstance(item, dict):
+                                continue
+                            model_id = str(item.get("id") or item.get("name") or "").strip()
+                            if model_id.startswith("models/"):
+                                model_id = model_id.split("/", 1)[1]
+                            if not model_id:
+                                continue
+                            discovered.append({
+                                "id": model_id[:200],
+                                "display_name": str(item.get("display_name") or item.get("name") or model_id)[:200],
+                                "input_modalities": item.get("input_modalities", item.get("supported_input", [])),
+                                "context_tokens": item.get("context_window", item.get("inputTokenLimit")),
+                                "max_output_tokens": item.get("max_output_tokens", item.get("outputTokenLimit")),
+                            })
+                        if not discovered:
+                            error_class = "no_models_advertised"
+    except HTTPError as exc:
+        error_class = f"http_{int(exc.code)}"
+    except (URLError, TimeoutError, OSError):
+        error_class = "network_unavailable"
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        error_class = "catalogue_response_invalid"
+
+    latency_ms = max(0.0, (time.monotonic() - started) * 1000.0)
+    status = "healthy" if error_class is None and discovered else "unavailable"
+    store.save(
+        provider_id, status=status, models=discovered,
+        latency_ms=latency_ms, error_class=error_class, now=now,
+    )
+    return {
+        "provider_id": provider_id,
+        "status": status if status == "healthy" else (error_class or status),
+        "model_count": len(discovered),
+        "latency_ms": round(latency_ms, 2),
+    }
+
+
+def probe_due_catalogue_providers(
+    catalogue_path: str | Path,
+    store: ProviderCatalogueStore,
+    *,
+    environ: dict[str, str] | None = None,
+    secret_reader: Callable[[str], str] | None = None,
+    interval_seconds: int = 21_600,
+    timeout_seconds: int = 6,
+    opener: Callable[..., Any] = urlopen,
+    now: float | None = None,
+) -> list[dict[str, Any]]:
+    """Check every configured official provider catalogue at most once per interval."""
+    try:
+        catalogue = json.loads(Path(catalogue_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    providers = catalogue.get("providers", []) if isinstance(catalogue, dict) else []
+    env = dict(os.environ if environ is None else environ)
+    reports = []
+    current = time.time() if now is None else now
+    for provider in providers if isinstance(providers, list) else []:
+        if not isinstance(provider, dict):
+            continue
+        discovery = provider.get("discovery", {})
+        if not isinstance(discovery, dict) or not _bool(discovery.get("enabled")):
+            continue
+        provider_id = str(provider.get("provider", ""))
+        previous = store.get(provider_id)
+        last_probe = float(previous.get("last_probe") or 0) if previous else 0
+        if previous and current - last_probe < max(300, interval_seconds):
+            continue
+        reports.append(probe_catalogue_provider(
+            provider, store, environ=env, secret_reader=secret_reader,
+            opener=opener, timeout_seconds=timeout_seconds, now=current,
+        ))
+    return reports
+
+
+def catalogue_discovery_snapshot(
+    database_path: str | Path, *, limit: int = 100
+) -> list[dict[str, Any]]:
+    return ProviderCatalogueStore(database_path).snapshot(limit=limit)

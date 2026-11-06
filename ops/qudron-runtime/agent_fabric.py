@@ -14,6 +14,7 @@ from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, AgentTaskResult, DataClass, TaskEnvelope,
     TaskStatus,
 )
+from approval_service import ApprovalService
 
 
 class AgentFabricError(RuntimeError):
@@ -72,8 +73,14 @@ class DispatchReceipt:
 
 
 class AgentFabric:
-    def __init__(self, policy: FabricPolicy | None = None):
+    def __init__(
+        self,
+        policy: FabricPolicy | None = None,
+        *,
+        approval_service: ApprovalService | None = None,
+    ):
         self.policy = policy or FabricPolicy()
+        self.approval_service = approval_service
         self._agents: dict[str, AgentDescriptor] = {}
         self._adapters: dict[str, AgentAdapter] = {}
         self._agent_slots: dict[str, asyncio.Semaphore] = {}
@@ -176,8 +183,6 @@ class AgentFabric:
         return [agent for _, agent in ranked]
 
     async def dispatch(self, task: TaskEnvelope) -> DispatchReceipt:
-        if task.requires_approval and not task.approved:
-            raise AgentFabricError("Task is waiting for owner approval")
         candidates = self.eligible_agents(task)
         if not candidates:
             reasons: dict[str, int] = {}
@@ -185,6 +190,17 @@ class AgentFabric:
                 _, reason = self._eligible(agent, task)
                 reasons[reason] = reasons.get(reason, 0) + 1
             raise NoEligibleAgent(f"No provider passed policy gates: {reasons}")
+
+        if task.requires_approval:
+            if self.approval_service is None or not task.approval_token:
+                raise AgentFabricError("Task is waiting for authenticated owner approval")
+            approval = self.approval_service.verify_and_consume(
+                task.approval_token,
+                action="agent.dispatch",
+                resource_id=f"{task.project_id}/{task.task_id}",
+            )
+            if not approval:
+                raise AgentFabricError("Owner approval token is invalid, expired, out of scope, or already used")
 
         failures: list[str] = []
         for index, agent in enumerate(candidates):

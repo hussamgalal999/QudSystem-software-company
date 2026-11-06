@@ -11,7 +11,8 @@ from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, AgentTaskResult, DataClass,
     TaskEnvelope, TaskStatus,
 )
-from approval_service import ApprovalService
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 
 class FakeAdapter:
@@ -296,7 +297,9 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_approval_requires_scoped_one_time_token(self):
         with tempfile.TemporaryDirectory() as directory:
-            service = ApprovalService("a" * 40, Path(directory) / "approvals.sqlite3")
+            private_key = Ed25519PrivateKey.generate()
+            issuer = ApprovalTokenIssuer(private_key)
+            service = ApprovalService(private_key.public_key(), Path(directory) / "approvals.sqlite3")
             fabric = AgentFabric(approval_service=service)
             adapter = FakeAdapter()
             fabric.register_adapter("fake", adapter)
@@ -306,7 +309,7 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
                 await fabric.dispatch(task(requires_approval=True, approved_by="owner"))
             self.assertEqual(adapter.submitted, [])
 
-            token = service.issue(
+            token = issuer.issue(
                 action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
             )
             approved_task = task(requires_approval=True, approved_by="owner", approval_token=token)

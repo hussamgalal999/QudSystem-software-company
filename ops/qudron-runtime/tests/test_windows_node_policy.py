@@ -145,7 +145,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
 
     def test_approval_resource_binds_exact_untrimmed_ui_selectors(self):
         base = {
-            "process_id": 123, "window_title": "Notepad",
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
             "automation_id": "search-box", "control_type": "Edit",
         }
         padded = {**base, "automation_id": " search-box "}
@@ -156,7 +156,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
 
     def test_typed_text_is_bound_to_approved_exact_payload(self):
         params = {
-            "process_id": 123, "window_title": "Notepad",
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
             "automation_id": "search", "control_type": "Edit", "text": "approved text",
         }
         approval = self.approval("windows.type_text", params, "nonce-00000000000003")
@@ -264,7 +264,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
             "idempotency_key": "idem-invalid-type-text",
             "action": "windows.type_text",
             "parameters": {
-                "process_id": 123, "window_title": "Notepad",
+                "process_id": 123, "window_handle": 456, "window_title": "Notepad",
                 "automation_id": "search-box", "control_type": "Edit", "text": "literal text",
             },
         }
@@ -289,6 +289,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
     def test_approval_resource_binds_exact_window_title(self):
         base = {
             "process_id": 123,
+            "window_handle": 456,
             "window_title": "Notepad - Notes",
             "automation_id": "search-box",
             "control_type": "Edit",

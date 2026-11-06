@@ -189,6 +189,14 @@ class ProviderRoutingTests(unittest.TestCase):
         payload = json.loads(seen[0].data.decode("utf-8"))
         self.assertNotIn("PRIVATE_ROLE_MEMORY_MARKER", payload["messages"][1]["content"])
 
+    def test_legacy_swarm_and_cvpen_agent_limits_remain_honored(self):
+        global_limit = worker.MAX_ROLE_ASSIGNMENTS_PER_TASK
+        with patch.dict(os.environ, {"QUDRON_MAX_SWARM_AGENTS": "7"}, clear=False):
+            self.assertEqual(worker.configured_max_agents("research", swarm_enabled=True), min(global_limit, 7))
+        with patch.dict(os.environ, {"QUDRON_MAX_CVPEN_AGENTS": "3"}, clear=False):
+            self.assertEqual(worker.configured_max_agents("cvpen_cv_creation", swarm_enabled=True), min(global_limit, 3))
+        self.assertEqual(worker.configured_max_agents("research", swarm_enabled=False), 1)
+
     def test_agent_memory_note_redacts_sensitive_job_title(self):
         note = worker.build_agent_memory_note(
             job={"id": "job-1", "title": "Candidate jane@example.com phone +1 555 123 4567"},

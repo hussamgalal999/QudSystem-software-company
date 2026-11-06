@@ -565,7 +565,7 @@ class ContinuityStore:
     ) -> None:
         with self.connect() as db:
             db.execute(
-                """UPDATE external_agent_tasks SET status=?,last_event_id=?,
+                """UPDATE external_agent_tasks SET status=?,last_event_id=COALESCE(?,last_event_id),
                    result_json=COALESCE(?,result_json),error=?,updated_at=?
                    WHERE provider=? AND external_task_id=?""",
                 (status, last_event_id,

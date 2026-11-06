@@ -444,12 +444,11 @@ class ComputeFabric:
         self._providers[provider.provider_id] = provider
 
     def _eligible(self, provider: ComputeProviderDescriptor, request: ComputeRequest) -> tuple[bool, str]:
-        if self.lease_store:
-            active = self.lease_store.active_count(provider.provider_id)
-            reserved = 0
-        else:
-            active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
-            reserved = self._reservations.get(provider.provider_id, 0)
+        # Store-backed admission is rechecked atomically by reserve() below.
+        # Keep this synchronous candidate-ranking pass memory-only so it never
+        # blocks the asyncio event loop on SQLite I/O.
+        active = sum(1 for provider_id, _ in self._leases.values() if provider_id == provider.provider_id)
+        reserved = self._reservations.get(provider.provider_id, 0)
         if active + reserved >= provider.max_concurrent_leases:
             return False, "provider_concurrency_limit"
         if not provider.enabled:
@@ -522,7 +521,7 @@ class ComputeFabric:
         # The same logical request is idempotent across process restarts when
         # a durable lease store is configured.
         if self.lease_store:
-            prior = self.lease_store.find_request(request.request_id)
+            prior = await asyncio.to_thread(self.lease_store.find_request, request.request_id)
             if prior:
                 state, existing_lease = prior
                 if state == "active" and existing_lease.expires_at > time.time():
@@ -546,7 +545,8 @@ class ComputeFabric:
             reservation_id = None
             locally_reserved = False
             if self.lease_store:
-                reservation_id = self.lease_store.reserve(
+                reservation_id = await asyncio.to_thread(
+                    self.lease_store.reserve,
                     provider.provider_id,
                     request.request_id,
                     provider.max_concurrent_leases,
@@ -582,7 +582,8 @@ class ComputeFabric:
                 if lease.lease_id in self._leases:
                     raise ComputeFabricError("Duplicate active compute lease ID")
                 if self.lease_store:
-                    self.lease_store.save_lease(
+                    await asyncio.to_thread(
+                        self.lease_store.save_lease,
                         reservation_id, request.request_id, lease, state="active"
                     )
                     reservation_resolved = True
@@ -602,7 +603,8 @@ class ComputeFabric:
                     persisted = False
                     if self.lease_store:
                         try:
-                            self.lease_store.save_lease(
+                            await asyncio.to_thread(
+                                self.lease_store.save_lease,
                                 reservation_id, request.request_id,
                                 cleanup_lease, state="release_pending",
                             )
@@ -621,7 +623,7 @@ class ComputeFabric:
                             timeout=self.policy.request_timeout_seconds,
                         )
                         if persisted and self.lease_store:
-                            self.lease_store.delete_lease(cleanup_lease.lease_id)
+                            await asyncio.to_thread(self.lease_store.delete_lease, cleanup_lease.lease_id)
                         self._leases.pop(cleanup_lease.lease_id, None)
                         reservation_resolved = True
                     except Exception:
@@ -636,14 +638,14 @@ class ComputeFabric:
                     # resource before the response was lost. Keep the bounded
                     # reservation until expiry to avoid immediate overbooking.
                     if not isinstance(exc, asyncio.TimeoutError):
-                        self.lease_store.cancel_reservation(reservation_id)
+                        await asyncio.to_thread(self.lease_store.cancel_reservation, reservation_id)
                         reservation_resolved = True
                 continue
             finally:
                 if self.lease_store and reservation_id and reservation_resolved:
                     # No-op after commit; removes a reservation after clean
                     # failure or successful compensating release.
-                    self.lease_store.cancel_reservation(reservation_id)
+                    await asyncio.to_thread(self.lease_store.cancel_reservation, reservation_id)
                 elif locally_reserved:
                     async with self._lock:
                         remaining = self._reservations.get(provider.provider_id, 1) - 1
@@ -658,7 +660,7 @@ class ComputeFabric:
     async def release(self, lease: ComputeLease) -> None:
         stored = self._leases.get(lease.lease_id)
         if not stored and self.lease_store:
-            persisted = self.lease_store.get_lease(lease.lease_id)
+            persisted = await asyncio.to_thread(self.lease_store.get_lease, lease.lease_id)
             if persisted:
                 state, persisted_lease = persisted
                 stored = (persisted_lease.provider_id, persisted_lease)
@@ -672,14 +674,14 @@ class ComputeFabric:
             )
         adapter = self._adapters[provider.adapter]
         if self.lease_store:
-            self.lease_store.mark_release_pending(lease.lease_id)
+            await asyncio.to_thread(self.lease_store.mark_release_pending, lease.lease_id)
         # Keep the lease in both stores until provider release is confirmed.
         await asyncio.wait_for(
             adapter.release(provider, lease),
             timeout=self.policy.request_timeout_seconds,
         )
         if self.lease_store:
-            self.lease_store.delete_lease(lease.lease_id)
+            await asyncio.to_thread(self.lease_store.delete_lease, lease.lease_id)
         self._leases.pop(lease.lease_id, None)
 
     def snapshot(self) -> dict[str, Any]:

@@ -289,14 +289,17 @@ class ContinuityStoreTests(unittest.TestCase):
         self.store.transition_agent_instance(first["instance_id"], "succeeded")
 
         def latest_role_snapshot():
-            rows = self.store.pending_cloud_outbox(limit=200)
-            candidates = [
-                row for row in rows
-                if row["endpoint"] == "/v1/agents"
-                and json.loads(row["payload_json"]).get("agent_id") == "qudron/qa_engineer"
-            ]
-            self.assertTrue(candidates)
-            return json.loads(candidates[-1]["payload_json"])
+            # Multiple state writes can share the same timestamp precision;
+            # rowid gives the true insertion order for this transactional test.
+            with self.store.connect() as db:
+                rows = db.execute(
+                    "SELECT payload_json FROM cloud_outbox WHERE endpoint='/v1/agents' ORDER BY rowid DESC"
+                ).fetchall()
+            for row in rows:
+                payload = json.loads(row["payload_json"])
+                if payload.get("agent_id") == "qudron/qa_engineer":
+                    return payload
+            self.fail("No cloud agent snapshot was queued")
 
         active = latest_role_snapshot()
         self.assertEqual(active["status"], "running")

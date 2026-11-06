@@ -3,20 +3,27 @@ import time
 import unittest
 from pathlib import Path
 
-from approval_service import ApprovalError, ApprovalService, issue_approval_token
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from approval_service import (
+    ApprovalError, ApprovalService, ApprovalTokenIssuer, issue_approval_token,
+)
 
 
 class ApprovalServiceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.database = Path(self.temp.name) / "approvals.sqlite3"
-        self.service = ApprovalService("approval-secret-" + "x" * 40, self.database)
+        self.private_key = Ed25519PrivateKey.generate()
+        self.public_key = self.private_key.public_key()
+        self.issuer = ApprovalTokenIssuer(self.private_key)
+        self.service = ApprovalService(self.public_key, self.database)
 
     def tearDown(self):
         self.temp.cleanup()
 
     def test_token_is_scoped_and_consumed_once(self):
-        token = self.service.issue(
+        token = self.issuer.issue(
             action="agent.dispatch",
             resource_id="qudron/job-1",
             approved_by="owner",
@@ -30,7 +37,7 @@ class ApprovalServiceTests(unittest.TestCase):
         ))
 
     def test_token_cannot_be_replayed_for_a_different_action_or_resource(self):
-        token = self.service.issue(
+        token = self.issuer.issue(
             action="agent.dispatch",
             resource_id="qudron/job-1",
             approved_by="owner",
@@ -46,7 +53,7 @@ class ApprovalServiceTests(unittest.TestCase):
         ))
 
     def test_tampered_and_expired_tokens_are_rejected(self):
-        token = self.service.issue(
+        token = self.issuer.issue(
             action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
         )
         encoded, signature = token.split(".")
@@ -56,7 +63,7 @@ class ApprovalServiceTests(unittest.TestCase):
         ))
 
         expired = issue_approval_token(
-            "approval-secret-" + "x" * 40,
+            self.private_key,
             action="agent.dispatch", resource_id="qudron/job-expired",
             approved_by="owner", ttl_seconds=30,
         )
@@ -66,11 +73,11 @@ class ApprovalServiceTests(unittest.TestCase):
         ))
 
     def test_non_ascii_signature_is_rejected_without_raising(self):
-        token = self.service.issue(
+        token = self.issuer.issue(
             action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
         )
         encoded, _ = token.split(".", 1)
-        malformed = encoded + "." + ("é" * 64)
+        malformed = encoded + "." + ("é" * 128)
         self.assertIsNone(self.service.verify_and_consume(
             malformed, action="agent.dispatch", resource_id="qudron/job-1"
         ))
@@ -78,13 +85,16 @@ class ApprovalServiceTests(unittest.TestCase):
     def test_overlong_approval_scope_is_rejected_not_truncated(self):
         with self.assertRaisesRegex(ApprovalError, "supported length"):
             issue_approval_token(
-                "approval-secret-" + "x" * 40,
+                self.private_key,
                 action="agent.dispatch", resource_id="x" * 501, approved_by="owner",
             )
 
-    def test_missing_or_weak_secret_is_rejected(self):
-        with self.assertRaises(Exception):
-            ApprovalService("weak", self.database)
+    def test_runtime_verifier_cannot_mint_or_load_a_private_key(self):
+        self.assertFalse(hasattr(self.service, "issue"))
+        with self.assertRaises(ApprovalError):
+            ApprovalService(self.private_key, self.database)
+        with self.assertRaises(ApprovalError):
+            ApprovalTokenIssuer(self.public_key)
 
 
 if __name__ == "__main__":

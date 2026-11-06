@@ -160,6 +160,29 @@ class WindowsNodePolicyTests(unittest.TestCase):
         with self.assertRaises(WindowsNodeError):
             automation.type_text(123, "Notepad", "search-box", "Button", "must not type")
 
+    def test_idempotent_ui_action_receipt_survives_worker_restart(self):
+        params = {"app_alias": "notepad"}
+        approval = self.approval(
+            "windows.launch_app", params, "nonce-restart-00000001"
+        )
+        payload = {
+            "task_id": "task-restart", "idempotency_key": "idem-restart",
+            "action": "windows.launch_app", "parameters": params,
+            "approval": approval,
+        }
+        first = self.node.execute(payload)
+        restarted = WindowsNode(
+            token="t" * 40,
+            approval_secret="s" * 40,
+            database_path=Path(self.temp.name) / "windows.sqlite3",
+            allowed_apps={"notepad": "C:/Windows/notepad.exe"},
+            automation=self.automation,
+        )
+        second = restarted.execute(payload)
+        self.assertFalse(first["replayed"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(len(self.automation.invocations), 1)
+
     def test_running_receipt_replay_is_unknown_and_never_reexecutes_action(self):
         params = {"app_alias": "notepad"}
         key = "idem-running-unknown"

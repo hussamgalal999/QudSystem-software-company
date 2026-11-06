@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from continuity_store import ContinuityStore
@@ -43,6 +44,34 @@ class ContinuityStoreTests(unittest.TestCase):
         second_store.complete_stage(
             job_id="job-claim", project="qudron", agent_id="worker",
             stage="analyze", claim_token=recovered["claim_token"], output="current",
+        )
+
+    def test_stage_completion_rolls_back_run_event_and_memory_as_one_transaction(self):
+        claim = self.store.begin_stage(
+            job_id="job-atomic", project="qudron", agent_id="worker", stage="produce"
+        )
+        with patch.object(self.store, "_queue_event", side_effect=RuntimeError("event store unavailable")):
+            with self.assertRaisesRegex(RuntimeError, "event store unavailable"):
+                self.store.complete_stage(
+                    job_id="job-atomic", project="qudron", agent_id="worker",
+                    stage="produce", claim_token=claim["claim_token"],
+                    output="private output", memory_note="memory must not be committed",
+                )
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT status,output FROM agent_runs WHERE job_id=? AND agent_id=? AND stage=?",
+                ("job-atomic", "worker", "produce"),
+            ).fetchone()
+            memories = db.execute(
+                "SELECT COUNT(*) FROM agent_memories WHERE project=? AND agent_id=?",
+                ("qudron", "worker"),
+            ).fetchone()[0]
+        self.assertEqual(row["status"], "running")
+        self.assertIsNone(row["output"])
+        self.assertEqual(memories, 0)
+        self.store.complete_stage(
+            job_id="job-atomic", project="qudron", agent_id="worker",
+            stage="produce", claim_token=claim["claim_token"], output="committed output",
         )
 
     def test_snapshot_exposes_all_recent_stage_checkpoints_without_raw_output(self):

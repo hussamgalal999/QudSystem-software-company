@@ -32,10 +32,11 @@ class MCPToolAgentAdapter:
         self.timeout_seconds = max(5, min(180, timeout_seconds))
         self._sessions: dict[str, str] = {}
         self._session_lock = threading.Lock()
+        self._initialization_locks: dict[str, threading.Lock] = {}
 
     def _request_sync(
         self, agent: AgentDescriptor, method: str, params: dict[str, Any] | None = None,
-        *, notification: bool = False,
+        *, notification: bool = False, session_id: str | None = None,
     ) -> dict[str, Any]:
         endpoint = (agent.endpoint_ref or "").strip()
         if not is_allowed_credential_endpoint(endpoint):
@@ -44,8 +45,9 @@ class MCPToolAgentAdapter:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
-        with self._session_lock:
-            session_id = self._sessions.get(endpoint)
+        if session_id is None:
+            with self._session_lock:
+                session_id = self._sessions.get(endpoint)
         if session_id:
             headers["Mcp-Session-Id"] = session_id
         token_env = str(agent.metadata.get("token_env", "")).strip()
@@ -96,9 +98,37 @@ class MCPToolAgentAdapter:
             if isinstance(item, dict) and item.get("type") == "text"
         )[:80_000]
 
-    def _call_tool(self, agent: AgentDescriptor, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def _initialize_session(self, agent: AgentDescriptor) -> str | None:
+        endpoint = (agent.endpoint_ref or "").strip()
+        with self._session_lock:
+            lock = self._initialization_locks.setdefault(endpoint, threading.Lock())
+        # Keep initialize + initialized notification atomic for this endpoint.
+        with lock:
+            initialized = self._request_sync(
+                agent, "initialize",
+                {
+                    "protocolVersion": self.protocol_version,
+                    "capabilities": {},
+                    "clientInfo": {"name": "qudron-agent-fabric", "version": "0.1.0"},
+                },
+            )
+            if not isinstance(initialized, dict) or not initialized.get("protocolVersion"):
+                raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
+            with self._session_lock:
+                session_id = self._sessions.get(endpoint)
+            self._request_sync(
+                agent, "notifications/initialized", {}, notification=True,
+                session_id=session_id,
+            )
+            return session_id
+
+    def _call_tool(
+        self, agent: AgentDescriptor, name: str, arguments: dict[str, Any],
+        *, session_id: str | None = None,
+    ) -> dict[str, Any]:
         result = self._request_sync(
-            agent, "tools/call", {"name": name, "arguments": arguments}
+            agent, "tools/call", {"name": name, "arguments": arguments},
+            session_id=session_id,
         )
         if not isinstance(result, dict) or result.get("isError"):
             raise MCPAdapterError(self._text_content(result if isinstance(result, dict) else {})[:500])
@@ -108,19 +138,7 @@ class MCPToolAgentAdapter:
         tool_name = str(agent.metadata.get("submit_tool", "")).strip()
         if not tool_name:
             raise MCPAdapterError("MCP agent descriptor is missing its explicit submit_tool")
-        initialized = await asyncio.to_thread(
-            self._request_sync, agent, "initialize",
-            {
-                "protocolVersion": self.protocol_version,
-                "capabilities": {},
-                "clientInfo": {"name": "qudron-agent-fabric", "version": "0.1.0"},
-            },
-        )
-        if not isinstance(initialized, dict) or not initialized.get("protocolVersion"):
-            raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
-        await asyncio.to_thread(
-            self._request_sync, agent, "notifications/initialized", {}, notification=True
-        )
+        session_id = await asyncio.to_thread(self._initialize_session, agent)
         args = {
             "title": task.title,
             "prompt": task.instruction,
@@ -129,7 +147,9 @@ class MCPToolAgentAdapter:
             "role": agent.display_name,
         }
         args.update(agent.metadata.get("fixed_arguments", {}))
-        result = await asyncio.to_thread(self._call_tool, agent, tool_name, args)
+        result = await asyncio.to_thread(
+            self._call_tool, agent, tool_name, args, session_id=session_id
+        )
         text = self._text_content(result)
         parsed: dict[str, Any] = {}
         try:
@@ -151,6 +171,7 @@ class MCPToolAgentAdapter:
             task_url=parsed.get("task_url"),
             metadata={
                 "protocol": "mcp",
+                "mcp_session_id": session_id,
                 "submit_tool": tool_name,
                 "status_tool": status_tool,
                 "result_tool": agent.metadata.get("result_tool"),
@@ -171,7 +192,8 @@ class MCPToolAgentAdapter:
                 summary="MCP task submitted; no status_tool was configured.",
             )
         result = await asyncio.to_thread(
-            self._call_tool, agent, str(status_tool), {"job_id": handle.remote_task_id}
+            self._call_tool, agent, str(status_tool), {"job_id": handle.remote_task_id},
+            session_id=handle.metadata.get("mcp_session_id"),
         )
         raw = self._text_content(result)
         data: dict[str, Any] = {}
@@ -193,6 +215,7 @@ class MCPToolAgentAdapter:
             final = await asyncio.to_thread(
                 self._call_tool, agent, str(handle.metadata["result_tool"]),
                 {"job_id": handle.remote_task_id},
+                session_id=handle.metadata.get("mcp_session_id"),
             )
             summary = self._text_content(final)[:80_000]
         return AgentTaskResult(
@@ -208,6 +231,7 @@ class MCPToolAgentAdapter:
         result = await asyncio.to_thread(
             self._call_tool, agent, str(follow_tool),
             {"job_id": handle.remote_task_id, "message": message},
+            session_id=handle.metadata.get("mcp_session_id"),
         )
         return AgentTaskHandle(
             agent.provider_id, handle.remote_task_id, TaskStatus.RUNNING,
@@ -219,7 +243,8 @@ class MCPToolAgentAdapter:
         if not cancel_tool:
             raise MCPAdapterError("This MCP agent does not expose an explicit cancel_tool")
         await asyncio.to_thread(
-            self._call_tool, agent, str(cancel_tool), {"job_id": handle.remote_task_id}
+            self._call_tool, agent, str(cancel_tool), {"job_id": handle.remote_task_id},
+            session_id=handle.metadata.get("mcp_session_id"),
         )
         return AgentTaskHandle(
             agent.provider_id, handle.remote_task_id, TaskStatus.CANCELLED,

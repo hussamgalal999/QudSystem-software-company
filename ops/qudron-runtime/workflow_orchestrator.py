@@ -630,7 +630,7 @@ class WorkflowOrchestrator:
                 if is_consensus_reducer:
                     failed_dependencies = {
                         dependency_id for dependency_id in dependencies
-                        if by_id.get(dependency_id, {}).get("status") == "failed"
+                        if dependency_id in by_id and by_id[dependency_id]["status"] == "failed"
                     }
                     pending_dependencies = dependencies - successful_dependencies - failed_dependencies
                     node_input["consensus"] = {

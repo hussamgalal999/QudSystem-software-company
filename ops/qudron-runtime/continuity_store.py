@@ -62,6 +62,26 @@ class ContinuityStore:
               ON agent_runs(job_id, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_agent_runs_active
               ON agent_runs(status, updated_at DESC);
+            CREATE TABLE IF NOT EXISTS agent_instances (
+              instance_id TEXT PRIMARY KEY,
+              job_id TEXT NOT NULL,
+              project TEXT NOT NULL,
+              role_id TEXT NOT NULL,
+              stage TEXT NOT NULL,
+              status TEXT NOT NULL,
+              attempts INTEGER NOT NULL DEFAULT 0,
+              model_profile TEXT,
+              provider_id TEXT,
+              model_name TEXT,
+              error TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              UNIQUE(job_id, role_id, stage)
+            );
+            CREATE INDEX IF NOT EXISTS idx_agent_instances_job
+              ON agent_instances(job_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_agent_instances_status
+              ON agent_instances(status, updated_at DESC);
             CREATE TABLE IF NOT EXISTS agent_memories (
               id TEXT PRIMARY KEY,
               project TEXT NOT NULL,
@@ -174,6 +194,155 @@ class ContinuityStore:
             },
             now,
         )
+
+
+    def create_agent_instance(
+        self, *, job_id: str, project: str, role_id: str, stage: str,
+        model_profile: str | None = None, provider_id: str | None = None,
+        model_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or recover one idempotent task-scoped instance for a stable role."""
+        if not job_id or not project or not role_id or not stage:
+            raise ValueError("job_id, project, role_id and stage are required")
+        if max(len(job_id), len(project), len(role_id), len(stage)) > 240:
+            raise ValueError("agent instance identity field is too long")
+        now = _now()
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT * FROM agent_instances WHERE job_id=? AND role_id=? AND stage=?",
+                (job_id, role_id, stage),
+            ).fetchone()
+            if row:
+                return dict(row)
+            instance_id = uuid.uuid4().hex
+            db.execute(
+                """INSERT INTO agent_instances
+                   (instance_id,job_id,project,role_id,stage,status,attempts,
+                    model_profile,provider_id,model_name,error,created_at,updated_at)
+                   VALUES(?,?,?,?,?,'queued',0,?,?,?,NULL,?,?)""",
+                (instance_id, job_id, project, role_id, stage, model_profile,
+                 provider_id, model_name, now, now),
+            )
+            self._queue_event(
+                db, project=project, job_id=job_id, agent_id=role_id,
+                event_type="agent_instance_created",
+                detail=f"instance={instance_id}; stage={stage}", now=now,
+            )
+            self._queue_agent_snapshot(
+                db, project=project, agent_id=role_id, status="queued",
+                task_id=job_id, next_action=f"Assigned role stage: {stage}", now=now,
+            )
+            row = db.execute(
+                "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)
+            ).fetchone()
+            return dict(row)
+
+    def transition_agent_instance(
+        self, instance_id: str, status: str, *,
+        model_profile: str | None = None, provider_id: str | None = None,
+        model_name: str | None = None, error: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist a validated lifecycle transition for one task-scoped instance."""
+        allowed = {
+            "queued": {"assigned", "running", "paused", "succeeded", "cancelled", "retired"},
+            "assigned": {"running", "paused", "cancelled", "replaced", "retired"},
+            "running": {"succeeded", "failed", "paused", "cancelled", "replaced"},
+            "paused": {"queued", "assigned", "running", "cancelled", "retired"},
+            "failed": {"queued", "running", "succeeded", "replaced", "retired"},
+            "succeeded": {"retired"},
+            "cancelled": {"retired"},
+            "replaced": {"retired"},
+            "retired": set(),
+        }
+        if status not in allowed:
+            raise ValueError(f"Unsupported agent instance status: {status}")
+        now = _now()
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)
+            ).fetchone()
+            if not row:
+                raise KeyError(instance_id)
+            current = str(row["status"])
+            if status != current and status not in allowed.get(current, set()):
+                raise ValueError(f"Invalid agent instance transition: {current} -> {status}")
+            attempts = int(row["attempts"])
+            if status == "running" and current != "running":
+                attempts += 1
+            safe_error = error[:1200] if error else (None if status != "failed" else row["error"])
+            next_profile = model_profile or row["model_profile"]
+            next_provider = provider_id or row["provider_id"]
+            next_model = model_name or row["model_name"]
+            db.execute(
+                """UPDATE agent_instances SET status=?,attempts=?,model_profile=?,
+                   provider_id=?,model_name=?,error=?,updated_at=? WHERE instance_id=?""",
+                (status, attempts, next_profile, next_provider, next_model,
+                 safe_error, now, instance_id),
+            )
+            role_id = str(row["role_id"])
+            project = str(row["project"])
+            job_id = str(row["job_id"])
+            stage = str(row["stage"])
+            self._queue_event(
+                db, project=project, job_id=job_id, agent_id=role_id,
+                event_type=f"agent_instance_{status}",
+                detail=(f"instance={instance_id}; stage={stage}; "
+                        f"provider={next_provider or 'unresolved'}; model={next_model or 'unresolved'}"),
+                now=now,
+            )
+            snapshot_status = {
+                "running": "running", "assigned": "running", "queued": "queued",
+                "paused": "blocked", "failed": "blocked", "succeeded": "idle",
+                "cancelled": "idle", "replaced": "idle", "retired": "idle",
+            }[status]
+            next_action = {
+                "queued": f"Await execution for stage: {stage}",
+                "assigned": f"Assigned stage: {stage}",
+                "running": f"Executing stage: {stage}",
+                "paused": f"Resume stage: {stage}",
+                "failed": safe_error or f"Retry or replace stage: {stage}",
+                "succeeded": "Await next assignment.",
+                "cancelled": "No further action; task cancelled.",
+                "replaced": "Superseded by a replacement instance.",
+                "retired": "Instance retired.",
+            }[status]
+            self._queue_agent_snapshot(
+                db, project=project, agent_id=role_id, status=snapshot_status,
+                task_id=job_id if status in {"queued", "assigned", "running", "paused", "failed"} else None,
+                next_action=next_action, now=now,
+            )
+            updated = db.execute(
+                "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)
+            ).fetchone()
+            return dict(updated)
+
+    def get_agent_instance(self, instance_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_agent_instances(
+        self, *, job_id: str | None = None, project: str | None = None,
+        status: str | None = None, limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(500, int(limit)))
+        clauses = []
+        values: list[Any] = []
+        for column, value in (("job_id", job_id), ("project", project), ("status", status)):
+            if value is not None:
+                clauses.append(f"{column}=?")
+                values.append(value)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        with self.connect() as db:
+            rows = db.execute(
+                f"SELECT * FROM agent_instances{where} ORDER BY updated_at DESC LIMIT ?",
+                (*values, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def pending_cloud_outbox(self, limit: int = 50) -> list[dict[str, Any]]:
         limit = max(1, min(200, int(limit)))
@@ -421,6 +590,20 @@ class ContinuityStore:
                 )
             }
             memory_count = int(db.execute("SELECT COUNT(*) FROM agent_memories").fetchone()[0])
+            instance_counts = {
+                str(row["status"]): int(row["total"])
+                for row in db.execute(
+                    "SELECT status,COUNT(*) AS total FROM agent_instances GROUP BY status"
+                )
+            }
+            active_instances = int(db.execute(
+                "SELECT COUNT(*) FROM agent_instances WHERE status IN ('queued','assigned','running','paused')"
+            ).fetchone()[0])
+            recent_instances = db.execute(
+                """SELECT instance_id,job_id,project,role_id,stage,status,attempts,
+                          model_profile,provider_id,model_name,updated_at
+                   FROM agent_instances ORDER BY updated_at DESC LIMIT 20"""
+            ).fetchall()
             external_counts = {
                 str(row["status"]): int(row["total"])
                 for row in db.execute(
@@ -433,6 +616,9 @@ class ContinuityStore:
             ).fetchall()
         return {
             "agent_stage_counts": stage_counts,
+            "agent_instance_counts": instance_counts,
+            "active_agent_instances": active_instances,
+            "latest_agent_instances": [dict(row) for row in recent_instances],
             "saved_agent_memories": memory_count,
             "external_task_counts": external_counts,
             "cloud_outbox_counts": self.cloud_outbox_snapshot(),

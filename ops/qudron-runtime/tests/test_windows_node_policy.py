@@ -13,21 +13,21 @@ class FakeAutomation:
         self.invocations = []
 
     def list_windows(self):
-        return [{"title": "Notepad", "process_id": 123}]
+        return [{"title": "Notepad", "process_id": 123, "handle": 456}]
 
-    def inspect_window(self, process_id):
-        return {"title": "Notepad", "process_id": process_id, "controls": [], "control_count": 0}
+    def inspect_window(self, process_id, window_handle):
+        return {"title": "Notepad", "process_id": process_id, "handle": window_handle, "controls": [], "control_count": 0}
 
     def launch_app(self, path):
         self.invocations.append(("launch", path))
         return {"launched": True, "process_id": 99}
 
-    def invoke_control(self, process_id, window_title, automation_id, control_type):
-        self.invocations.append(("invoke", process_id, window_title, automation_id, control_type))
+    def invoke_control(self, process_id, window_handle, window_title, automation_id, control_type):
+        self.invocations.append(("invoke", process_id, window_handle, window_title, automation_id, control_type))
         return {"invoked": True, "automation_id": automation_id}
 
-    def type_text(self, process_id, window_title, automation_id, control_type, text):
-        self.invocations.append(("type", process_id, window_title, automation_id, control_type, text))
+    def type_text(self, process_id, window_handle, window_title, automation_id, control_type, text):
+        self.invocations.append(("type", process_id, window_handle, window_title, automation_id, control_type, text))
         return {"typed": True, "character_count": len(text)}
 
 
@@ -66,7 +66,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
         result = self.node.execute({
             "task_id": "task-inspect", "idempotency_key": "idem-inspect",
             "action": "windows.inspect_window",
-            "parameters": {"process_id": 123},
+            "parameters": {"process_id": 123, "window_handle": 456},
         })
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["result"]["title"], "Notepad")
@@ -74,7 +74,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
 
     def test_invoke_control_requires_and_consumes_exact_approval(self):
         params = {
-            "process_id": 123, "window_title": "Notepad",
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
             "automation_id": "search-box", "control_type": "Edit",
         }
         with self.assertRaises(WindowsNodeError):
@@ -94,7 +94,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(
             self.automation.invocations,
-            [("invoke", 123, "Notepad", "search-box", "Edit")],
+            [("invoke", 123, 456, "Notepad", "search-box", "Edit")],
         )
         with self.assertRaises(WindowsNodeError):
             self.node.execute({

@@ -607,13 +607,27 @@ class ProviderCatalogueStore:
 def _catalogue_auth_headers(
     provider: dict[str, Any], key: str
 ) -> dict[str, str]:
-    mode = str(provider.get("probe_auth_header", "bearer")).lower()
+    # Provider catalogues keep discovery-only authentication settings inside
+    # the discovery object. Accept the top-level form too for backwards
+    # compatibility with older configurations.
+    discovery = provider.get("discovery", {})
+    if not isinstance(discovery, dict):
+        discovery = {}
+    mode = str(
+        provider.get("probe_auth_header")
+        or discovery.get("probe_auth_header")
+        or "bearer"
+    ).lower()
     if mode == "bearer":
         return {"Authorization": f"Bearer {key}"}
     if mode == "api-key":
         return {"api-key": key}
     if mode == "x-api-key":
-        version = str(provider.get("probe_api_version", "2023-06-01"))
+        version = str(
+            provider.get("probe_api_version")
+            or discovery.get("probe_api_version")
+            or "2023-06-01"
+        )
         return {"x-api-key": key, "anthropic-version": version}
     if mode == "x-goog-api-key":
         return {"x-goog-api-key": key}

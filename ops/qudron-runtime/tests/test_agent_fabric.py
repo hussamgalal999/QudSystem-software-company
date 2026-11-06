@@ -64,15 +64,18 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
                 super().__init__()
                 self.active = 0
                 self.max_active = 0
-                self.started = asyncio.Event()
-                self.release = asyncio.Event()
+                self.calls = 0
+                self.started = [asyncio.Event(), asyncio.Event()]
+                self.release = [asyncio.Event(), asyncio.Event()]
 
             async def submit(self, agent_descriptor, task_envelope):
+                index = self.calls
+                self.calls += 1
                 self.active += 1
                 self.max_active = max(self.max_active, self.active)
-                self.started.set()
+                self.started[index].set()
                 try:
-                    await self.release.wait()
+                    await self.release[index].wait()
                 finally:
                     self.active -= 1
                 return AgentTaskHandle(
@@ -90,24 +93,30 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         first = asyncio.create_task(fabric.dispatch(task(
             task_id="job-first", idempotency_key="idem-first",
         )))
-        await adapter.started.wait()
+        await adapter.started[0].wait()
 
         # A provider/adapter identity change during the submit await would orphan
         # the remote handle and its admission lease; reject that refresh.
         with self.assertRaises(AgentFabricError):
             fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
 
-        refreshed = agent("worker", "provider", "fake", max_concurrency=1)
-        fabric.update_agent(refreshed)
         second = asyncio.create_task(fabric.dispatch(task(
             task_id="job-second", idempotency_key="idem-second",
         )))
         await asyncio.sleep(0.02)
-        self.assertEqual(adapter.max_active, 1)
-
-        adapter.release.set()
+        adapter.release[0].set()
         first_receipt = await first
+
+        # The second dispatch is still pending on the slot; the first completion
+        # must not clear the agent-level pending counter for both submissions.
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
+
         await fabric.poll("worker", first_receipt.handle)
+        await adapter.started[1].wait()
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
+        adapter.release[1].set()
         second_receipt = await second
         await fabric.poll("worker", second_receipt.handle)
         self.assertEqual(adapter.max_active, 1)

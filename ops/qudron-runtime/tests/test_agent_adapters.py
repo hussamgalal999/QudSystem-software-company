@@ -236,7 +236,7 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             handle = await MCPToolAgentAdapter().submit(agent, self.task)
         self.assertEqual(handle.remote_task_id, "remote-job-1")
         self.assertEqual([c["method"] for c in calls], ["initialize", "notifications/initialized", "tools/call"])
-        self.assertEqual(calls[1]["params"]["name"], "qudron_submit_job")
+        self.assertEqual(calls[2]["params"]["name"], "qudron_submit_job")
 
 
 if __name__ == "__main__":

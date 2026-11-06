@@ -216,16 +216,42 @@ Every task in `project_task_registry.json` carries a `verification_profile`. The
 ## Scoring model
 
 For each task, evaluate each applicable gate as:
-- **Pass = 1.0** only with current evidence.
-- **Partial = 0.5** only when the test ran and a bounded subset passed; explain the uncovered scope.
+- **Pass = 1.0** only with current evidence for the exact candidate commit and target.
+- **Partial = 0.5** only when the test ran and a bounded subset passed; explain the uncovered scope and sample size.
 - **Fail = 0.0** when tested and failed.
-- **Blocked / not run = unscored**, never converted into a pass.
+- **Blocked / not run = 0.0 for coverage**, while retaining its distinct status in reporting. It is never converted into a pass.
+- **Stale = 0.0** until the evidence is rerun against the current candidate commit.
 
-Report two values separately:
-1. **Evidence coverage:** passed weighted gates / all required weighted gates. Blocked and not-run remain in the denominator and are visible.
-2. **Verified completion:** 100% only when all mandatory gates pass and the required maturity level is reached.
+### Weight assignment
 
-For portfolio reporting, publish counts for complete, partial, failed, blocked, not run, and stale evidence. Show the exact denominator and commit. Never average away a critical security, privacy, payment, authorization or data-loss failure; any mandatory critical gate failure blocks release regardless of numeric score.
+1. Each task may define a `gate_weights` object keyed by the exact gate IDs in its `verification_profile`.
+2. Every weight must be a positive number; weights must sum to **100** (tolerance 0.01).
+3. If `gate_weights` is absent, assign equal weight to every required gate: (w_i = 100/n). Do not invent weights after seeing the results.
+4. A gate not present in `verification_profile` is not scored. A gate present in the profile cannot be silently omitted.
+5. Mark security, privacy, authorization, payment integrity, data-loss prevention and owner approval gates as **critical** in the task's `critical_gates` list. Critical gates are hard release blockers.
+
+### Exact formulas
+
+Let (s_i) be the gate score (1.0, 0.5 or 0.0) and (w_i) its weight.
+
+[
+\text{Evidence Coverage} =
+\frac{\sum_{i=1}^{n} w_i s_i}{\sum_{i=1}^{n} w_i}\times 100
+]
+
+Blocked, not-run and stale gates contribute zero to the numerator and remain in the denominator. Report their counts separately so a high score cannot hide missing access or missing tests.
+
+[
+\text{Verified Completion} =
+\begin{cases}
+100, & \text{if every mandatory gate passes, all critical gates pass, and the required maturity level is reached}\\
+0, & \text{otherwise}
+\end{cases}
+]
+
+Evidence Coverage is a diagnostic progress measure; Verified Completion is the acceptance decision. They must never be merged into one percentage.
+
+For portfolio reporting, publish counts for complete, partial, failed, blocked, not run, and stale evidence. Show the exact denominator, weight map, commit SHA, environment and evidence references. Never average away a critical security, privacy, payment, authorization or data-loss failure; any mandatory critical gate failure blocks release regardless of numeric score.
 
 ## Required release-level gates
 

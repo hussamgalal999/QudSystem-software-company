@@ -216,6 +216,8 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         fabric.register_adapter("fake", FakeAdapter())
         fabric.register_agent(agent("stale", "provider", "fake",
                                     last_verified_at=time.time() - 90_000))
+        fabric.register_agent(agent("never-verified", "provider", "fake",
+                                    last_verified_at=None))
         with self.assertRaises(NoEligibleAgent):
             await fabric.dispatch(task())
 

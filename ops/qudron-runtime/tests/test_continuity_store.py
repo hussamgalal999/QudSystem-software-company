@@ -37,6 +37,47 @@ class ContinuityStoreTests(unittest.TestCase):
         self.assertIn("owner-authorized Android", memory)
         self.assertNotIn("evidence-led", memory)
 
+    def test_expired_agent_memory_is_excluded_and_purged(self):
+        self.store.remember(
+            project="qudron", agent_id="research_analyst",
+            content="This note should expire.", ttl_days=1,
+        )
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT id, expires_at FROM agent_memories WHERE project=? AND agent_id=?",
+                ("qudron", "research_analyst"),
+            ).fetchone()
+            self.assertIsNotNone(row["expires_at"])
+            db.execute(
+                "UPDATE agent_memories SET expires_at=? WHERE id=?",
+                ("2000-01-01T00:00:00+00:00", row["id"]),
+            )
+        memory = self.store.agent_memory_context(
+            project="qudron", agent_id="research_analyst"
+        )
+        self.assertNotIn("This note should expire", memory)
+        with self.store.connect() as db:
+            count = db.execute(
+                "SELECT COUNT(*) FROM agent_memories WHERE id=?", (row["id"],)
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
+
+    def test_zero_ttl_creates_non_expiring_agent_memory(self):
+        self.store.remember(
+            project="qudron", agent_id="research_analyst",
+            content="Retain this long-lived note.", scope="long", ttl_days=0,
+        )
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT expires_at FROM agent_memories WHERE project=? AND agent_id=?",
+                ("qudron", "research_analyst"),
+            ).fetchone()
+        self.assertIsNone(row["expires_at"])
+        memory = self.store.agent_memory_context(
+            project="qudron", agent_id="research_analyst"
+        )
+        self.assertIn("Retain this long-lived note", memory)
+
     def test_completed_agent_stage_is_reused_after_restart(self):
         self.assertIsNone(self.store.begin_stage(
             job_id="job-001", project="qudron", agent_id="software_engineer", stage="produce"

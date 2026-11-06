@@ -19,6 +19,7 @@ def approval_resource(action: str, parameters: dict[str, Any]) -> str:
             ).hexdigest()
         return ":".join((
             str(parameters.get("process_id", "")),
+            str(parameters.get("window_title", "")),
             str(parameters.get("automation_id", "")),
             str(parameters.get("control_type", "")),
             text_digest,

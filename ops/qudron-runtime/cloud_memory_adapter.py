@@ -70,7 +70,7 @@ class CloudMemoryClient:
             self.base_url + endpoint, data=data, headers=headers, method=method
         )
         try:
-            with open_credential_request(request, timeout=self.timeout_seconds) as response:
+            with open_credential_request(request, timeout=self.timeout_seconds, endpoint_validated=True) as response:
                 raw = response.read(1_000_001)
                 if len(raw) > 1_000_000:
                     raise CloudMemoryError("Cloud-memory response exceeded 1 MB")
@@ -116,7 +116,7 @@ class CloudMemoryClient:
             method="GET",
         )
         try:
-            with open_credential_request(request, timeout=self.timeout_seconds) as response:
+            with open_credential_request(request, timeout=self.timeout_seconds, endpoint_validated=True) as response:
                 raw = response.read(1_000_001)
                 if len(raw) > 1_000_000:
                     raise CloudMemoryError("Cloud-memory context exceeded 1 MB")

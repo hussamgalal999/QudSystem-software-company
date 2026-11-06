@@ -68,6 +68,10 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(redirected)
 
+
+    def test_a2a_message_text_tolerates_null_parts(self):
+        self.assertEqual(A2AHttpAdapter._message_text({"parts": None}), "")
+
     async def test_a2a_follow_up_preserves_direct_message_response(self):
         adapter = A2AHttpAdapter()
         agent_descriptor = AgentDescriptor(
@@ -140,8 +144,8 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
         base = adapter._base(descriptor)
         self.assertEqual(base, "https://agent.example.com/tenant/agent/")
         self.assertEqual(
-            urljoin(base, ".well-known/agent-card.json"),
-            "https://agent.example.com/tenant/agent/.well-known/agent-card.json",
+            urljoin(base, "/.well-known/agent-card.json"),
+            "https://agent.example.com/.well-known/agent-card.json",
         )
 
     async def test_mcp_submit_completes_initialize_handshake_before_tools_call(self):

@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "project": "Qudron — QudSystem Executive Orchestration Platform",
-  "snapshot_date": "2026-11-05",
-  "source_branch": "feat/qudron-continuity-memory-registry-2026-11-05",
+  "snapshot_date": "2026-11-06",
+  "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
   "base_branch": "main",
-  "source_commit": "bd15a49f55aa6035b3def5e16c16e415791d0a63",
+  "source_commit": "07348ed7218135059e143d97ba632179ac69c420",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",

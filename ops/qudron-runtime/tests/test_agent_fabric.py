@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from agent_fabric import (
-    AgentFabric, FabricPolicy, NoEligibleAgent, ProviderUnavailable,
+    AgentFabric, AgentFabricError, FabricPolicy, NoEligibleAgent, ProviderUnavailable,
 )
 from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, AgentTaskResult, DataClass,
@@ -90,6 +90,11 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
             task_id="job-first", idempotency_key="idem-first",
         )))
         await adapter.started.wait()
+
+        # A provider/adapter identity change during the submit await would orphan
+        # the remote handle and its admission lease; reject that refresh.
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
 
         refreshed = agent("worker", "provider", "fake", max_concurrency=1)
         fabric.update_agent(refreshed)

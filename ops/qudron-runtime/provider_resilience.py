@@ -18,7 +18,13 @@ import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
+from endpoint_security import open_credential_request
+
+
+def _open_validated_provider_request(request: Request, timeout: int = 6):
+    """Open only after provider-specific URL validation; never follow credential redirects."""
+    return open_credential_request(request, timeout=timeout, endpoint_validated=True)
 
 
 PROFILES = ("fast", "balanced", "reasoning")
@@ -436,7 +442,7 @@ def probe_route(
     store: ProviderHealthStore,
     *,
     timeout_seconds: int = 5,
-    opener: Callable[..., Any] = urlopen,
+    opener: Callable[..., Any] = _open_validated_provider_request,
     now: float | None = None,
 ) -> dict[str, Any]:
     """Perform one small read-only /models request; never runs model inference."""
@@ -661,7 +667,7 @@ def probe_catalogue_provider(
     *,
     environ: dict[str, str] | None = None,
     secret_reader: Callable[[str], str] | None = None,
-    opener: Callable[..., Any] = urlopen,
+    opener: Callable[..., Any] = _open_validated_provider_request,
     timeout_seconds: int = 6,
     now: float | None = None,
 ) -> dict[str, Any]:
@@ -780,7 +786,7 @@ def probe_due_catalogue_providers(
     secret_reader: Callable[[str], str] | None = None,
     interval_seconds: int = 21_600,
     timeout_seconds: int = 6,
-    opener: Callable[..., Any] = urlopen,
+    opener: Callable[..., Any] = _open_validated_provider_request,
     now: float | None = None,
 ) -> list[dict[str, Any]]:
     """Check every configured official provider catalogue at most once per interval."""

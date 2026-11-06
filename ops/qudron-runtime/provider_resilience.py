@@ -253,8 +253,8 @@ def load_provider_routes(
                 api_key=api_key,
                 protocol=protocol,
                 price_class=price_class,
-                input_usd_per_1m=input_rate,
-                output_usd_per_1m=output_rate,
+                input_usd_per_1m=(0.0 if price_class == "free" and verified_free and input_rate is None else input_rate),
+                output_usd_per_1m=(0.0 if price_class == "free" and verified_free and output_rate is None else output_rate),
                 verified_free=verified_free,
                 accepted_data_classes=normalized_classes,
                 priority=max(1, min(10_000, int(item.get("priority", 100)))),
@@ -449,9 +449,12 @@ def probe_route(
                     if not isinstance(entries, list):
                         error_class = "catalogue_schema_invalid"
                     else:
-                        model_available = any(
-                            isinstance(item, dict) and str(item.get("id", item.get("name", ""))) == route.model
-                            for item in entries
+                        model_available = (
+                            bool(entries) if route.model.lower() == "auto" else any(
+                                isinstance(item, dict)
+                                and str(item.get("id", item.get("name", ""))) == route.model
+                                for item in entries
+                            )
                         )
                         if not model_available:
                             error_class = "model_not_advertised"

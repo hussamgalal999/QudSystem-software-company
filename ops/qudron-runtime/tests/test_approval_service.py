@@ -3,7 +3,7 @@ import time
 import unittest
 from pathlib import Path
 
-from approval_service import ApprovalService, issue_approval_token
+from approval_service import ApprovalError, ApprovalService, issue_approval_token
 
 
 class ApprovalServiceTests(unittest.TestCase):
@@ -64,6 +64,23 @@ class ApprovalServiceTests(unittest.TestCase):
             expired, action="agent.dispatch", resource_id="qudron/job-expired",
             now=time.time() + 60,
         ))
+
+    def test_non_ascii_signature_is_rejected_without_raising(self):
+        token = self.service.issue(
+            action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
+        )
+        encoded, _ = token.split(".", 1)
+        malformed = encoded + "." + ("é" * 64)
+        self.assertIsNone(self.service.verify_and_consume(
+            malformed, action="agent.dispatch", resource_id="qudron/job-1"
+        ))
+
+    def test_overlong_approval_scope_is_rejected_not_truncated(self):
+        with self.assertRaisesRegex(ApprovalError, "supported length"):
+            issue_approval_token(
+                "approval-secret-" + "x" * 40,
+                action="agent.dispatch", resource_id="x" * 501, approved_by="owner",
+            )
 
     def test_missing_or_weak_secret_is_rejected(self):
         with self.assertRaises(Exception):

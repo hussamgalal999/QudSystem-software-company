@@ -113,6 +113,45 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(receipt.provider_id, "gemini-free")
         self.assertEqual(result.status, TaskStatus.SUCCEEDED)
 
+    async def test_dispatch_holds_admission_lease_until_remote_terminal_state(self):
+        fabric = AgentFabric()
+        adapter = FakeAdapter()
+        fabric.register_adapter("fake", adapter)
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+
+        first = await fabric.dispatch(task(task_id="job-one", idempotency_key="idem-one"))
+        second_task = asyncio.create_task(
+            fabric.dispatch(task(task_id="job-two", idempotency_key="idem-two"))
+        )
+        await asyncio.sleep(0.02)
+        self.assertEqual(len(adapter.submitted), 1)
+
+        first_result = await fabric.poll("worker", first.handle)
+        self.assertEqual(first_result.status, TaskStatus.SUCCEEDED)
+        second = await second_task
+        self.assertEqual(len(adapter.submitted), 2)
+        await fabric.poll("worker", second.handle)
+
+    async def test_timed_out_submission_holds_slot_until_explicit_reconciliation(self):
+        class HangingAdapter:
+            async def submit(self, agent_descriptor, task_envelope):
+                await asyncio.Event().wait()
+            async def poll(self, agent_descriptor, handle):
+                raise AssertionError("poll must not run before a handle is known")
+            async def follow_up(self, agent_descriptor, handle, message):
+                raise AssertionError("follow_up must not run")
+            async def cancel(self, agent_descriptor, handle):
+                raise AssertionError("cancel must not run")
+
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=0.01))
+        fabric.register_adapter("hanging", HangingAdapter())
+        fabric.register_agent(agent("worker", "provider", "hanging", max_concurrency=1))
+        with self.assertRaises(ProviderUnavailable):
+            await fabric.dispatch(task(task_id="job-timeout", idempotency_key="idem-timeout"))
+        self.assertEqual(fabric._agent_slots["worker"]._active, 1)
+        await fabric.reconcile_submission_timeout("worker", "job-timeout", handle=None)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+
     async def test_free_policy_rejects_paid_route(self):
         fabric = AgentFabric()
         fabric.register_adapter("fake", FakeAdapter())

@@ -1177,10 +1177,10 @@
       "id": "ci-release-gate",
       "area": "Release",
       "title": "Pass full CI for this continuity branch and its final merge candidate",
-      "status": "implemented_unverified",
+      "status": "pending_ci",
       "priority": "P0",
-      "evidence": "GitHub Actions run 42294161790; commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759; PR #26",
-      "current_state": "Qudron Runtime Checks completed successfully on repair-branch commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759 (run 42294161790), including unit/safety tests, runtime and FreeLLM image builds, Compose validation, sidecar health/auth smoke test and timezone database check. A fresh exact-head run is required after subsequent code or registry changes; independent review and production gates remain open.",
+      "evidence": "GitHub Actions run 42294161790 passed on a0c603368bd6ad427c57d3e81529d0a7c8ec8759; exact-head run after registry correction pending.",
+      "current_state": "Qudron Runtime Checks passed on code commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759 (run 42294161790). The subsequent registry-only snapshot update exposed a status-count consistency failure in test_status_counts_match_task_records; this is being corrected before exact-head CI is accepted. Independent review and production gates remain open.",
       "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
       "verification_profile": [
         "exact_commit_ci_green",

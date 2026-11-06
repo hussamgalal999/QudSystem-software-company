@@ -163,6 +163,8 @@ class SQLiteComputeLeaseStore:
                 CREATE INDEX IF NOT EXISTS idx_compute_reservations_provider_expiry
                     ON compute_reservations(provider_id, expires_at);
             """)
+            # Serialize migration checks across concurrent runtime startups.
+            db.execute("BEGIN IMMEDIATE")
             reservation_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(compute_reservations)")
             }
@@ -170,6 +172,7 @@ class SQLiteComputeLeaseStore:
                 db.execute(
                     "ALTER TABLE compute_reservations ADD COLUMN runtime_seconds INTEGER NOT NULL DEFAULT 0"
                 )
+            db.execute("COMMIT")
         finally:
             db.close()
 

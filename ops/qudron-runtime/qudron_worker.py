@@ -1558,12 +1558,12 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         personal_memory = continuity.agent_memory_context(
             project=project, agent_id=agent_id, limit=6
         )
-        agent_prior = prior
-        if personal_memory:
-            agent_prior = (
-                "PERSISTENT ROLE MEMORY (use as context, verify against current evidence):\n"
-                + personal_memory + "\n\nCURRENT TASK CONTEXT:\n" + prior
-            )
+        # Keep private role memory in the dedicated memory channel. call_llm
+        # removes this channel for anonymous/keyless routes; prior_context is
+        # always sent and must contain only task-scoped, policy-approved context.
+        combined_memory = "\n\n".join(
+            item for item in (memory_context, personal_memory) if item
+        )
         try:
             def on_route_selected(provider_id: str, model_name: str, selected_profile: str) -> None:
                 continuity.transition_agent_instance(
@@ -1572,7 +1572,7 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
                 )
 
             output = call_llm(
-                job, agent, instruction, agent_prior, memory_context,
+                job, agent, instruction, prior, combined_memory,
                 on_route_selected=on_route_selected,
             )
             if not isinstance(output, str) or not output.strip():

@@ -211,9 +211,9 @@ class WindowsNodePolicyTests(unittest.TestCase):
         self.assertTrue(control.focused)
         self.assertEqual(window.selector, ("search-box", "Edit"))
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "Notepad", "", "Edit", "must not type")
+            automation.type_text(123, 456, "Notepad", "", "Edit", "must not type")
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "Notepad", "search-box", "Button", "must not type")
+            automation.type_text(123, 456, "Notepad", "search-box", "Button", "must not type")
 
     def test_idempotent_ui_action_receipt_survives_worker_restart(self):
         params = {"app_alias": "notepad"}

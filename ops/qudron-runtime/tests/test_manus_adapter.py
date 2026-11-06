@@ -4,10 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from approval_service import ApprovalService
-from urllib.error import HTTPError
-from unittest.mock import patch
 
 from continuity_store import ContinuityStore
 from manus_adapter import ManusAdapter, ManusAPIError
@@ -71,9 +70,10 @@ class ManusAdapterTests(unittest.TestCase):
 
 
     def test_send_message_requires_scoped_one_time_owner_approval(self):
-        with self.assertRaisesRegex(ManusAPIError, "Owner approval is required"):
-            self.adapter.send_message("task-1", "Continue the task.")
-        self.assertFalse(self.requests)
+        with patch.object(self.adapter, "_request") as denied_request:
+            with self.assertRaisesRegex(ManusAPIError, "Owner approval is required"):
+                self.adapter.send_message("task-1", "Continue the task.")
+        denied_request.assert_not_called()
 
         approvals = ApprovalService(
             "b" * 40, Path(self.temp.name) / "manus-approvals.sqlite3"

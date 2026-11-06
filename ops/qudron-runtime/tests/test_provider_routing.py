@@ -6,7 +6,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 
 import qudron_worker as worker
-from provider_resilience import ProviderRoute, ProviderHealthStore
+from provider_resilience import ProviderRoute, ProviderHealthStore, eligible_routes
 
 
 class FakeResponse:

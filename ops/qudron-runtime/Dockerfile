@@ -6,10 +6,12 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
-# Keep every runtime adapter/module and its JSON registry in the image. In particular,
-# qudron_worker imports continuity_store at startup; an explicit legacy file list
-# silently omitted the new continuity and agent-fabric modules.
-COPY *.py *.json ./
+# Include runtime modules and only the JSON configuration required at startup.
+# The connected-account GitHub repository inventory is intentionally excluded:
+# its snapshot contains private repository names and belongs in the owner-scoped
+# inventory store, not in a general runtime image.
+COPY *.py ./
+COPY schedule.json agent_registry.json service_workflows.json model_provider_catalog.json compute_provider_catalog.json ./
 RUN mkdir -p /app/data /app/reports /app/logs
 EXPOSE 8765
 CMD ["python", "-u", "qudron_worker.py"]

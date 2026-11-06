@@ -20,7 +20,7 @@ class VisionTests(unittest.TestCase):
    def __enter__(self):return self
    def __exit__(self,*a):return False
    def read(self):return b'{"choices":[{"message":{"content":"Visible text"}}],"usage":{"prompt_tokens":20,"completion_tokens":10,"total_tokens":30}}'
-  def fake(req,timeout):
+  def fake(req,timeout=0,**kwargs):
    captured["body"]=json.loads(req.data.decode());captured["auth"]=req.get_header("Authorization");return Response()
   with patch.dict(os.environ,self.env,clear=True),patch.object(va.worker,"reserve_model_budget",return_value="reserve") as reserve,patch.object(va.worker,"acquire_model_call_slot",return_value="slot"),patch.object(va.worker,"record_model_usage") as record,patch.object(va.worker,"release_model_call_slot") as release,patch.object(va.worker,"release_model_budget_reservation") as release_budget,patch("vision_adapter.open_credential_request",side_effect=fake):
    result=va.analyze_image(self.img,"Extract visible code")

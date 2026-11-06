@@ -93,6 +93,32 @@ class ProviderResilienceTests(unittest.TestCase):
         self.assertEqual(routes[0].api_key, "secret-value-not-to-display")
         self.assertNotIn("secret-value-not-to-display", json.dumps(routes[0].safe_record()))
 
+    def test_global_data_class_allowlist_constrains_fallback_routes(self):
+        env = {
+            "QUDRON_PROVIDER_DATA_CLASSES": "public,internal",
+            "QUDRON_PROVIDER_ROUTES_JSON": json.dumps([{
+                "route_id": "fallback-with-confidential",
+                "provider_id": "fallback",
+                "profile": "balanced",
+                "base_url": "https://fallback.example/v1",
+                "model": "model-1",
+                "api_key_env": "FALLBACK_KEY",
+                "enabled": True,
+                "owner_approved": True,
+                "protocol": "openai_chat_completions",
+                "price_class": "paid",
+                "input_usd_per_1m": 0.5,
+                "output_usd_per_1m": 1.0,
+                "accepted_data_classes": ["public", "internal", "confidential"],
+            }]),
+            "FALLBACK_KEY": "test-secret",
+        }
+        routes = load_provider_routes("balanced", environ=env)
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(set(routes[0].accepted_data_classes), {"public", "internal"})
+        self.assertFalse(route_allowed_for_data(routes[0], "confidential"))
+        self.assertEqual(eligible_routes(routes, self.store, data_class="confidential"), [])
+
     def test_missing_fallback_credentials_and_missing_paid_prices_fail_closed(self):
         env = {
             "QUDRON_PROVIDER_ROUTES_JSON": json.dumps([

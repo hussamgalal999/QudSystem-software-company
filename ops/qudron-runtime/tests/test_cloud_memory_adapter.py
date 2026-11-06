@@ -62,6 +62,13 @@ class CloudMemoryAdapterTests(unittest.TestCase):
         client = CloudMemoryClient("https://memory.example.com", "t" * 40)
         with patch("cloud_memory_adapter.urlopen", side_effect=fake_urlopen):
             first = flush_outbox(self.store, client)
+            # The production outbox applies exponential backoff after failure.
+            # Advance only this test record to its due time before the retry.
+            with self.store.connect() as db:
+                db.execute(
+                    "UPDATE cloud_outbox SET next_attempt_at=0 WHERE outbox_id=?",
+                    ("event-1",),
+                )
             result = flush_outbox(self.store, client)
         self.assertEqual(first["failed"], 1)
         self.assertEqual(first["pending"], 1)

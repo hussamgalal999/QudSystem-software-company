@@ -1232,8 +1232,8 @@
     }
   ],
   "computed_status_counts": {
-    "ci_verified": 2,
-    "implemented_pending_ci": 8,
+    "implemented_pending_ci": 9,
+    "ci_verified": 1,
     "planned": 11,
     "blocked_owner": 10,
     "target_unmeasured": 2,

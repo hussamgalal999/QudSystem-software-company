@@ -224,11 +224,15 @@ class WorkflowStore:
             CREATE INDEX IF NOT EXISTS idx_workflow_resource_lease
               ON workflow_resource_locks(resource_key,lease_until);
             """)
+            # Serialize schema inspection and ALTER so concurrent worker startup
+            # cannot race on the same legacy column migration.
+            db.execute("BEGIN IMMEDIATE")
             columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(workflow_nodes)").fetchall()
             }
             if "execution_owner" not in columns:
                 db.execute("ALTER TABLE workflow_nodes ADD COLUMN execution_owner TEXT")
+            db.execute("COMMIT")
 
 
     def create(self, definition: WorkflowDefinition) -> str:

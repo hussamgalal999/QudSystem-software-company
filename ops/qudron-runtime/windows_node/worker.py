@@ -92,13 +92,18 @@ class PywinautoAutomation:
         return {"process_id": process.pid, "launched": True}
 
     def invoke_control(
-        self, process_id: int, automation_id: str, control_type: str
+        self, process_id: int, window_title: str,
+        automation_id: str, control_type: str,
     ) -> dict[str, Any]:
+        if not isinstance(window_title, str) or not window_title.strip():
+            raise WindowsNodeError("A non-empty window_title is required")
         if not automation_id or not control_type:
             raise WindowsNodeError("automation_id and control_type are required")
         for window in self._desktop().windows():
             try:
                 if int(window.process_id()) != process_id:
+                    continue
+                if str(window.window_text()).strip() != window_title.strip():
                     continue
                 control = window.child_window(
                     auto_id=automation_id, control_type=control_type
@@ -112,9 +117,11 @@ class PywinautoAutomation:
         raise WindowsNodeError("Allowlisted UI control could not be located or invoked")
 
     def type_text(
-        self, process_id: int, automation_id: str,
+        self, process_id: int, window_title: str, automation_id: str,
         control_type: str, text: str,
     ) -> dict[str, Any]:
+        if not isinstance(window_title, str) or not window_title.strip():
+            raise WindowsNodeError("A non-empty window_title is required")
         if not isinstance(automation_id, str) or not automation_id.strip():
             raise WindowsNodeError("A non-empty automation_id is required")
         if control_type != "Edit":
@@ -124,6 +131,8 @@ class PywinautoAutomation:
         for window in self._desktop().windows():
             try:
                 if int(window.process_id()) != process_id:
+                    continue
+                if str(window.window_text()).strip() != window_title.strip():
                     continue
                 control = window.child_window(
                     auto_id=automation_id.strip(), control_type="Edit"
@@ -249,19 +258,25 @@ class WindowsNode:
             raise WindowsNodeError("parameters must be a JSON object")
         if action not in READ_ACTIONS | MUTATING_ACTIONS:
             raise WindowsNodeError("Action is not allowlisted")
-        if action == "windows.type_text":
+        if action in {"windows.invoke_control", "windows.type_text"}:
             process_id = params.get("process_id")
+            window_title = params.get("window_title")
             automation_id = params.get("automation_id")
             control_type = params.get("control_type")
-            text_value = params.get("text")
             if isinstance(process_id, bool) or not isinstance(process_id, int) or process_id <= 0:
-                raise WindowsNodeError("type_text requires a positive integer process_id")
+                raise WindowsNodeError("UI control actions require a positive integer process_id")
+            if not isinstance(window_title, str) or not window_title.strip():
+                raise WindowsNodeError("UI control actions require an exact non-empty window_title")
             if not isinstance(automation_id, str) or not automation_id.strip():
-                raise WindowsNodeError("type_text requires a non-empty automation_id")
-            if control_type != "Edit":
-                raise WindowsNodeError("type_text requires the exact Edit control type")
-            if not isinstance(text_value, str) or len(text_value) > 4000:
-                raise WindowsNodeError("type_text requires a string of at most 4,000 characters")
+                raise WindowsNodeError("UI control actions require a non-empty automation_id")
+            if not isinstance(control_type, str) or not control_type.strip():
+                raise WindowsNodeError("UI control actions require a non-empty control_type")
+            if action == "windows.type_text":
+                text_value = params.get("text")
+                if control_type != "Edit":
+                    raise WindowsNodeError("type_text requires the exact Edit control type")
+                if not isinstance(text_value, str) or len(text_value) > 4000:
+                    raise WindowsNodeError("type_text requires a string of at most 4,000 characters")
 
         db = self._connect()
         try:
@@ -325,14 +340,13 @@ class WindowsNode:
                 raw = self.automation.launch_app(path)
             elif action == "windows.invoke_control":
                 raw = self.automation.invoke_control(
-                    int(params.get("process_id", 0)),
-                    str(params.get("automation_id", "")),
-                    str(params.get("control_type", "")),
+                    params["process_id"], params["window_title"],
+                    params["automation_id"], params["control_type"],
                 )
             else:
                 raw = self.automation.type_text(
-                    params["process_id"], params["automation_id"],
-                    params["control_type"], params["text"],
+                    params["process_id"], params["window_title"],
+                    params["automation_id"], params["control_type"], params["text"],
                 )
             safe = self._safe_result(action, raw)
             response = {

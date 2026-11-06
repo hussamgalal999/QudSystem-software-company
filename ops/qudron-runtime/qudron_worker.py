@@ -1146,7 +1146,7 @@ def reserve_model_budget(
             ).fetchone()[0]
             uncertain = db.execute(
                 """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
-                   WHERE created_at LIKE ? AND billing_state='unknown'""",
+                   WHERE started_at LIKE ? AND billing_state='unknown'""",
                 (day,),
             ).fetchone()[0]
             if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > daily_budget:
@@ -1167,7 +1167,7 @@ def reserve_model_budget(
             ).fetchone()[0]
             uncertain = db.execute(
                 """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
-                   WHERE created_at LIKE ? AND billing_state='unknown'""",
+                   WHERE started_at LIKE ? AND billing_state='unknown'""",
                 (month,),
             ).fetchone()[0]
             if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > monthly_budget:

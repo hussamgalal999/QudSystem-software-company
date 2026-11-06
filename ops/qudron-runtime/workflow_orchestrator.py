@@ -347,46 +347,65 @@ class WorkflowStore:
         if changed != 1:
             raise WorkflowError("Approval target was not found or does not require approval")
 
-    def start_node(self, workflow_id: str, node_id: str) -> int:
+    def start_node(self, workflow_id: str, node_id: str) -> int | None:
+        """Atomically claim a queued node; return None if another runner owns it."""
         now = time.time()
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute(
-                "SELECT attempts,status FROM workflow_nodes WHERE workflow_id=? AND node_id=?",
+                "SELECT attempts,status,requires_approval,approved_by FROM workflow_nodes "
+                "WHERE workflow_id=? AND node_id=?",
                 (workflow_id, node_id),
             ).fetchone()
             if not row:
+                db.rollback()
                 raise WorkflowError("Workflow node not found")
             if row["status"] in {"succeeded", "failed", "cancelled"}:
+                db.rollback()
                 raise WorkflowError("Terminal workflow node cannot be restarted implicitly")
+            if row["status"] != "queued" or (
+                row["requires_approval"] and not row["approved_by"]
+            ):
+                db.rollback()
+                return None
             attempts = int(row["attempts"]) + 1
-            db.execute(
+            changed = db.execute(
                 """UPDATE workflow_nodes SET status='running',attempts=?,error=NULL,updated_at=?
-                   WHERE workflow_id=? AND node_id=?""",
-                (attempts, now, workflow_id, node_id),
-            )
+                   WHERE workflow_id=? AND node_id=? AND status='queued'
+                     AND attempts=? AND (requires_approval=0 OR approved_by IS NOT NULL)""",
+                (attempts, now, workflow_id, node_id, int(row["attempts"])),
+            ).rowcount
+            if changed != 1:
+                db.rollback()
+                return None
+            db.commit()
         return attempts
 
     def finish_node(
-        self, workflow_id: str, node_id: str, result: NodeExecutionResult
-    ) -> None:
+        self, workflow_id: str, node_id: str, result: NodeExecutionResult,
+        attempt_token: int | None = None,
+    ) -> bool:
         now = time.time()
         status = "succeeded" if result.status == "succeeded" else "failed"
         with self.connect() as db:
-            db.execute(
-                """UPDATE workflow_nodes SET status=?,output_json=?,artifacts_json=?,
-                   evidence_json=?,metadata_json=?,error=?,updated_at=?
-                   WHERE workflow_id=? AND node_id=?""",
-                (
-                    status,
-                    json.dumps({"summary": result.summary, "metadata": result.metadata}, ensure_ascii=False)
-                    if result.status == "succeeded" and self._persist_output(db, workflow_id, node_id) else None,
-                    json.dumps(result.artifacts, ensure_ascii=False),
-                    json.dumps(result.evidence, ensure_ascii=False),
-                    json.dumps(result.metadata, ensure_ascii=False),
-                    None if status == "succeeded" else result.summary[:1200],
-                    now, workflow_id, node_id,
-                ),
-            )
+            query = """UPDATE workflow_nodes SET status=?,output_json=?,artifacts_json=?,
+                         evidence_json=?,metadata_json=?,error=?,updated_at=?
+                         WHERE workflow_id=? AND node_id=?"""
+            params = [
+                status,
+                json.dumps({"summary": result.summary, "metadata": result.metadata}, ensure_ascii=False)
+                if result.status == "succeeded" and self._persist_output(db, workflow_id, node_id) else None,
+                json.dumps(result.artifacts, ensure_ascii=False),
+                json.dumps(result.evidence, ensure_ascii=False),
+                json.dumps(result.metadata, ensure_ascii=False),
+                None if status == "succeeded" else result.summary[:1200],
+                now, workflow_id, node_id,
+            ]
+            if attempt_token is not None:
+                query += " AND status='running' AND attempts=?"
+                params.append(attempt_token)
+            changed = db.execute(query, tuple(params)).rowcount
+        return changed == 1
 
     @staticmethod
     def _persist_output(db: sqlite3.Connection, workflow_id: str, node_id: str) -> bool:
@@ -396,7 +415,10 @@ class WorkflowStore:
         ).fetchone()
         return bool(row and row["persist_output"])
 
-    def retry_node(self, workflow_id: str, node_id: str, error: str) -> bool:
+    def retry_node(
+        self, workflow_id: str, node_id: str, error: str,
+        attempt_token: int | None = None,
+    ) -> bool:
         with self.connect() as db:
             row = db.execute(
                 """SELECT attempts,max_attempts,retry_safe FROM workflow_nodes
@@ -405,12 +427,14 @@ class WorkflowStore:
             if not row:
                 raise WorkflowError("Workflow node not found")
             retry = bool(row["retry_safe"]) and int(row["attempts"]) < int(row["max_attempts"])
-            db.execute(
-                """UPDATE workflow_nodes SET status=?,error=?,updated_at=?
-                   WHERE workflow_id=? AND node_id=?""",
-                ("queued" if retry else "failed", error[:1200], time.time(), workflow_id, node_id),
-            )
-        return retry
+            query = """UPDATE workflow_nodes SET status=?,error=?,updated_at=?
+                       WHERE workflow_id=? AND node_id=?"""
+            params = ["queued" if retry else "failed", error[:1200], time.time(), workflow_id, node_id]
+            if attempt_token is not None:
+                query += " AND status='running' AND attempts=?"
+                params.append(attempt_token)
+            changed = db.execute(query, tuple(params)).rowcount
+        return retry and changed == 1
 
     def set_workflow_status(self, workflow_id: str, status: str) -> None:
         with self.connect() as db:
@@ -471,11 +495,14 @@ class WorkflowOrchestrator:
         for attempt in range(1, int(row["max_attempts"]) + 1):
             if attempt > 1:
                 # Each failed attempt releases its lease in finally. Reacquire
-                # every declared resource before starting a retry; otherwise
-                # another workflow can write the same resource in the gap.
+                # every declared resource before starting a retry.
                 while not self.store.acquire_resources(owner, claims, self.lease_seconds):
                     await asyncio.sleep(min(0.1, max(0.01, self.lease_seconds / 20)))
-            self.store.start_node(workflow_id, node_id)
+            attempt_token = self.store.start_node(workflow_id, node_id)
+            if attempt_token is None:
+                # Another orchestrator claimed this queued node. It owns the
+                # shared resource lease; do not execute or release it here.
+                return
             stop = asyncio.Event()
             heartbeat = asyncio.create_task(self._keep_lease(owner, stop))
             try:
@@ -485,11 +512,12 @@ class WorkflowOrchestrator:
                     raise TypeError("workflow executor must return NodeExecutionResult")
                 if result.status != "succeeded":
                     raise WorkflowError(result.summary or "Agent did not return success")
-                self.store.finish_node(workflow_id, node_id, result)
+                if not self.store.finish_node(workflow_id, node_id, result, attempt_token):
+                    return
                 return
             except Exception as exc:
                 message = f"{type(exc).__name__}: {exc}"[:1200]
-                retry = self.store.retry_node(workflow_id, node_id, message)
+                retry = self.store.retry_node(workflow_id, node_id, message, attempt_token)
                 if not retry:
                     return
                 if self.retry_base_seconds:

@@ -1,6 +1,8 @@
 import asyncio
 import time
 import unittest
+import tempfile
+from pathlib import Path
 
 from agent_fabric import (
     AgentFabric, FabricPolicy, NoEligibleAgent, ProviderUnavailable,
@@ -9,6 +11,7 @@ from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, AgentTaskResult, DataClass,
     TaskEnvelope, TaskStatus,
 )
+from approval_service import ApprovalService
 
 
 class FakeAdapter:
@@ -105,6 +108,29 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception):
             await fabric.dispatch(task(requires_approval=True))
         self.assertEqual(adapter.submitted, [])
+
+
+    async def test_owner_approval_requires_scoped_one_time_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = ApprovalService("a" * 40, Path(directory) / "approvals.sqlite3")
+            fabric = AgentFabric(approval_service=service)
+            adapter = FakeAdapter()
+            fabric.register_adapter("fake", adapter)
+            fabric.register_agent(agent("agent", "provider", "fake"))
+
+            with self.assertRaises(Exception):
+                await fabric.dispatch(task(requires_approval=True, approved_by="owner"))
+            self.assertEqual(adapter.submitted, [])
+
+            token = service.issue(
+                action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
+            )
+            approved_task = task(requires_approval=True, approved_by="owner", approval_token=token)
+            receipt = await fabric.dispatch(approved_task)
+            self.assertEqual(receipt.agent_id, "agent")
+            with self.assertRaises(Exception):
+                await fabric.dispatch(approved_task)
+            self.assertEqual(len(adapter.submitted), 1)
 
     async def test_mismatched_provider_handle_is_rejected(self):
         fabric = AgentFabric()

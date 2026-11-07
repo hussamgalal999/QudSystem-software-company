@@ -173,6 +173,24 @@ class AgentFleetTests(unittest.TestCase):
         for artifact in artifact_dir.iterdir():
             if artifact.is_file():
                 self.assertNotIn("API_KEY=DO_NOT_EXPORT", artifact.read_text(encoding="utf-8"))
+    def test_success_does_not_export_raw_logs_by_default(self) -> None:
+        manifest_path = self.write_manifest([{
+            "id": "no-raw-logs", "agent": "codex", "mode": "implement", "base_ref": "HEAD",
+            "allowed_paths": ["generated.txt"], "prompt": "create a fixture file",
+        }])
+        task = agent_fleet.load_manifest(manifest_path)["tasks"][0]
+        artifact_dir = self.artifacts / "no-logs"
+        worktree_root = self.worktrees / "no-logs"
+        artifact_dir.mkdir(parents=True)
+        worktree_root.mkdir(parents=True)
+        prepared = agent_fleet.prepare_task(self.repo, task, "no-logs-12345678", worktree_root, artifact_dir)
+        result = agent_fleet.execute_task(prepared, artifact_dir, timeout=60)
+        self.assertEqual(result["status"], "completed")
+        self.assertFalse(result["logs_exported"])
+        self.assertIsNone(result["stdout_path"])
+        self.assertIsNone(result["stderr_path"])
+        self.assertFalse((artifact_dir / "no-raw-logs.stdout.txt").exists())
+        self.assertFalse((artifact_dir / "no-raw-logs.stderr.txt").exists())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -452,7 +452,13 @@ def execute_task(
     if task["mode"] == "review" and files:
         violations = files[:]
     execution_succeeded = exit_code == 0 and not timed_out
-    patch_exported = bool(execution_succeeded and not violations and files)
+    diff_check = git(
+        ["diff", "--check", prepared["base_sha"], "--", *files],
+        prepared["worktree"],
+        check=False,
+    )
+    diff_check_passed = diff_check.returncode == 0
+    patch_exported = bool(execution_succeeded and not violations and diff_check_passed and files)
     logs_exported = bool(capture_logs and not violations and execution_succeeded)
     if logs_exported:
         safe_write(stdout_path, stdout)
@@ -472,6 +478,8 @@ def execute_task(
         status = "failed"
     elif violations:
         status = "scope_violation" if task["mode"] == "implement" else "review_mutated_files"
+    elif not diff_check_passed:
+        status = "diff_check_failed"
     elif task["mode"] == "review":
         status = "review_completed"
     elif not files:
@@ -485,12 +493,14 @@ def execute_task(
         "duration_seconds": round(time.time() - started, 2),
         "changed_files": files,
         "scope_violations": violations,
+        "diff_check_passed": diff_check_passed,
         "patch_exported": patch_exported,
         "patch_path": str(patch_path) if patch_exported else None,
         "patch_sha256": patch_sha256,
         "patch_block_reason": (
             "scope_validation_failed" if violations
             else "worker_execution_failed" if not execution_succeeded
+            else "diff_check_failed" if not diff_check_passed
             else None
         ),
         "logs_exported": logs_exported,

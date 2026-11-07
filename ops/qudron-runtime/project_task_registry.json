@@ -4,7 +4,7 @@
   "snapshot_date": "2026-11-07",
   "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
   "base_branch": "main",
-  "source_commit": "a0c603368bd6ad427c57d3e81529d0a7c8ec8759",
+  "source_commit": "4289b73fb931236e238d829a4fb84c72a5167b1e",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -2383,8 +2383,8 @@
       "title": "Enforce approvals for external publishing, messaging, payments, account changes and device mutation",
       "status": "implemented_unverified",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/tests/test_approval_service.py; docs/CONTINUITY_PROTOCOL.md",
-      "current_state": "Mutating MCP tools carry non-read-only hints; end-to-end approval policy across every connector is incomplete.",
+      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/scripts/generate_approval_keys.py; ops/qudron-runtime/scripts/issue_approval.py; ops/qudron-runtime/APPROVAL_KEY_OPERATIONS.md; ops/qudron-runtime/tests/test_approval_service.py",
+      "current_state": "Ed25519 asymmetric approval signing/verifying, owner-only key generation and token-issuance utilities, and public-key-only runtime verification tests are implemented. The owner private key and runtime public-key secret mount are not provisioned in deployment, so production approval issuance is not enabled.",
       "acceptance_criteria": "Every high-impact tool requires user approval and stores approver, target, diff, timestamp and outcome.",
       "verification_profile": [
         "threat_model_and_risk_register",
@@ -2559,8 +2559,8 @@
       "title": "Pass full CI for this continuity branch and its final merge candidate",
       "status": "pending_ci",
       "priority": "P0",
-      "evidence": "GitHub Actions run 42294161790 passed on a0c603368bd6ad427c57d3e81529d0a7c8ec8759; exact-head run after registry correction pending.",
-      "current_state": "Qudron Runtime Checks passed on code commit a0c603368bd6ad427c57d3e81529d0a7c8ec8759 (run 42294161790). The subsequent registry-only snapshot update exposed a status-count consistency failure in test_status_counts_match_task_records; this is being corrected before exact-head CI is accepted. Independent review and production gates remain open.",
+      "evidence": "GitHub Actions run 42294161790 passed on a0c603368bd6ad427c57d3e81529d0a7c8ec8759; later exact-head CI runs identified registry/test mismatches which were corrected; latest exact-head run pending.",
+      "current_state": "A prior exact repair-branch code revision passed full CI, but a subsequent registry-only change exposed a status-count mismatch; that was corrected. The quality-contract validator, complete per-task contracts and owner approval utilities have since been added. A fresh exact-head CI run is required before acceptance; independent review and production gates remain open.",
       "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
       "verification_profile": [
         "exact_commit_ci_green",
@@ -2687,7 +2687,7 @@
       "status": "implemented_pending_ci",
       "priority": "P1",
       "evidence": "ops/qudron-runtime/quality_contract_validator.py; ops/qudron-runtime/tests/test_quality_contract_validator.py; docs/QUALITY_VERIFICATION_FRAMEWORK.md",
-      "current_state": "Validator and per-task contract fields are being added on the repair branch; exact-head CI must pass before status is promoted.",
+      "current_state": "All 64 registry tasks now carry mandatory_gates, critical_gates, gate_weights and required_maturity. A canonical-profile validator and regression tests are implemented; exact-head CI is pending.",
       "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. A validator rejects unknown gate IDs and missing fields; unit tests cover invalid IDs, missing weights, invalid maturity and score reproducibility.",
       "verification_profile": [
         "schema_validation",

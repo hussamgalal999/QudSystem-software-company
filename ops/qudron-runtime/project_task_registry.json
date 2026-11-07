@@ -2718,7 +2718,7 @@
       "status": "ci_verified",
       "priority": "P0",
       "evidence": "PR #30 commit c19c4d3ce4e037503052e37ae373d7b3aad9ae96; GitHub Actions run #652; ops/qudron-runtime/scripts/agent_fleet.py; tests/test_agent_fleet_binding.py; agent-workers/run.schema.json",
-      "current_state": "The unified launcher supports Codex/Gemini/Claude CLI adapters, per-task worktrees and branches, bounded parallel execution, allowed/denied path checks, protected artifact export, patch SHA-256, process-group timeout cleanup and a mandatory human-review handoff. Exact-head Run #652 passed all workflow steps and 385 tests, including three worktree/branch/base-HEAD binding regressions. CI uses fake CLI executables; no live vendor CLI sessions have been demonstrated.",
+      "current_state": "The unified launcher supports Codex/Gemini/Claude CLI adapters, per-task worktrees and branches, bounded parallel execution, allowed/denied path checks, protected artifact export, patch SHA-256, process-group timeout cleanup and a mandatory human-review handoff. Exact-head Run #652 passed all workflow steps and 385 tests, including three worktree/branch/base-HEAD binding regressions. CI uses fake CLI executables; no live vendor CLI sessions have been demonstrated. The launcher is currently standalone: inspection found no invocation from qudron_worker.py, mcp_gateway.py, or agent_fabric.py; normal Qudron queue/MCP intake does not yet dispatch it.",
       "verification_profile": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -2794,12 +2794,56 @@
         "quota_and_cost_limits": 14.26
       },
       "required_maturity": "M4"
+    },
+    {
+      "id": "cli-worker-fleet-runtime-integration",
+      "area": "Runtime",
+      "title": "Integrate the engineering CLI worker fleet into Qudron's authenticated task queue and MCP control plane",
+      "status": "planned",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/mcp_gateway.py; ops/qudron-runtime/continuity_store.py; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "The launcher is a standalone command-line entry point and has no call site from Qudron's queue worker, MCP gateway, or Agent Fabric. Manual invocation and CI simulation do not prove that Qudron can intake, schedule, monitor, cancel, resume, or reconcile fleet runs.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Expose an owner-authenticated, schema-validated Qudron operation to create bounded engineering fleet runs; persist fleet/run/task/agent/branch/worktree lifecycle in the continuity ledger; enforce provider/data-class allowlists, no-secret mounts, task-scoped file allowlists, deny patterns, timeout and concurrency caps; reconcile restart/cancellation/timeouts without orphaning processes or worktrees; expose status and evidence through MCP; attach manifests, immutable base/head SHAs, patch hashes and logs to the task result; require independent security review and explicit human approval before any patch is applied or PR is merged; pass unit, integration, restart, cancellation, security and exact-head CI.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "restart_and_failure_recovery",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
     }
   ],
   "computed_status_counts": {
     "ci_verified": 5,
     "implemented_pending_ci": 8,
-    "planned": 11,
+    "planned": 12,
     "blocked_owner": 11,
     "target_unmeasured": 2,
     "not_started": 15,
@@ -2808,17 +2852,17 @@
     "open_pr": 1,
     "needs_owner_review": 1
   },
-  "total_tasks": 66,
+  "total_tasks": 67,
   "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria.",
   "evidence_source_commit": "c19c4d3ce4e037503052e37ae373d7b3aad9ae96",
   "evidence_source_commit_semantics": "Exact executable-code commit used for the worker-fleet evidence. The registry snapshot is a later documentation/data change and has its own snapshot_validation record.",
   "snapshot_validation": {
-    "snapshot_commit": "5cda1966279d927bb4aecfafc32613b3cd3e4010",
+    "snapshot_commit": "62fcb14e39b432d0a8f0a615e39154264656e4b5",
     "workflow": "Qudron Runtime Checks",
-    "workflow_run_number": 655,
-    "workflow_run_id": "42390680642",
-    "conclusion": "success",
-    "unit_and_safety_test_count": 385,
-    "validated_at": "2026-11-07T16:19:29Z"
+    "workflow_run_number": 656,
+    "workflow_run_id": "42391074804",
+    "conclusion": "in_progress",
+    "unit_and_safety_test_count": null,
+    "validated_at": "2026-11-07T16:25:00Z"
   }
 }

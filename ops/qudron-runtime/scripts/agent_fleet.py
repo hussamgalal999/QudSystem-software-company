@@ -94,26 +94,39 @@ def resolve_ref(root: Path, ref: str) -> str:
 def validate_relative_pattern(pattern: Any, task_id: str, field: str = "path") -> str:
     if not isinstance(pattern, str) or not pattern.strip():
         raise FleetError(f"Task {task_id}: {field} entries must be non-empty strings")
-    p = PurePosixPath(pattern)
-    if p.is_absolute() or ".." in p.parts or "\\" in pattern:
+    value = pattern.strip()
+    p = PurePosixPath(value)
+    segments = value.split("/")
+    if (
+        p.is_absolute()
+        or re.match(r"^[A-Za-z]:", value)
+        or any(segment in {"", ".", ".."} for segment in segments)
+        or "\\" in value
+        or "\x00" in value
+    ):
         raise FleetError(f"Task {task_id}: unsafe {field} pattern: {pattern!r}")
-    return pattern
+    # Exact relative file paths and directory-prefix globs are intentionally
+    # the only writable-scope language. Arbitrary globs are hard to intersect
+    # correctly and can create hidden overlap between parallel workers.
+    if ("*" in value or "?" in value or "[" in value or "]" in value) and not value.endswith("/**"):
+        raise FleetError(f"Task {task_id}: {field} supports only exact paths or a trailing '/**' directory pattern")
+    if value.count("**") and not value.endswith("/**"):
+        raise FleetError(f"Task {task_id}: '**' is supported only as a trailing directory pattern")
+    return value
 
 
 def patterns_overlap(left: str, right: str) -> bool:
-    if left == right:
-        return True
     left_tree = left.endswith("/**")
     right_tree = right.endswith("/**")
-    left_root = left[:-3].rstrip("/") if left_tree else left
-    right_root = right[:-3].rstrip("/") if right_tree else right
-    if left_tree and (right_root == left_root or right_root.startswith(left_root + "/")):
+    left_root = left[:-3] if left_tree else left
+    right_root = right[:-3] if right_tree else right
+    if left_root == right_root:
         return True
-    if right_tree and (left_root == right_root or left_root.startswith(right_root + "/")):
+    if left_tree and right_root.startswith(left_root + "/"):
         return True
-    # Conservative wildcard intersection: false positives are safer than two
-    # concurrent tasks silently claiming the same writable file.
-    return fnmatch.fnmatchcase(left, right) or fnmatch.fnmatchcase(right, left)
+    if right_tree and left_root.startswith(right_root + "/"):
+        return True
+    return False
 
 
 def load_manifest(path: Path) -> dict[str, Any]:

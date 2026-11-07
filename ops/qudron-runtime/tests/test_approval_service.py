@@ -97,5 +97,44 @@ class ApprovalServiceTests(unittest.TestCase):
             ApprovalTokenIssuer(self.public_key)
 
 
+
+    def test_owner_issuer_loads_private_key_and_runtime_verifies_public_key_from_files(self):
+        import os
+        from unittest.mock import patch
+        from cryptography.hazmat.primitives import serialization
+
+        private_path = Path(self.temp.name) / "owner-private.pem"
+        public_path = Path(self.temp.name) / "runtime-public.pem"
+        private_path.write_bytes(self.private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ))
+        public_path.write_bytes(self.public_key.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ))
+        with patch.dict(os.environ, {
+            "QUDRON_APPROVAL_PRIVATE_KEY_FILE": str(private_path),
+            "QUDRON_APPROVAL_PRIVATE_KEY_PASSPHRASE": "",
+            "QUDRON_APPROVAL_PUBLIC_KEY_FILE": str(public_path),
+        }):
+            issuer = ApprovalTokenIssuer.from_environment()
+            runtime = ApprovalService.from_environment(self.database)
+            token = issuer.issue(
+                action="agent.dispatch", resource_id="job-owner-key",
+                approved_by="os-user:test-owner",
+            )
+            self.assertIsNotNone(runtime.verify_and_consume(
+                token, action="agent.dispatch", resource_id="job-owner-key"
+            ))
+
+    def test_runtime_from_environment_fails_closed_without_public_key(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"QUDRON_APPROVAL_PUBLIC_KEY_FILE": ""}):
+            self.assertIsNone(ApprovalService.from_environment(self.database))
+
 if __name__ == "__main__":
     unittest.main()

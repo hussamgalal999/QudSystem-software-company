@@ -445,5 +445,32 @@ class AgentFleetTests(unittest.TestCase):
         time.sleep(2.2)
         self.assertFalse(marker.exists(), "a worker child process survived its parent's timeout")
 
+    def test_diff_check_failure_blocks_patch_export(self) -> None:
+        codex = self.bin / "codex"
+        codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "from pathlib import Path\n"
+            "Path('generated.txt').write_text('bad trailing spaces   \\n', encoding='utf-8')\n"
+            "print('{}')\n",
+            encoding="utf-8",
+        )
+        codex.chmod(0o755)
+        manifest_path = self.write_manifest([{
+            "id": "whitespace-error", "agent": "codex", "mode": "implement", "base_ref": "HEAD",
+            "allowed_paths": ["generated.txt"], "prompt": "create a file with whitespace error",
+        }])
+        task = agent_fleet.load_manifest(manifest_path)["tasks"][0]
+        artifact_dir = self.artifacts / "diff-check"
+        worktree_root = self.worktrees / "diff-check"
+        artifact_dir.mkdir(parents=True)
+        worktree_root.mkdir(parents=True)
+        prepared = agent_fleet.prepare_task(self.repo, task, "diff-check-12345678", worktree_root, artifact_dir)
+        result = agent_fleet.execute_task(prepared, artifact_dir, timeout=60)
+        self.assertEqual(result["status"], "diff_check_failed")
+        self.assertFalse(result["diff_check_passed"])
+        self.assertFalse(result["patch_exported"])
+        self.assertIsNone(result["patch_path"])
+        self.assertEqual(result["patch_block_reason"], "diff_check_failed")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

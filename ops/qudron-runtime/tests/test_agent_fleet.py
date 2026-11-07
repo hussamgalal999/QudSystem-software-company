@@ -445,6 +445,24 @@ class AgentFleetTests(unittest.TestCase):
         time.sleep(2.2)
         self.assertFalse(marker.exists(), "a worker child process survived its parent's timeout")
 
+    @unittest.skipUnless(os.name == "posix", "literal pathspec filename test requires POSIX filenames")
+    def test_patch_export_treats_git_pathspec_magic_as_literal_filename(self) -> None:
+        base_sha = agent_fleet.git(["rev-parse", "HEAD"], self.repo).stdout.strip()
+        worktree = self.tmp / "literal-pathspec-worktree"
+        agent_fleet.git(["worktree", "add", "--detach", str(worktree), base_sha], self.repo)
+        try:
+            (worktree / "README.md").write_text("README OUTSIDE PATCH\n", encoding="utf-8")
+            special_name = ":(top)README.md"
+            (worktree / special_name).write_text("literal path content\n", encoding="utf-8")
+            patch_path = self.artifacts / "literal-path.patch"
+            agent_fleet.write_patch(worktree, base_sha, patch_path, [special_name])
+            patch = patch_path.read_text(encoding="utf-8")
+            self.assertIn(special_name, patch)
+            self.assertIn("literal path content", patch)
+            self.assertNotIn("README OUTSIDE PATCH", patch)
+        finally:
+            agent_fleet.git(["worktree", "remove", "--force", str(worktree)], self.repo, check=False)
+
     def test_diff_check_failure_blocks_patch_export(self) -> None:
         codex = self.bin / "codex"
         codex.write_text(

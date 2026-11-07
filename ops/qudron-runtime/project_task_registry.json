@@ -4,7 +4,7 @@
   "snapshot_date": "2026-11-07",
   "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
   "base_branch": "main",
-  "source_commit": "4289b73fb931236e238d829a4fb84c72a5167b1e",
+  "source_commit": "8146ab1eccc3909e56768abbee808e6819b2ee1a",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -2557,10 +2557,10 @@
       "id": "ci-release-gate",
       "area": "Release",
       "title": "Pass full CI for this continuity branch and its final merge candidate",
-      "status": "pending_ci",
+      "status": "ci_verified",
       "priority": "P0",
-      "evidence": "GitHub Actions run 42294161790 passed on a0c603368bd6ad427c57d3e81529d0a7c8ec8759; later exact-head CI runs identified registry/test mismatches which were corrected; latest exact-head run pending.",
-      "current_state": "A prior exact repair-branch code revision passed full CI, but a subsequent registry-only change exposed a status-count mismatch; that was corrected. The quality-contract validator, complete per-task contracts and owner approval utilities have since been added. A fresh exact-head CI run is required before acceptance; independent review and production gates remain open.",
+      "evidence": "GitHub Actions run 42315960184 (run #568), commit 8146ab1eccc3909e56768abbee808e6819b2ee1a, PR #26.",
+      "current_state": "Qudron Runtime Checks run 568 completed successfully on exact repair-branch commit 8146ab1eccc3909e56768abbee808e6819b2ee1a. Unit/safety tests, runtime and FreeLLM builds, OpenDots/Compose validation, FreeLLM health/auth smoke test and timezone database check all passed. Independent review, owner key provisioning and live deployment gates remain open.",
       "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
       "verification_profile": [
         "exact_commit_ci_green",
@@ -2684,11 +2684,11 @@
       "id": "quality-contract-validator",
       "area": "Governance",
       "title": "Machine-validate task-specific critical gates, gate weights and required maturity",
-      "status": "implemented_pending_ci",
+      "status": "ci_verified",
       "priority": "P1",
       "evidence": "ops/qudron-runtime/quality_contract_validator.py; ops/qudron-runtime/tests/test_quality_contract_validator.py; docs/QUALITY_VERIFICATION_FRAMEWORK.md",
-      "current_state": "All 64 registry tasks now carry mandatory_gates, critical_gates, gate_weights and required_maturity. A canonical-profile validator and regression tests are implemented; exact-head CI is pending.",
-      "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. A validator rejects unknown gate IDs and missing fields; unit tests cover invalid IDs, missing weights, invalid maturity and score reproducibility.",
+      "current_state": "All 64 registry tasks carry mandatory_gates, critical_gates, gate_weights and required_maturity; the canonical-profile validator and negative regression tests passed in CI run 568 on commit 8146ab1eccc3909e56768abbee808e6819b2ee1a.",
+      "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. The validator rejects unknown gate IDs and missing fields; tests cover invalid IDs, missing weights, invalid maturity, critical-gate subsets, weight sums and status-count consistency.",
       "verification_profile": [
         "schema_validation",
         "coverage_reproducibility",
@@ -2714,8 +2714,8 @@
     }
   ],
   "computed_status_counts": {
-    "ci_verified": 2,
-    "implemented_pending_ci": 9,
+    "ci_verified": 4,
+    "implemented_pending_ci": 8,
     "planned": 11,
     "blocked_owner": 10,
     "target_unmeasured": 2,
@@ -2723,8 +2723,7 @@
     "candidate_not_enabled": 3,
     "implemented_unverified": 9,
     "open_pr": 1,
-    "needs_owner_review": 1,
-    "pending_ci": 1
+    "needs_owner_review": 1
   },
   "total_tasks": 64,
   "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria."

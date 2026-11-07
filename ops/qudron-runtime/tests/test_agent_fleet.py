@@ -109,6 +109,14 @@ class AgentFleetTests(unittest.TestCase):
         with self.assertRaises(agent_fleet.FleetError):
             agent_fleet.safe_write(link, "overwrite-attempt\n")
         self.assertEqual(target.read_text(encoding="utf-8"), "keep-this-content\n")
+        hardlink = self.artifacts / "hardlink-output.txt"
+        try:
+            hardlink.hardlink_to(target)
+        except (OSError, NotImplementedError):
+            self.skipTest("hard links are unavailable on this platform")
+        with self.assertRaises(FileExistsError):
+            agent_fleet.safe_write(hardlink, "overwrite-attempt\n")
+        self.assertEqual(target.read_text(encoding="utf-8"), "keep-this-content\n")
 
     def test_manifest_rejects_boolean_version_and_unknown_fields(self) -> None:
         payload = {"version": True, "tasks": []}

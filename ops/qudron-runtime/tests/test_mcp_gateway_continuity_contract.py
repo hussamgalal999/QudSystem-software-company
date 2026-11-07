@@ -1,5 +1,8 @@
+import tempfile
 import unittest
+from pathlib import Path
 
+from continuity_store import ContinuityStore
 from mcp_gateway import TOOLS, handle_mcp_request
 
 
@@ -33,36 +36,35 @@ class MCPGatewayContinuityContractTests(unittest.TestCase):
         self.assertIn("checkpoint-presence indicators", description)
         self.assertIn("does not expose stored stage output", description)
 
-    def test_continuity_callback_returns_bounded_metadata_without_stage_content(self):
-        snapshot = {
-            "agent_stage_counts": {"completed": 1},
-            "recent_agent_stages": [{
-                "job_id": "job-12345678",
-                "project": "qudron",
-                "agent_id": "qa_engineer",
-                "stage": "review",
-                "status": "completed",
-                "attempts": 1,
-                "has_output": 1,
-                "updated_at": "2026-11-07T00:00:00Z",
-            }],
-            "latest_events": [],
-        }
-        response = handle_mcp_request(
-            {"jsonrpc": "2.0", "id": 31, "method": "tools/call",
-             "params": {"name": "qudron_get_continuity", "arguments": {}}},
-            is_authorized=lambda: True,
-            enqueue_job=lambda _: {},
-            get_job=lambda _: {},
-            get_job_result=lambda _: "",
-            get_status=lambda: {},
-            get_usage=lambda: {},
-            get_continuity=lambda: snapshot,
-        )
+    def test_continuity_callback_omits_real_checkpoint_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ContinuityStore(Path(directory) / "qudron.sqlite3")
+            claim = store.begin_stage(
+                job_id="job-12345678", project="qudron",
+                agent_id="qa_engineer", stage="review",
+            )
+            store.complete_stage(
+                job_id="job-12345678", project="qudron",
+                agent_id="qa_engineer", stage="review",
+                claim_token=claim["claim_token"],
+                output="private-stage-output must never leave the store",
+            )
+            response = handle_mcp_request(
+                {"jsonrpc": "2.0", "id": 31, "method": "tools/call",
+                 "params": {"name": "qudron_get_continuity", "arguments": {}}},
+                is_authorized=lambda: True,
+                enqueue_job=lambda _: {},
+                get_job=lambda _: {},
+                get_job_result=lambda _: "",
+                get_status=lambda: {},
+                get_usage=lambda: {},
+                get_continuity=store.snapshot,
+            )
         body = response["result"]["content"][0]["text"]
         self.assertIn('"has_output": 1', body)
         self.assertIn('"status": "completed"', body)
         self.assertNotIn("private-stage-output", body)
+        self.assertNotIn('"output"', body)
 
 
 if __name__ == "__main__":

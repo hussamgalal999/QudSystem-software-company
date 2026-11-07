@@ -2717,8 +2717,8 @@
       "title": "Run bounded Codex, Gemini and Claude CLI workers with isolated task worktrees and verified handoff",
       "status": "ci_verified",
       "priority": "P0",
-      "evidence": "PR #30 commit c19c4d3ce4e037503052e37ae373d7b3aad9ae96; GitHub Actions run #652; ops/qudron-runtime/scripts/agent_fleet.py; tests/test_agent_fleet_binding.py; agent-workers/run.schema.json",
-      "current_state": "The unified launcher supports Codex/Gemini/Claude CLI adapters, per-task worktrees and branches, bounded parallel execution, allowed/denied path checks, protected artifact export, patch SHA-256, process-group timeout cleanup and a mandatory human-review handoff. Exact-head Run #652 passed all workflow steps and 385 tests, including three worktree/branch/base-HEAD binding regressions. CI uses fake CLI executables; no live vendor CLI sessions have been demonstrated. The launcher is currently standalone: inspection found no invocation from qudron_worker.py, mcp_gateway.py, or agent_fabric.py; normal Qudron queue/MCP intake does not yet dispatch it.",
+      "evidence": "PR #30 commit 743e691de48bd065cf1c7005ddbc45a3b57f239e; GitHub Actions Qudron Runtime Checks run #662 (387 tests; all workflow steps passed); ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet_binding.py; ops/qudron-runtime/agent-workers/manifest.schema.json; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "A single CLI launcher supports authorized Codex/Gemini/Claude CLI adapters, one isolated worktree and branch per task, up to eight parallel tasks, non-overlapping allowlists, default-denied sensitive paths, per-provider environment allowlists, process-group timeout cleanup, immutable worktree/branch/base-HEAD validation, structured acceptance criteria/expected checks/known risks, protected patch/log export, SHA-256 integrity and mandatory human review. Exact-head CI run #662 passed all 387 unit/safety tests and every workflow step, including both runtime images, Compose, FreeLLM health/authentication and timezone checks. CI uses fake CLI executables; no live vendor CLI sessions have been demonstrated. The launcher remains standalone and is not called by Qudron queue/MCP/Agent Fabric.",
       "verification_profile": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -2728,7 +2728,7 @@
         "observability",
         "deployment_smoke_and_rollback"
       ],
-      "acceptance_criteria": "On the exact release candidate, automated tests must cover all configured CLI adapters, isolated task worktrees, concurrency bounds, scope and secret protections, timeout/process cleanup, safe artifact creation, patch integrity, immutable base/branch binding, and mandatory review before integration. A green CI result proves code contracts only; it does not prove live provider login or production execution.",
+      "acceptance_criteria": "On the exact release candidate, automated tests cover all configured CLI adapters, task worktrees, concurrency and disjoint-scope enforcement, secret-path denial, provider-specific environment allowlists, timeout/process cleanup, structured task notes and report schemas, safe artifacts, immutable worktree/branch/base binding, patch integrity and mandatory review. Exact-head CI must pass. A green CI result proves code contracts only; it does not prove live provider login, a secure remote host or production execution.",
       "mandatory_gates": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -2760,8 +2760,8 @@
       "status": "blocked_owner",
       "priority": "P0",
       "evidence": "PR #30 worker-fleet contract; Vercel connected-team project inventory; Railway workspace inventory; Replit Qudron/QudSystem app search",
-      "current_state": "No Qudron project or named sandbox was found in the connected Vercel team search, the connected Railway workspace currently has zero projects, and the connected Replit account has no Qudron/QudSystem app. No approved isolated compute environment or provider CLI login has been verified for this workflow. Therefore the three-worker real-provider E2E run, independent Security/QA review and result handoff have not been executed.",
-      "acceptance_criteria": "Provision three separately isolated, owner-approved remote environments with dedicated non-shared HOME directories and no host-home, Docker-socket or production-secret mounts; verify authorized CLI versions and account entitlements; run three non-overlapping Architecture, Development and Security/QA tasks; collect task IDs, provider/model identity, timestamps, exact changed-file manifests, immutable base/head hashes, patch hashes, logs and costs; require an independent security review and human approval; then run exact-head CI before merge. Do not incur compute/API charges or inject credentials before owner-approved budget and least-privilege configuration.",
+      "current_state": "No Qudron project or named sandbox is available in the connected Vercel account search; the connected Railway workspace has zero projects; the connected Replit account has no Qudron/QudSystem app. No approved isolated compute environment or authorized CLI login is configured. Official free trial options were researched, but their credits/quotas are finite and do not establish ongoing free capacity. No three-worker real-provider E2E run, independent live Security/QA review or real provider artifact handoff has been executed.",
+      "acceptance_criteria": "Provision three separately isolated, owner-approved remote environments with dedicated non-shared HOME directories and no host-home, Docker-socket, SSH-agent or production-secret mounts; verify authorized CLI versions, exact provider account entitlements and an approved budget cap; run three non-overlapping Architecture, Development and Security/QA tasks; collect task IDs, provider/model identity, timestamps, exact changed-file manifests, immutable base/head hashes, patch hashes, sanitized logs and costs; require independent security review and human approval; run exact-head CI before merge. Never treat a worktree alone as OS isolation. Do not incur compute/API charges or inject credentials before approval.",
       "verification_profile": [
         "provider_contract_compatibility",
         "bounded_parallel_dispatch",
@@ -2798,11 +2798,11 @@
     {
       "id": "cli-worker-fleet-runtime-integration",
       "area": "Runtime",
-      "title": "Integrate the engineering CLI worker fleet into Qudron's authenticated task queue and MCP control plane",
+      "title": "Integrate the CLI worker fleet through an authenticated remote-executor service and Qudron's queue/MCP control plane",
       "status": "planned",
       "priority": "P0",
       "evidence": "ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/mcp_gateway.py; ops/qudron-runtime/continuity_store.py; ops/qudron-runtime/agent-workers/run.schema.json",
-      "current_state": "The launcher is a standalone command-line entry point and has no call site from Qudron's queue worker, MCP gateway, or Agent Fabric. Manual invocation and CI simulation do not prove that Qudron can intake, schedule, monitor, cancel, resume, or reconcile fleet runs.",
+      "current_state": "The launcher is a standalone CLI entry point and has no call site from qudron_worker.py, mcp_gateway.py or Agent Fabric. The production-safe design must dispatch to a disposable remote executor with an isolated filesystem/HOME and least-privilege credentials; running provider CLIs directly inside Qudron's core worker would expose the core runtime and must not be used as a shortcut.",
       "verification_profile": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -2812,7 +2812,7 @@
         "observability",
         "deployment_smoke_and_rollback"
       ],
-      "acceptance_criteria": "Expose an owner-authenticated, schema-validated Qudron operation to create bounded engineering fleet runs; persist fleet/run/task/agent/branch/worktree lifecycle in the continuity ledger; enforce provider/data-class allowlists, no-secret mounts, task-scoped file allowlists, deny patterns, timeout and concurrency caps; reconcile restart/cancellation/timeouts without orphaning processes or worktrees; expose status and evidence through MCP; attach manifests, immutable base/head SHAs, patch hashes and logs to the task result; require independent security review and explicit human approval before any patch is applied or PR is merged; pass unit, integration, restart, cancellation, security and exact-head CI.",
+      "acceptance_criteria": "Define and implement an owner-authenticated, schema-validated remote-executor contract for bounded fleet runs; persist fleet/run/task/agent/branch/worktree lifecycle in the continuity ledger; provide a remote sandbox/VM with dedicated HOME, no host mounts, Docker socket, SSH agent or production secrets; enforce provider/data-class allowlists, task-scoped paths, deny patterns, timeout, concurrency and cost caps; reconcile restart/cancel/timeout without orphaning processes or worktrees; expose status and artifacts through MCP; attach immutable base/head SHAs, changed-file manifests and patch hashes; require independent review and explicit human approval before applying a patch or merging; pass unit, integration, restart, cancellation, isolation, security and exact-head CI.",
       "mandatory_gates": [
         "functional_correctness",
         "concurrency_and_race_safety",
@@ -2854,19 +2854,14 @@
   },
   "total_tasks": 67,
   "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria.",
-  "evidence_source_commit": "c19c4d3ce4e037503052e37ae373d7b3aad9ae96",
-  "evidence_source_commit_semantics": "Exact executable-code commit used for the worker-fleet evidence. The registry snapshot is a later documentation/data change and has its own snapshot_validation record.",
+  "evidence_source_commit": "743e691de48bd065cf1c7005ddbc45a3b57f239e",
+  "evidence_source_commit_semantics": "Exact PR #30 code and contract commit validated by the recorded exact-head CI run.",
   "snapshot_validation": {
-    "snapshot_commit": "5cda1966279d927bb4aecfafc32613b3cd3e4010",
+    "snapshot_commit": "743e691de48bd065cf1c7005ddbc45a3b57f239e",
     "workflow": "Qudron Runtime Checks",
-    "workflow_run_number": 655,
-    "workflow_run_id": "42390680642",
+    "workflow_run_number": 662,
+    "workflow_run_id": "42391819524",
     "conclusion": "success",
-    "unit_and_safety_test_count": 385
-  },
-  "current_snapshot_update": {
-    "commit": "6cb0ef88b713f7fd0131734ba94892b414287eb6",
-    "validation_status": "pending",
-    "note": "Adds the explicit P0 task for core queue/MCP integration of the standalone CLI fleet."
+    "unit_and_safety_test_count": 387
   }
 }

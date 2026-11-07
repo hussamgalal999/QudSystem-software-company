@@ -28,8 +28,9 @@ This is a development tool, not the production Qudron queue. It does not create 
 - Creates one worktree and branch per task.
 - Runs up to eight tasks concurrently; default is two.
 - Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands.
-- Captures per-task stdout/stderr and a run.json summary; a patch artifact is written only after every changed path passes the declared allowlist.
-- Rejects changed files outside the declared allowed_paths scope and exports no patch at all for a scope-violating task.
+- Captures per-task stdout/stderr and a run.json summary; a patch artifact is written only after every changed path passes the declared allowlist and denylist.
+- Rejects changed files outside the declared allowed_paths scope, blocks sensitive paths by default, and exports no patch at all for a scope-violating task.
+- Rejects overlapping write scopes between concurrent implementation tasks before any worker is launched.
 - Never commits, pushes, opens a PR, or merges.
 
 ## Supported CLI adapters
@@ -97,7 +98,7 @@ No automatic PR creation or merge is implemented. Keep human merge approval and 
 - Codex workspace-write is still a code-execution environment inside its workspace. Do not use danger-full-access or YOLO for routine fleet tasks.
 - Gemini auto_edit and Claude acceptEdits do not blanket-approve shell commands; a worker may pause or fail if a command requires approval.
 - Aider automatic commits are disabled.
-- allowed_paths is a post-run diff check, not an OS-level access-control boundary. Use separate OS users or containers for hostile/untrusted agent code.
+- allowed_paths and deny_paths are post-run diff checks, not OS-level access-control boundaries. Sensitive paths are denied by default, but an untrusted process can still read or alter files inside its VM; use a disposable restricted VM/container with no host credentials or Docker socket.
 - Missing local CLIs are reported as unavailable; no agent is silently substituted.
 - The runner never installs packages, provisions credentials, bypasses quotas, accesses browser cookies, or calls production services.
 - Keep customer CVs, payment records, secrets and confidential data out of prompts unless the selected provider and environment are explicitly approved for that data class.

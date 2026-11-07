@@ -11,7 +11,7 @@ The registry and the provider-neutral fabric are foundations; they do not provis
 
 ## Dynamic task planning
 
-- The planner selects **every role listed in the selected team by default**, and guarantees at least **10 distinct task-scoped role assignments per task**. When a task-specific team has fewer than ten roles, it adds cross-functional reviewers for evidence, privacy, policy, fact-checking, QA, reliability, data and strategy/compliance; the domain producer and finalizer stay in place. Larger teams retain every configured role.
+- The planner selects **every role listed in the selected team by default**, and plans at least **10 distinct task-scoped role assignments** when no explicit `max_agents` or legacy per-task cap is configured. A caller-supplied task cap or the smaller legacy `QUDRON_MAX_SWARM_AGENTS` / `QUDRON_MAX_CVPEN_AGENTS` value can intentionally reduce that count. When an uncapped task-specific team has fewer than ten roles, it adds cross-functional reviewers for evidence, privacy, policy, fact-checking, QA, reliability, data and strategy/compliance; the domain producer and finalizer stay in place. Larger teams retain every configured role.
 - An explicit task-scoped role-assignment guard is configured by `QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK` (default 10,000; hard safety ceiling 10,000). This caps planned role assignments only; it does not provision or count 10,000 persisted agent instances.
 - A task can still request an intentional subset through an explicit `max_agents` argument for bounded testing or specialist workflows.
 - Independent review stages fan out up to `QUDRON_MAX_PARALLEL_REVIEWS` (default 16; hard ceiling 32). Actual upstream calls remain governed by the shared SQLite-backed global model-call slot limit.
@@ -24,7 +24,7 @@ The registry and the provider-neutral fabric are foundations; they do not provis
 
 The default provider policy must remain free-only and explicitly authorized. A route is eligible only when its access method is permitted, its price class is `free` or `free_compute`, a recent health probe exists, its quality score meets the configured threshold, its capabilities match the task, and the task's data classification is allowed.
 
-Do not scrape browser cookies, reuse consumer sessions as undocumented APIs, bypass quotas, rotate accounts to evade limits, or silently fall back to paid inference. Never send customer CVs, payment records, secrets, or confidential content to anonymous free endpoints. If all eligible providers are unavailable, preserve the task and report `NEEDS_PROVIDER`; do not silently substitute a weak local model.
+Do not scrape browser cookies, reuse consumer sessions as undocumented APIs, bypass quotas, rotate accounts to evade limits, or silently fall back to paid inference. Never send customer CVs, payment records, secrets, or confidential content to anonymous free endpoints. If all eligible providers are unavailable, the current worker fails closed with a provider-configuration error and applies its persisted retry/failure policy. A durable `NEEDS_PROVIDER` queue state is not implemented yet; do not report that state or silently substitute a weak local model.
 
 ## Provider and compute resource controls
 

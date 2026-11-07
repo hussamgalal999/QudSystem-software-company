@@ -299,7 +299,7 @@ def changed_files(
 ) -> list[str]:
     # Intent-to-add makes ordinary untracked files appear in the diff without
     # committing their contents. First collect only path names.
-    git(["add", "-N", "--", "."], worktree, check=False)
+    git(["add", "-N", "--", "."], worktree)
     names = git(["diff", "--name-only", "-z", base_sha, "--"], worktree).stdout
     files = {name for name in names.split("\0") if name}
     # Git ignores files such as .env by design. Scan ignored, untracked path

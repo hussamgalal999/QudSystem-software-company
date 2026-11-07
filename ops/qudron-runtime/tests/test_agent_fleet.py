@@ -20,7 +20,8 @@ class AgentFleetTests(unittest.TestCase):
         subprocess.run(["git", "config", "user.email", "fleet-test@example.invalid"], cwd=self.repo, check=True)
         subprocess.run(["git", "config", "user.name", "Fleet Test"], cwd=self.repo, check=True)
         (self.repo / "README.md").write_text("fixture\n", encoding="utf-8")
-        subprocess.run(["git", "add", "README.md"], cwd=self.repo, check=True)
+        (self.repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md", ".gitignore"], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-m", "initial"], cwd=self.repo, check=True, capture_output=True)
         self.worktrees = self.tmp / "worktrees"
         self.artifacts = self.tmp / "artifacts"

@@ -2857,12 +2857,16 @@
   "evidence_source_commit": "c19c4d3ce4e037503052e37ae373d7b3aad9ae96",
   "evidence_source_commit_semantics": "Exact executable-code commit used for the worker-fleet evidence. The registry snapshot is a later documentation/data change and has its own snapshot_validation record.",
   "snapshot_validation": {
-    "snapshot_commit": "62fcb14e39b432d0a8f0a615e39154264656e4b5",
+    "snapshot_commit": "5cda1966279d927bb4aecfafc32613b3cd3e4010",
     "workflow": "Qudron Runtime Checks",
-    "workflow_run_number": 656,
-    "workflow_run_id": "42391074804",
-    "conclusion": "in_progress",
-    "unit_and_safety_test_count": null,
-    "validated_at": "2026-11-07T16:25:00Z"
+    "workflow_run_number": 655,
+    "workflow_run_id": "42390680642",
+    "conclusion": "success",
+    "unit_and_safety_test_count": 385
+  },
+  "current_snapshot_update": {
+    "commit": "6cb0ef88b713f7fd0131734ba94892b414287eb6",
+    "validation_status": "pending",
+    "note": "Adds the explicit P0 task for core queue/MCP integration of the standalone CLI fleet."
   }
 }

@@ -64,6 +64,24 @@ class AgentFleetTests(unittest.TestCase):
         with self.assertRaises(agent_fleet.FleetError):
             agent_fleet.load_manifest(path)
 
+    def test_manifest_rejects_non_directory_wildcard_globs(self) -> None:
+        path = self.write_manifest([{
+            "id": "wildcard-scope", "agent": "codex", "mode": "implement",
+            "allowed_paths": ["src/**/*.py"], "prompt": "make a change",
+        }])
+        with self.assertRaisesRegex(agent_fleet.FleetError, "only exact paths or a trailing"):
+            agent_fleet.load_manifest(path)
+
+    def test_manifest_rejects_non_normalized_relative_paths(self) -> None:
+        for unsafe in ("src//module.py", "src/./module.py", "C:/private.txt", "src\\\\private.txt"):
+            path = self.write_manifest([{
+                "id": "unsafe-path", "agent": "codex", "mode": "implement",
+                "allowed_paths": [unsafe], "prompt": "make a change",
+            }])
+            with self.subTest(path=unsafe):
+                with self.assertRaises(agent_fleet.FleetError):
+                    agent_fleet.load_manifest(path)
+
     def test_manifest_rejects_overlapping_parallel_write_scopes(self) -> None:
         path = self.write_manifest([
             {

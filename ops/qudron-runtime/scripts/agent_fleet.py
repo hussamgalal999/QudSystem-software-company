@@ -108,8 +108,11 @@ def validate_relative_pattern(pattern: Any, task_id: str, field: str = "path") -
     # Exact relative file paths and directory-prefix globs are intentionally
     # the only writable-scope language. Arbitrary globs are hard to intersect
     # correctly and can create hidden overlap between parallel workers.
-    if ("*" in value or "?" in value or "[" in value or "]" in value) and not value.endswith("/**"):
+    has_glob = any(char in value for char in "*?[]")
+    if has_glob and not value.endswith("/**"):
         raise FleetError(f"Task {task_id}: {field} supports only exact paths or a trailing '/**' directory pattern")
+    if value.endswith("/**") and any(char in value[:-3] for char in "*?[]"):
+        raise FleetError(f"Task {task_id}: directory-prefix paths cannot contain wildcards")
     if value.count("**") and not value.endswith("/**"):
         raise FleetError(f"Task {task_id}: '**' is supported only as a trailing directory pattern")
     return value

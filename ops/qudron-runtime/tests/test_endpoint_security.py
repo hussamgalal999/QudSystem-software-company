@@ -28,6 +28,9 @@ class CredentialEndpointPolicyTests(unittest.TestCase):
         for url in (
             "http://localhost.evil.test/mcp",
             "http://localhost.attacker.example/mcp",
+            "http://127.0.0.1%2eattacker.example/mcp",
+            "http://127.0.0.1%attacker.example/mcp",
+            "http://[::1%25eth0]:8765/mcp",
             "http://127.0.0.1.evil.test/mcp",
             "http://192.168.1.10:8765/mcp",
             "http://user:pass@127.0.0.1:8765/mcp",
@@ -53,6 +56,32 @@ class CredentialRedirectPolicyTests(unittest.TestCase):
         request = Request("http://remote.example/v1/tasks")
         with self.assertRaisesRegex(ValueError, "endpoint is not allowed"):
             open_credential_request(request, timeout=2)
+
+
+    def test_credential_requests_disable_environment_proxies(self):
+        from unittest.mock import patch
+        from urllib.request import ProxyHandler
+
+        captured = {}
+
+        class FakeOpener:
+            def open(self, request, timeout):
+                captured["request"] = request
+                captured["timeout"] = timeout
+                return "opened"
+
+        def fake_build_opener(*handlers):
+            captured["handlers"] = handlers
+            return FakeOpener()
+
+        request = Request("http://127.0.0.1:8765/mcp")
+        with patch("endpoint_security.build_opener", side_effect=fake_build_opener):
+            result = open_credential_request(request, timeout=2)
+
+        self.assertEqual(result, "opened")
+        proxy_handlers = [h for h in captured["handlers"] if isinstance(h, ProxyHandler)]
+        self.assertEqual(len(proxy_handlers), 1)
+        self.assertEqual(proxy_handlers[0].proxies, {})
 
 
 if __name__ == "__main__":

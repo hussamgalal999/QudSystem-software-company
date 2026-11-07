@@ -34,8 +34,13 @@ def is_allowed_credential_endpoint(url: str) -> bool:
         return False
     if hostname == "localhost":
         return True
+    # Percent-encoded/scoped hostnames are ambiguous at the URL/DNS boundary.
+    # Do not strip a zone or decode a suffix: that can turn a remote host into
+    # an apparent loopback address before credentials are attached.
+    if "%" in hostname:
+        return False
     try:
-        address = ipaddress.ip_address(hostname.split("%", 1)[0])
+        address = ipaddress.ip_address(hostname)
     except ValueError:
         return False
     # Any IP address classified by the standard library as loopback is
@@ -44,7 +49,7 @@ def is_allowed_credential_endpoint(url: str) -> bool:
 
 
 
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 class RejectCredentialRedirectHandler(HTTPRedirectHandler):
@@ -68,5 +73,7 @@ def open_credential_request(
         raise TypeError("request must be urllib.request.Request")
     if not endpoint_validated and not is_allowed_credential_endpoint(request.full_url):
         raise ValueError("Credential request endpoint is not allowed")
-    opener = build_opener(RejectCredentialRedirectHandler())
+    # urllib otherwise installs ProxyHandler() from HTTP_PROXY/HTTPS_PROXY.
+    # Even a loopback HTTP request could then send its bearer token to a proxy.
+    opener = build_opener(ProxyHandler({}), RejectCredentialRedirectHandler())
     return opener.open(request, timeout=max(1, min(300, float(timeout))))

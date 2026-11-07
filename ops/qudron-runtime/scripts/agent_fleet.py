@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -402,18 +403,45 @@ def execute_task(
     stderr_path = artifact_dir / f"{task['id']}.stderr.txt"
     patch_path = artifact_dir / f"{task['id']}.patch"
     started = time.time()
+    proc: subprocess.Popen[str] | None = None
     try:
-        proc = subprocess.run(
-            argv, cwd=str(prepared["worktree"]), input=stdin_text, text=True,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
-            check=False, env=build_agent_env(agent),
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        proc = subprocess.Popen(
+            argv,
+            cwd=str(prepared["worktree"]),
+            stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=build_agent_env(agent),
+            start_new_session=(os.name != "nt"),
+            creationflags=creationflags,
         )
-        stdout, stderr, exit_code = proc.stdout, proc.stderr, proc.returncode
-        timed_out = False
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-        exit_code, timed_out = 124, True
+        stdout, stderr = proc.communicate(input=stdin_text, timeout=timeout)
+        exit_code, timed_out = proc.returncode, False
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        if proc is not None and proc.poll() is None:
+            if os.name == "nt":
+                # taskkill /T terminates the CLI and its descendants on Windows.
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                )
+                if proc.poll() is None:
+                    proc.kill()
+            else:
+                # A separate session gives the worker a process group of its own.
+                # Kill the group, not only the top-level CLI, to prevent orphan agents.
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        stdout, stderr = proc.communicate() if proc is not None else ("", "")
+        exit_code = 124
     # First collect path names, then validate scope. Never construct a patch
     # artifact from an untrusted worker diff before this validation succeeds.
     files = changed_files(prepared["worktree"], prepared["base_sha"], task["deny_paths"])

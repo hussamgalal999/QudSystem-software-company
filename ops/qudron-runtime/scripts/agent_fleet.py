@@ -271,24 +271,56 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 
 def build_agent_env(agent: str) -> dict[str, str]:
-    """Pass only runtime basics and credentials explicitly intended for this provider."""
+    """Give each CLI provider a private HOME below an operator-owned root."""
     if agent not in AGENT_ENV_KEYS:
         raise FleetError(f"Unsupported provider environment: {agent}")
+    raw_home_root = os.environ.get("QUDRON_FLEET_HOME_ROOT", "").strip()
+    if not raw_home_root:
+        raise FleetError(
+            "QUDRON_FLEET_HOME_ROOT must point to a private directory outside the repository"
+        )
+    home_root = Path(raw_home_root).expanduser()
+    if not home_root.is_absolute():
+        raise FleetError("QUDRON_FLEET_HOME_ROOT must be an absolute path")
+    if home_root.is_symlink():
+        raise FleetError("QUDRON_FLEET_HOME_ROOT cannot be a symbolic link")
+    try:
+        home_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(home_root, 0o700)
+        home_root = home_root.resolve(strict=True)
+    except OSError as exc:
+        raise FleetError("Cannot create or secure QUDRON_FLEET_HOME_ROOT") from exc
+    try:
+        checkout = repo_root(Path.cwd()).resolve()
+    except FleetError:
+        checkout = None
+    if checkout and (home_root == checkout or checkout in home_root.parents):
+        raise FleetError("QUDRON_FLEET_HOME_ROOT must be outside the repository checkout")
+
+    # Separate provider homes prevent one CLI from inheriting another provider's
+    # OAuth/device-login files. The root itself is never passed to the subprocess.
+    home_path = home_root / agent
+    if home_path.is_symlink():
+        raise FleetError(f"Provider HOME cannot be a symbolic link: {agent}")
+    try:
+        home_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(home_path, 0o700)
+        home_path = home_path.resolve(strict=True)
+    except OSError as exc:
+        raise FleetError(f"Cannot create or secure provider HOME: {agent}") from exc
+
     allowed = BASE_ENV_KEYS | AGENT_ENV_KEYS[agent]
     env = {key: value for key, value in os.environ.items() if key in allowed}
-    # Keep CLI credentials/config below the operator-provided HOME. Never inherit
-    # host XDG/Windows profile paths that may point at unrelated credential stores.
-    home = env.get("HOME")
-    if home:
-        home_path = Path(home).expanduser()
-        env["HOME"] = str(home_path)
-        env["XDG_CONFIG_HOME"] = str(home_path / ".config")
-        env["XDG_CACHE_HOME"] = str(home_path / ".cache")
-        env["XDG_DATA_HOME"] = str(home_path / ".local" / "share")
-        if os.name == "nt":
-            env["USERPROFILE"] = str(home_path)
-            env["APPDATA"] = str(home_path / "AppData" / "Roaming")
-            env["LOCALAPPDATA"] = str(home_path / "AppData" / "Local")
+    env["HOME"] = str(home_path)
+    env["XDG_CONFIG_HOME"] = str(home_path / ".config")
+    env["XDG_CACHE_HOME"] = str(home_path / ".cache")
+    env["XDG_DATA_HOME"] = str(home_path / ".local" / "share")
+    if os.name == "nt":
+        env["USERPROFILE"] = str(home_path)
+        env["APPDATA"] = str(home_path / "AppData" / "Roaming")
+        env["LOCALAPPDATA"] = str(home_path / "AppData" / "Local")
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     return env

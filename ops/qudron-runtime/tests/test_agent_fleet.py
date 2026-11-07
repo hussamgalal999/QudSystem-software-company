@@ -19,6 +19,8 @@ class AgentFleetTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.tmp = Path(self.temp.name)
+        self.old_fleet_home_root = os.environ.get("QUDRON_FLEET_HOME_ROOT")
+        os.environ["QUDRON_FLEET_HOME_ROOT"] = str(self.tmp / "agent-home-root")
         self.repo = self.tmp / "repo"
         self.repo.mkdir()
         subprocess.run(["git", "init", "-b", "main"], cwd=self.repo, check=True, capture_output=True)
@@ -47,6 +49,10 @@ class AgentFleetTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         os.environ["PATH"] = self.old_path
+        if self.old_fleet_home_root is None:
+            os.environ.pop("QUDRON_FLEET_HOME_ROOT", None)
+        else:
+            os.environ["QUDRON_FLEET_HOME_ROOT"] = self.old_fleet_home_root
         self.temp.cleanup()
 
     def write_manifest(self, tasks: list[dict]) -> Path:
@@ -60,9 +66,10 @@ class AgentFleetTests(unittest.TestCase):
             "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
             "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS", "HOME",
             "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
-            "APPDATA", "LOCALAPPDATA", "USERPROFILE",
+            "APPDATA", "LOCALAPPDATA", "USERPROFILE", "QUDRON_FLEET_HOME_ROOT",
         )}
-        isolated_home = self.tmp / "isolated-cli-home"
+        isolated_home = self.tmp / "host-user-home"
+        home_root = self.tmp / "agent-home-root"
         os.environ.update({
             "OPENAI_API_KEY": "openai-test-key",
             "ANTHROPIC_API_KEY": "anthropic-test-key",
@@ -73,6 +80,7 @@ class AgentFleetTests(unittest.TestCase):
             "SSH_AUTH_SOCK": "/tmp/ssh-agent",
             "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/cloud-service-account.json",
             "HOME": str(isolated_home),
+            "QUDRON_FLEET_HOME_ROOT": str(home_root),
             "XDG_CONFIG_HOME": "/tmp/host-xdg-config",
             "XDG_CACHE_HOME": "/tmp/host-xdg-cache",
             "XDG_DATA_HOME": "/tmp/host-xdg-data",
@@ -90,6 +98,21 @@ class AgentFleetTests(unittest.TestCase):
             self.assertEqual(gemini_env["GEMINI_API_KEY"], "gemini-test-key")
             self.assertNotIn("OPENAI_API_KEY", gemini_env)
             self.assertEqual(claude_env["ANTHROPIC_API_KEY"], "anthropic-test-key")
+            expected_homes = {
+                "codex": home_root / "codex",
+                "gemini": home_root / "gemini",
+                "claude": home_root / "claude",
+            }
+            self.assertEqual(codex_env["HOME"], str(expected_homes["codex"]))
+            self.assertEqual(gemini_env["HOME"], str(expected_homes["gemini"]))
+            self.assertEqual(claude_env["HOME"], str(expected_homes["claude"]))
+            self.assertEqual(len({codex_env["HOME"], gemini_env["HOME"], claude_env["HOME"]}), 3)
+            self.assertNotEqual(codex_env["HOME"], str(isolated_home))
+            self.assertTrue(home_root.is_dir())
+            for agent_home in expected_homes.values():
+                self.assertTrue(agent_home.is_dir())
+                if os.name != "nt":
+                    self.assertEqual(os.stat(agent_home).st_mode & 0o777, 0o700)
             for env in (codex_env, gemini_env, claude_env):
                 for key in (
                     "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
@@ -98,9 +121,10 @@ class AgentFleetTests(unittest.TestCase):
                     self.assertNotIn(key, env)
                 self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
                 self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
-                self.assertEqual(env["XDG_CONFIG_HOME"], str(isolated_home / ".config"))
-                self.assertEqual(env["XDG_CACHE_HOME"], str(isolated_home / ".cache"))
-                self.assertEqual(env["XDG_DATA_HOME"], str(isolated_home / ".local" / "share"))
+                provider_home = Path(env["HOME"])
+                self.assertEqual(env["XDG_CONFIG_HOME"], str(provider_home / ".config"))
+                self.assertEqual(env["XDG_CACHE_HOME"], str(provider_home / ".cache"))
+                self.assertEqual(env["XDG_DATA_HOME"], str(provider_home / ".local" / "share"))
                 self.assertNotEqual(env["XDG_CONFIG_HOME"], "/tmp/host-xdg-config")
                 self.assertNotEqual(env["XDG_CACHE_HOME"], "/tmp/host-xdg-cache")
                 self.assertNotEqual(env["XDG_DATA_HOME"], "/tmp/host-xdg-data")
@@ -177,6 +201,14 @@ class AgentFleetTests(unittest.TestCase):
         self.assertEqual(len(manifest["tasks"]), 2)
         self.assertEqual(manifest["max_parallel"], 2)
 
+    def test_provider_home_root_is_required_and_must_be_outside_checkout(self) -> None:
+        old_root = os.environ.pop("QUDRON_FLEET_HOME_ROOT", None)
+        try:
+            with self.assertRaisesRegex(agent_fleet.FleetError, "QUDRON_FLEET_HOME_ROOT"):
+                agent_fleet.build_agent_env("codex")
+        finally:
+            if old_root is not None:
+                os.environ["QUDRON_FLEET_HOME_ROOT"] = old_root
     def test_manifest_preserves_acceptance_criteria_expected_checks_and_risks(self) -> None:
         task = {
             "id": "structured-task",

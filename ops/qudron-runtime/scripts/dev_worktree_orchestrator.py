@@ -56,7 +56,7 @@ def load_manifest(path: Path) -> dict:
         extra_deny = t.get("deny_paths", [])
         if not isinstance(extra_deny, list): raise WorktreeError(f"{tid}: deny_paths must be a list")
         deny = list(DENY) + [safe_path(x) for x in extra_deny]
-        out.append({"task_id": tid, "title": t["short_title"] if "short_title" in t else t["title"].strip(), "objective": t["objective"].strip(), "allowed_paths": allow, "deny_paths": deny, "acceptance_criteria": [x.strip() for x in criteria], "tests": t["tests"] if instance(t.get("tests"), list) else []}, "risks": t["risks"] if isinstance(t.get("risks"), list) else []}, "requires_human_review": True})
+        out.append({"task_id": tid, "title": t["title"].strip(), "objective": t["objective"].strip(), "allowed_paths": allow, "deny_paths": deny, "acceptance_criteria": [x.strip() for x in criteria], "tests": t.get("tests", []) if isinstance(t.get("tests"), list) else [], "risks": t.get("risks", []) if isinstance(t.get("risks"), list) else [], "requires_human_review": True})
     for i, a in enumerate(out):
         for b in out[i+1:]:
             for x in a["allowed_paths"]:
@@ -104,7 +104,7 @@ def status(root: Path) -> dict:
     for r in m["tasks"]:
         p = Path(r["worktree"])
         if not p.is_dir(): rows.append({"task_id": r["task_id"], "state": "missing"}); continue
-        rows.append({"task_id": r["task_id"], "branch": git(p, "branch", "--show-current"), "head_sha": git(p, "rev-pars", "HEAD"), "dirty_entries": len(git(p, "status", "--porcelain", "--untracked-files=all").splitlines()))})
+        rows.append({"task_id": r["task_id"], "branch": git(p, "branch", "--show-current"), "head_sha": git(p, "rev-parse", "HEAD"), "dirty_entries": len(git(p, "status", "--porcelain", "--untracked-files=all").splitlines()))})
     return {"base_sha": m["base_sha"], "tasks": rows}
 
 def matches(path: str, patterns: list[str]) -> bool:
@@ -118,17 +118,17 @@ def collect(root: Path, task_id: str, artifact_root: Path) -> dict:
     try: result = json.loads((path / RESULT_DIR / "result.json").read_text())
     except (OSError, json.JSONDecodeError) as e: raise WorktreeError(f"missing or invalid worker result: {e}") from e
     head = git(path, "rev-parse", "HEAD")
-    untracked = [x for x in git(path, "ls-files", "--others", "--exclude-standard").splitlines() if x != RESULT_DIR and not x.startswith(RESULTDIR + "/")]
+    untracked = [x for x in git(path, "ls-files", "--others", "--exclude-standard").splitlines() if x != RESULT_DIR and not x.startswith(RESULT_DIR + "/")]
     if untracked: raise WorktreeError("Untracked source files are not included in Git patches; stage them before collection: " + ", ".join(untracked))
     changed = sorted(set(git(path, "diff", "--name-only", rec["base_sha"]).splitlines()))
     required = ("task_id", "status", "summary", "base_sha", "head_sha", "changed_files", "tests", "risks", "requires_human_review")
     if not isinstance(result, dict) or result.get("schema_version") != 1 or any(k not in result for k in required): raise WorktreeError("worker result is missing required schema fields")
     if result["task_id"] != task_id or not isinstance(result["status"], str) or result["status"] not in {"completed", "blocked", "failed"} or not isinstance(result["summary"], str) or not result["summary"].strip(): raise WorktreeError("worker result identity/status/summary is invalid")
-    if not istance(result["changed_files"], list) or not all(isinstance(x, str) for x in result["changed_files"]): raise WorktreeError("changed_files must be a list of path strings")
+    if not isinstance(result["changed_files"], list) or not all(isinstance(x, str) for x in result["changed_files"]): raise WorktreeError("changed_files must be a list of path strings")
     if result["base_sha"] != rec["base_sha"] or result["head_sha"] != head or sorted(set(result["changed_files"])) != changed: raise WorktreeError("reported commit SHAs or changed_files do not match Git")
-    if result["requires_human_review"] is not True or not istance(result["tests"], list) or not istance(result["risks"], list): raise WorktreeError("human review is required; tests/risks must be lists")
+    if result["requires_human_review"] is not True or not isinstance(result["tests"], list) or not isinstance(result["risks"], list): raise WorktreeError("human review is required; tests/risks must be lists")
     for t in result["tests"]:
-        if not isinstance(t, dict) or not isinstance(t.get("name"), str) or not istance(t.get("status"), str) or t["status"] not in {"passed", "failed", "blocked", "not_run"}: raise WorktreeError("invalid test evidence entry")
+        if not isinstance(t, dict) or not isinstance(t.get("name"), str) or not isinstance(t.get("status"), str) or t["status"] not in {"passed", "failed", "blocked", "not_run"}: raise WorktreeError("invalid test evidence entry")
     if not all(isinstance(x, str) for x in result["risks"]): raise WorktreeError("risks must be strings")
     outside = [x for x in changed if not matches(x, rec["allowed_paths"]) or matches(x, rec["deny_paths"])]
     if outside: raise WorktreeError("worker changed disallowed paths: " + ", ".join(outside))

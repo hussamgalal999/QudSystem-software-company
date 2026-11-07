@@ -53,8 +53,7 @@ AGENTS: dict[str, dict[str, str]] = {
 
 BASE_ENV_KEYS = {
     "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_MESSAGES",
-    "TERM", "NO_COLOR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
-    "SYSTEMROOT", "WINDIR", "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERPROFILE",
+    "TERM", "NO_COLOR", "SYSTEMROOT", "WINDIR", "PATHEXT",
 }
 AGENT_ENV_KEYS = {
     "codex": {"OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID"},
@@ -277,6 +276,19 @@ def build_agent_env(agent: str) -> dict[str, str]:
         raise FleetError(f"Unsupported provider environment: {agent}")
     allowed = BASE_ENV_KEYS | AGENT_ENV_KEYS[agent]
     env = {key: value for key, value in os.environ.items() if key in allowed}
+    # Keep CLI credentials/config below the operator-provided HOME. Never inherit
+    # host XDG/Windows profile paths that may point at unrelated credential stores.
+    home = env.get("HOME")
+    if home:
+        home_path = Path(home).expanduser()
+        env["HOME"] = str(home_path)
+        env["XDG_CONFIG_HOME"] = str(home_path / ".config")
+        env["XDG_CACHE_HOME"] = str(home_path / ".cache")
+        env["XDG_DATA_HOME"] = str(home_path / ".local" / "share")
+        if os.name == "nt":
+            env["USERPROFILE"] = str(home_path)
+            env["APPDATA"] = str(home_path / "AppData" / "Roaming")
+            env["LOCALAPPDATA"] = str(home_path / "AppData" / "Local")
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     return env

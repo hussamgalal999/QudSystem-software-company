@@ -58,8 +58,11 @@ class AgentFleetTests(unittest.TestCase):
         saved = {key: os.environ.get(key) for key in (
             "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
             "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
-            "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS",
+            "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS", "HOME",
+            "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+            "APPDATA", "LOCALAPPDATA", "USERPROFILE",
         )}
+        isolated_home = self.tmp / "isolated-cli-home"
         os.environ.update({
             "OPENAI_API_KEY": "openai-test-key",
             "ANTHROPIC_API_KEY": "anthropic-test-key",
@@ -69,6 +72,13 @@ class AgentFleetTests(unittest.TestCase):
             "AWS_SECRET_ACCESS_KEY": "aws-secret-must-not-leak",
             "SSH_AUTH_SOCK": "/tmp/ssh-agent",
             "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/cloud-service-account.json",
+            "HOME": str(isolated_home),
+            "XDG_CONFIG_HOME": "/tmp/host-xdg-config",
+            "XDG_CACHE_HOME": "/tmp/host-xdg-cache",
+            "XDG_DATA_HOME": "/tmp/host-xdg-data",
+            "APPDATA": "/tmp/host-appdata",
+            "LOCALAPPDATA": "/tmp/host-localappdata",
+            "USERPROFILE": "/tmp/host-userprofile",
         })
         try:
             codex_env = agent_fleet.build_agent_env("codex")
@@ -88,6 +98,19 @@ class AgentFleetTests(unittest.TestCase):
                     self.assertNotIn(key, env)
                 self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
                 self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+                self.assertEqual(env["XDG_CONFIG_HOME"], str(isolated_home / ".config"))
+                self.assertEqual(env["XDG_CACHE_HOME"], str(isolated_home / ".cache"))
+                self.assertEqual(env["XDG_DATA_HOME"], str(isolated_home / ".local" / "share"))
+                self.assertNotEqual(env["XDG_CONFIG_HOME"], "/tmp/host-xdg-config")
+                self.assertNotEqual(env["XDG_CACHE_HOME"], "/tmp/host-xdg-cache")
+                self.assertNotEqual(env["XDG_DATA_HOME"], "/tmp/host-xdg-data")
+                if os.name == "nt":
+                    self.assertEqual(env["USERPROFILE"], str(isolated_home))
+                    self.assertEqual(env["APPDATA"], str(isolated_home / "AppData" / "Roaming"))
+                    self.assertEqual(env["LOCALAPPDATA"], str(isolated_home / "AppData" / "Local"))
+                else:
+                    for key in ("USERPROFILE", "APPDATA", "LOCALAPPDATA"):
+                        self.assertNotIn(key, env)
         finally:
             for key, value in saved.items():
                 if value is None:

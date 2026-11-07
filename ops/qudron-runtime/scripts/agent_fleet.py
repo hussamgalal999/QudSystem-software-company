@@ -271,8 +271,15 @@ def build_agent_command(agent: str, mode: str, prompt: str, prompt_file: Path, w
 
 
 def safe_write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    """Create private artifacts without following a pre-existing symlink."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.is_symlink():
+        raise FleetError(f"Refusing to write through artifact symlink: {path}")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream.write(content)
     try:
         os.chmod(path, 0o600)
     except OSError:
@@ -480,8 +487,8 @@ def run_fleet(args: argparse.Namespace) -> int:
             raise FleetError(f"{label} directory must be outside the Git checkout: {external_path}")
     worktree_root = worktrees_base / run_id
     artifact_dir = artifacts_base / run_id
-    worktree_root.mkdir(parents=True, exist_ok=False)
-    artifact_dir.mkdir(parents=True, exist_ok=False)
+    worktree_root.mkdir(parents=True, exist_ok=False, mode=0o700)
+    artifact_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
     try:
         os.chmod(worktree_root, 0o700)
         os.chmod(artifact_dir, 0o700)

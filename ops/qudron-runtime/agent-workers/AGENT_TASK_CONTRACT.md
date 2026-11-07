@@ -29,7 +29,8 @@ The integration owner must validate the run report against `run.schema.json` and
 The integration owner must require:
 
 - exact base SHA and worker branch;
-- full diff and changed-file list (a patch is exported only after successful, non-timeout execution and complete allowlist/denylist validation);\n- SHA-256 digest for every exported patch;
+- full diff and changed-file list (a patch is exported only after successful, non-timeout execution and complete allowlist/denylist validation);
+- SHA-256 digest for every exported patch;
 - raw stdout/stderr are absent by default and may only be retained through explicit `--capture-logs` opt-in for scope-valid tasks; they remain suppressed for tasks with path violations;
 - allowed-path validation result, with no patch artifact exported if any changed path violates the allowlist;
 - test commands and actual exit codes;

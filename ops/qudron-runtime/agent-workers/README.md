@@ -27,7 +27,7 @@ This is a development tool, not the production Qudron queue. It does not create 
 - Resolves each task's base ref to an exact commit SHA.
 - Creates one worktree and branch per task.
 - Runs up to eight tasks concurrently; default is two.
-- Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands.
+- Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands. Codex runs ephemerally and Claude Code session persistence is disabled for worker tasks.
 - Writes a run.json summary and exports a patch only after every changed path passes the declared allowlist and denylist. Raw stdout/stderr are not saved by default.
 - Rejects changed files outside the declared allowed_paths scope, blocks sensitive paths by default, and exports no patch at all for a scope-violating task.
 - Rejects overlapping write scopes between concurrent implementation tasks before any worker is launched.

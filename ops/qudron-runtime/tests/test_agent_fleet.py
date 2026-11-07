@@ -144,12 +144,18 @@ class AgentFleetTests(unittest.TestCase):
         prompt_file = self.tmp / "prompt.md"
         argv, stdin_text = agent_fleet.build_agent_command("codex", "implement", "task body", prompt_file, worktree)
         self.assertIn("workspace-write", argv)
+        self.assertIn("--ephemeral", argv)
         self.assertIn("--ask-for-approval", argv)
         self.assertIn("never", argv)
         self.assertNotIn("--yolo", argv)
         self.assertEqual(stdin_text, "task body")
         review_argv, _ = agent_fleet.build_agent_command("codex", "review", "review", prompt_file, worktree)
         self.assertIn("read-only", review_argv)
+        claude_argv, _ = agent_fleet.build_agent_command("claude", "implement", "task", prompt_file, worktree)
+        self.assertIn("--no-session-persistence", claude_argv)
+        self.assertIn("acceptEdits", claude_argv)
+        claude_review, _ = agent_fleet.build_agent_command("claude", "review", "review", prompt_file, worktree)
+        self.assertIn("plan", claude_review)
 
     def test_run_creates_worktree_patch_and_json_report(self) -> None:
         manifest_path = self.write_manifest([{

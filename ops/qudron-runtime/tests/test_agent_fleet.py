@@ -291,5 +291,35 @@ class AgentFleetTests(unittest.TestCase):
         self.assertFalse((artifact_dir / "no-raw-logs.stdout.txt").exists())
         self.assertFalse((artifact_dir / "no-raw-logs.stderr.txt").exists())
 
+    def test_failed_worker_does_not_export_raw_logs_even_with_opt_in(self) -> None:
+        codex = self.bin / "codex"
+        codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "print('sensitive failure output')\n"
+            "raise SystemExit(7)\n",
+            encoding="utf-8",
+        )
+        codex.chmod(0o755)
+        manifest_path = self.write_manifest([{
+            "id": "failed-worker", "agent": "codex", "mode": "implement", "base_ref": "HEAD",
+            "allowed_paths": ["generated.txt"], "prompt": "this worker should fail",
+        }])
+        task = agent_fleet.load_manifest(manifest_path)["tasks"][0]
+        artifact_dir = self.artifacts / "failed-logs"
+        worktree_root = self.worktrees / "failed-logs"
+        artifact_dir.mkdir(parents=True)
+        worktree_root.mkdir(parents=True)
+        prepared = agent_fleet.prepare_task(self.repo, task, "failed-logs-12345678", worktree_root, artifact_dir)
+        result = agent_fleet.execute_task(prepared, artifact_dir, timeout=60, capture_logs=True)
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["patch_exported"])
+        self.assertFalse(result["logs_exported"])
+        self.assertEqual(result["log_block_reason"], "worker_execution_failed")
+        self.assertIsNone(result["stdout_path"])
+        self.assertIsNone(result["stderr_path"])
+        self.assertFalse((artifact_dir / "failed-worker.stdout.txt").exists())
+        self.assertFalse((artifact_dir / "failed-worker.stderr.txt").exists())
+        self.assertFalse((artifact_dir / "failed-worker.patch").exists())
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

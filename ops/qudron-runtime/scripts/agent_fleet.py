@@ -139,8 +139,11 @@ def load_manifest(path: Path) -> dict[str, Any]:
         raise FleetError(f"Manifest not found: {path}") from exc
     except json.JSONDecodeError as exc:
         raise FleetError(f"Manifest JSON is invalid: {exc}") from exc
-    if not isinstance(payload, dict) or payload.get("version") != 1:
-        raise FleetError("Manifest must be a JSON object with version: 1")
+    if not isinstance(payload, dict) or type(payload.get("version")) is not int or payload.get("version") != 1:
+        raise FleetError("Manifest must be a JSON object with integer version: 1")
+    unknown_top_level = set(payload) - {"version", "max_parallel", "tasks"}
+    if unknown_top_level:
+        raise FleetError("Manifest contains unsupported fields: " + ", ".join(sorted(unknown_top_level)))
     tasks = payload.get("tasks")
     if not isinstance(tasks, list) or not 1 <= len(tasks) <= MAX_TASKS:
         raise FleetError(f"Manifest tasks must contain between 1 and {MAX_TASKS} items")
@@ -149,6 +152,13 @@ def load_manifest(path: Path) -> dict[str, Any]:
     for index, raw in enumerate(tasks, start=1):
         if not isinstance(raw, dict):
             raise FleetError(f"Task #{index} must be an object")
+        unknown_task_fields = set(raw) - {
+            "id", "title", "agent", "mode", "prompt", "base_ref", "allowed_paths", "deny_paths"
+        }
+        if unknown_task_fields:
+            raise FleetError(
+                f"Task #{index}: unsupported fields: " + ", ".join(sorted(unknown_task_fields))
+            )
         task_id = raw.get("id")
         if not isinstance(task_id, str) or not ID_RE.fullmatch(task_id):
             raise FleetError(f"Task #{index}: id must match {ID_RE.pattern}")
@@ -156,10 +166,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
             raise FleetError(f"Duplicate task id: {task_id}")
         seen.add(task_id)
         agent = raw.get("agent")
-        if agent not in AGENTS:
+        if not isinstance(agent, str) or agent not in AGENTS:
             raise FleetError(f"Task {task_id}: unsupported agent {agent!r}; supported: {', '.join(AGENTS)}")
         mode = raw.get("mode", "implement")
-        if mode not in {"implement", "review"}:
+        if not isinstance(mode, str) or mode not in {"implement", "review"}:
             raise FleetError(f"Task {task_id}: mode must be implement or review")
         prompt = raw.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 16000:
@@ -168,6 +178,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
         if not isinstance(allowed, list):
             raise FleetError(f"Task {task_id}: allowed_paths must be a list")
         allowed = [validate_relative_pattern(p, task_id, "allowed_paths") for p in allowed]
+        if len(set(allowed)) != len(allowed):
+            raise FleetError(f"Task {task_id}: allowed_paths cannot contain duplicates")
         if mode == "implement" and not allowed:
             raise FleetError(f"Task {task_id}: implement tasks require a non-empty allowed_paths list")
         if mode == "review" and allowed:
@@ -175,10 +187,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
         deny = raw.get("deny_paths", [])
         if not isinstance(deny, list):
             raise FleetError(f"Task {task_id}: deny_paths must be a list")
-        deny = list(dict.fromkeys([
-            *DEFAULT_DENY_PATHS,
-            *(validate_relative_pattern(p, task_id, "deny_paths") for p in deny),
-        ]))
+        normalized_deny = [validate_relative_pattern(p, task_id, "deny_paths") for p in deny]
+        if len(set(normalized_deny)) != len(normalized_deny):
+            raise FleetError(f"Task {task_id}: deny_paths cannot contain duplicates")
+        deny = list(dict.fromkeys([*DEFAULT_DENY_PATHS, *normalized_deny]))
         base_ref = raw.get("base_ref", "HEAD")
         if not isinstance(base_ref, str) or not REF_RE.fullmatch(base_ref):
             raise FleetError(f"Task {task_id}: invalid base_ref")

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qudsystem.ltd/schemas/qudron-cli-agent-manifest-v1.schema.json",
+  "title": "Qudron CLI Agent Task Manifest",
+  "description": "Input contract for ops/qudron-runtime/scripts/agent_fleet.py. Runtime validation additionally checks path normalization, denylist enforcement, and non-overlapping implementation scopes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "tasks"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "max_parallel": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "default": 2
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "agent",
+        "allowed_paths",
+        "prompt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,39}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "agent": {
+          "enum": [
+            "codex",
+            "gemini",
+            "claude",
+            "aider"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "implement",
+            "review"
+          ],
+          "default": "implement"
+        },
+        "base_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$",
+          "default": "HEAD"
+        },
+        "allowed_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact relative path or a directory prefix ending in /**. Absolute paths, traversal, backslashes, and arbitrary wildcard patterns are rejected by runtime validation."
+          }
+        },
+        "deny_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Additional exact relative paths or directory prefixes ending in /**. Default-denied sensitive paths cannot be removed."
+          }
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "review"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "allowed_paths": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "allowed_paths": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

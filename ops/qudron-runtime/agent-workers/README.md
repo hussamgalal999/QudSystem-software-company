@@ -74,7 +74,7 @@ Inspect the run.json summary and task patches before sharing anything. Raw CLI l
 
 Validate manifests against `manifest.schema.json` before launch. Consumers should validate every `run.json` handoff against `run.schema.json` and reject reports that do not set `requires_human_review: true`. Runtime validation remains authoritative for safe path normalization, default deny paths, and non-overlapping concurrent write scopes.
 
-Copy tasks.example.json and replace the examples with independent tasks. Every implementer must have a narrow, non-overlapping `allowed_paths` list. Scopes accept exact relative paths or directory prefixes ending in `/**`; arbitrary glob syntax is rejected. Review tasks must use an empty allowed_paths list and run against the implementation branch or commit in read-only mode.
+Copy tasks.example.json and replace the examples with independent tasks. Every implementer must have a narrow, non-overlapping `allowed_paths` list. Scopes accept exact relative paths or directory prefixes ending in `/**`; arbitrary glob syntax is rejected. Review tasks must use an empty allowed_paths list and run against the implementation branch or commit in read-only mode. Manifests may also declare `acceptance_criteria`, `expected_checks`, and `known_risks`; these are validated, included in the worker prompt, and echoed in the run report. `expected_checks` entries are descriptive metadata only: the launcher never executes shell commands copied from a manifest and never treats a declared check as passed evidence.
 
 Allowed agent values: codex, gemini, claude.
 Allowed modes: implement, review.

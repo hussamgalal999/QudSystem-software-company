@@ -154,6 +154,46 @@ class AgentFleetTests(unittest.TestCase):
         self.assertEqual(len(manifest["tasks"]), 2)
         self.assertEqual(manifest["max_parallel"], 2)
 
+    def test_manifest_preserves_acceptance_criteria_expected_checks_and_risks(self) -> None:
+        task = {
+            "id": "structured-task",
+            "title": "Structured contract",
+            "agent": "codex",
+            "mode": "implement",
+            "allowed_paths": ["src/**"],
+            "prompt": "Implement the scoped change.",
+            "acceptance_criteria": ["Only src/ is modified.", "The result includes evidence."],
+            "expected_checks": ["Inspect the diff for scope compliance."],
+            "known_risks": ["Live provider use may consume quota."],
+        }
+        manifest_path = self.write_manifest([task])
+        normalized = agent_fleet.load_manifest(manifest_path)["tasks"][0]
+        self.assertEqual(normalized["acceptance_criteria"], task["acceptance_criteria"])
+        self.assertEqual(normalized["expected_checks"], task["expected_checks"])
+        self.assertEqual(normalized["known_risks"], task["known_risks"])
+        prompt = agent_fleet.make_prompt(normalized)
+        for value in task["acceptance_criteria"] + task["expected_checks"] + task["known_risks"]:
+            self.assertIn(value, prompt)
+        self.assertIn("the launcher does not execute", prompt.lower())
+
+    def test_manifest_rejects_invalid_structured_contract_lists(self) -> None:
+        base = {
+            "id": "invalid-contract",
+            "agent": "codex",
+            "mode": "implement",
+            "allowed_paths": ["src/**"],
+            "prompt": "Work inside src only.",
+        }
+        for field, value in (
+            ("acceptance_criteria", "not-a-list"),
+            ("expected_checks", [""]),
+            ("known_risks", ["x" * 1001]),
+        ):
+            with self.subTest(field=field):
+                path = self.write_manifest([{**base, field: value}])
+                with self.assertRaises(agent_fleet.FleetError):
+                    agent_fleet.load_manifest(path)
+
     def test_manifest_rejects_path_traversal(self) -> None:
         path = self.write_manifest([{
             "id": "unsafe-task", "agent": "codex", "mode": "implement",
@@ -239,6 +279,9 @@ class AgentFleetTests(unittest.TestCase):
             "id": "make-generated-file", "title": "Generate fixture file", "agent": "codex",
             "mode": "implement", "base_ref": "HEAD", "allowed_paths": ["generated.txt"],
             "prompt": "Create generated.txt with a short fixture message.",
+            "acceptance_criteria": ["Only generated.txt changes."],
+            "expected_checks": ["Review the patch and verify the changed-file manifest."],
+            "known_risks": ["The local fixture uses a fake CLI; it does not exercise a model provider."],
         }])
         args = argparse.Namespace(
             repo=str(self.repo),
@@ -266,6 +309,9 @@ class AgentFleetTests(unittest.TestCase):
         self.assertTrue(result["logs_exported"])
         self.assertEqual(result["changed_files"], ["generated.txt"])
         self.assertEqual(result["allowed_paths"], ["generated.txt"])
+        self.assertEqual(result["acceptance_criteria"], ["Only generated.txt changes."])
+        self.assertEqual(result["expected_checks"], ["Review the patch and verify the changed-file manifest."])
+        self.assertEqual(result["known_risks"], ["The local fixture uses a fake CLI; it does not exercise a model provider."])
         self.assertIn(".env", result["deny_paths"])
         self.assertNotIn("prompt", result)
         patch_file = Path(result["patch_path"])

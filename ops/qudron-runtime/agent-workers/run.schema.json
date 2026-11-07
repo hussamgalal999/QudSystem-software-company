@@ -86,7 +86,10 @@
         "allowed_paths",
         "deny_paths",
         "head_sha",
-        "binding_violations"
+        "binding_violations",
+        "acceptance_criteria",
+        "expected_checks",
+        "known_risks"
       ],
       "properties": {
         "task_id": {
@@ -244,6 +247,33 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 240
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "expected_checks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "known_risks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
           }
         }
       },

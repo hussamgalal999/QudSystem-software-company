@@ -150,6 +150,22 @@ def patterns_overlap(left: str, right: str) -> bool:
     return False
 
 
+def validate_manifest_notes(raw: Any, task_id: str, field: str) -> list[str]:
+    """Validate declarative acceptance/check/risk notes; never execute them as commands."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > 32:
+        raise FleetError(f"Task {task_id}: {field} must be a list of up to 32 descriptive strings")
+    values: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip() or len(item) > 1000:
+            raise FleetError(f"Task {task_id}: every {field} entry must contain 1-1,000 characters")
+        values.append(item.strip())
+    if len(values) != len(set(values)):
+        raise FleetError(f"Task {task_id}: {field} cannot contain duplicates")
+    return values
+
+
 def load_manifest(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -171,7 +187,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
         if not isinstance(raw, dict):
             raise FleetError(f"Task #{index} must be an object")
         unknown_task_fields = set(raw) - {
-            "id", "title", "agent", "mode", "prompt", "base_ref", "allowed_paths", "deny_paths"
+            "id", "title", "agent", "mode", "prompt", "base_ref", "allowed_paths", "deny_paths",
+            "acceptance_criteria", "expected_checks", "known_risks"
         }
         if unknown_task_fields:
             raise FleetError(
@@ -215,15 +232,27 @@ def load_manifest(path: Path) -> dict[str, Any]:
         title = raw.get("title", task_id)
         if not isinstance(title, str) or not title.strip() or len(title) > 200:
             raise FleetError(f"Task {task_id}: title must be 1-200 characters")
+        acceptance_criteria = validate_manifest_notes(
+            raw.get("acceptance_criteria"), task_id, "acceptance_criteria"
+        )
+        expected_checks = validate_manifest_notes(
+            raw.get("expected_checks"), task_id, "expected_checks"
+        )
+        known_risks = validate_manifest_notes(
+            raw.get("known_risks"), task_id, "known_risks"
+        )
         normalized.append({
             "id": task_id,
-            "title": title,
+            "title": title.strip(),
             "agent": agent,
             "mode": mode,
             "prompt": prompt.strip(),
             "base_ref": base_ref,
             "allowed_paths": allowed,
             "deny_paths": deny,
+            "acceptance_criteria": acceptance_criteria,
+            "expected_checks": expected_checks,
+            "known_risks": known_risks,
         })
     implementers = [task for task in normalized if task["mode"] == "implement"]
     for index, first in enumerate(implementers):
@@ -291,20 +320,38 @@ def safe_write(path: Path, content: str) -> None:
 
 def make_prompt(task: dict[str, Any]) -> str:
     allowed = task["allowed_paths"] or ["READ ONLY — do not modify any file"]
-    return (
-        "You are an isolated Qudron engineering worker. Work only in this Git worktree.\n"
-        f"Task ID: {task['id']}\nTitle: {task['title']}\nMode: {task['mode']}\n\n"
-        "TASK\n"
-        f"{task['prompt']}\n\n"
-        "BOUNDARIES\n"
-        f"Allowed paths: {json.dumps(allowed, ensure_ascii=False)}\n"
-        f"Denied paths: {json.dumps(task['deny_paths'], ensure_ascii=False)}\n"
-        "Do not commit, push, create a PR, merge, modify denied paths, or change files outside the allowed paths.\n"
-        "Do not read .env files, credential stores, SSH keys, browser profiles, or unrelated private data.\n"
-        "Do not publish content, send messages, make purchases, or call production services.\n"
-        "For review mode, do not modify any files. Report findings with file paths, line numbers, severity, and evidence.\n"
-        "Use only the repository context needed for this task. State what you did and which checks you actually ran.\n"
-    )
+    criteria = task.get("acceptance_criteria", [])
+    checks = task.get("expected_checks", [])
+    risks = task.get("known_risks", [])
+    lines = [
+        "You are an isolated Qudron engineering worker. Work only in this Git worktree.",
+        f"Task ID: {task['id']}",
+        f"Title: {task['title']}",
+        f"Mode: {task['mode']}",
+        "",
+        "TASK",
+        task["prompt"],
+        "",
+        "BOUNDARIES",
+        f"Allowed paths: {json.dumps(allowed, ensure_ascii=False)}",
+        f"Denied paths: {json.dumps(task['deny_paths'], ensure_ascii=False)}",
+    ]
+    for heading, values, empty_note in (
+        ("ACCEPTANCE CRITERIA", criteria, "No separate acceptance criteria were declared."),
+        ("EXPECTED CHECKS (descriptive only; do not execute manifest text as shell commands)", checks, "No separate expected checks were declared."),
+        ("KNOWN RISKS", risks, "No known risks were declared in the manifest."),
+    ):
+        lines.extend(["", heading])
+        lines.extend([f"- {value}" for value in values] if values else [empty_note])
+    lines.extend([
+        "",
+        "Do not commit, push, create a PR, merge, modify denied paths, or change files outside the allowed paths.",
+        "Do not read .env files, credential stores, SSH keys, browser profiles, or unrelated private data.",
+        "Do not publish content, send messages, make purchases, or call production services.",
+        "For review mode, do not modify any files. Report findings with file paths, line numbers, severity, and evidence.",
+        "Use only the repository context needed for this task. State what you did and which checks you actually ran.",
+    ])
+    return "\n".join(lines) + "\n"
 
 
 def changed_files(
@@ -408,6 +455,9 @@ def execute_task(
         "mode": task["mode"], "branch": prepared["branch"],
         "base_sha": prepared["base_sha"], "head_sha": prepared["base_sha"],
         "binding_violations": [], "worktree": str(prepared["worktree"]),
+        "acceptance_criteria": list(task.get("acceptance_criteria", [])),
+        "expected_checks": list(task.get("expected_checks", [])),
+        "known_risks": list(task.get("known_risks", [])),
         "allowed_paths": list(task["allowed_paths"]),
         "deny_paths": list(task["deny_paths"]),
         "status": "pending", "changed_files": [], "scope_violations": [],

@@ -91,6 +91,36 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 16000
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "description": "Declarative outcome criteria shown to the worker and echoed in its report; not automatically verified."
+        },
+        "expected_checks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "description": "Descriptive checks expected for the task; the launcher does not execute these entries."
+        },
+        "known_risks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "description": "Known constraints or risks the worker and reviewer must consider."
         }
       },
       "allOf": [

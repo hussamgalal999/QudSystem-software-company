@@ -129,9 +129,9 @@ class AgentFleetTests(unittest.TestCase):
                 self.assertNotEqual(env["XDG_CACHE_HOME"], "/tmp/host-xdg-cache")
                 self.assertNotEqual(env["XDG_DATA_HOME"], "/tmp/host-xdg-data")
                 if os.name == "nt":
-                    self.assertEqual(env["USERPROFILE"], str(isolated_home))
-                    self.assertEqual(env["APPDATA"], str(isolated_home / "AppData" / "Roaming"))
-                    self.assertEqual(env["LOCALAPPDATA"], str(isolated_home / "AppData" / "Local"))
+                    self.assertEqual(env["USERPROFILE"], str(provider_home))
+                    self.assertEqual(env["APPDATA"], str(provider_home / "AppData" / "Roaming"))
+                    self.assertEqual(env["LOCALAPPDATA"], str(provider_home / "AppData" / "Local"))
                 else:
                     for key in ("USERPROFILE", "APPDATA", "LOCALAPPDATA"):
                         self.assertNotIn(key, env)
@@ -209,6 +209,23 @@ class AgentFleetTests(unittest.TestCase):
         finally:
             if old_root is not None:
                 os.environ["QUDRON_FLEET_HOME_ROOT"] = old_root
+
+    def test_provider_home_root_inside_checkout_is_rejected(self) -> None:
+        checkout = agent_fleet.repo_root(Path.cwd())
+        candidate = checkout / f".qudron-home-root-test-{self.tmp.name.split('/')[-1]}"
+        old_root = os.environ.get("QUDRON_FLEET_HOME_ROOT")
+        try:
+            os.environ["QUDRON_FLEET_HOME_ROOT"] = str(candidate)
+            with self.assertRaisesRegex(agent_fleet.FleetError, "outside the repository checkout"):
+                agent_fleet.build_agent_env("codex")
+        finally:
+            if candidate.exists():
+                candidate.rmdir()
+            if old_root is None:
+                os.environ.pop("QUDRON_FLEET_HOME_ROOT", None)
+            else:
+                os.environ["QUDRON_FLEET_HOME_ROOT"] = old_root
+
     def test_manifest_preserves_acceptance_criteria_expected_checks_and_risks(self) -> None:
         task = {
             "id": "structured-task",

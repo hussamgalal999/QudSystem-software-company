@@ -52,7 +52,7 @@ AGENTS: dict[str, dict[str, str]] = {
 }
 
 BASE_ENV_KEYS = {
-    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_MESSAGES",
+    "PATH", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_MESSAGES",
     "TERM", "NO_COLOR", "SYSTEMROOT", "WINDIR", "PATHEXT",
 }
 AGENT_ENV_KEYS = {

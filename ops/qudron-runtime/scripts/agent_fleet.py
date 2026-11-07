@@ -227,7 +227,7 @@ def build_agent_command(agent: str, mode: str, prompt: str, prompt_file: Path, w
     """Return argv and optional stdin; never invoke a shell."""
     if agent == "codex":
         sandbox = "read-only" if mode == "review" else "workspace-write"
-        return (["codex", "exec", "--json", "--sandbox", sandbox,
+        return (["codex", "exec", "--json", "--ephemeral", "--sandbox", sandbox,
                  "--ask-for-approval", "never", "--cd", str(worktree), "-"], prompt)
     if agent == "gemini":
         approval = "plan" if mode == "review" else "auto_edit"
@@ -236,7 +236,8 @@ def build_agent_command(agent: str, mode: str, prompt: str, prompt_file: Path, w
     if agent == "claude":
         permission = "plan" if mode == "review" else "acceptEdits"
         return (["claude", "-p", prompt, "--output-format", "json",
-                 "--permission-mode", permission, "--max-turns", "30"], None)
+                 "--permission-mode", permission, "--max-turns", "30",
+                 "--no-session-persistence"], None)
     raise FleetError(f"No command adapter for agent: {agent}")
 
 

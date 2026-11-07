@@ -40,13 +40,12 @@ This is a development tool, not the production Qudron queue. It does not create 
 | Codex CLI | Yes | Yes | workspace-write or read-only sandbox |
 | Gemini CLI | Yes | Yes | auto_edit or plan approval mode |
 | Claude Code | Yes | Yes | acceptEdits or plan permission mode |
-| Aider | Yes | No | single-shot edit, automatic commits disabled |
 
 The runner does not install tools. Authenticate each CLI using its official account/provider flow. The doctor command checks local binary presence and version only; it does not make model calls or confirm quota.
 
 ## Not enabled in this first version
 
-OpenCode, Cline, Qwen Code, Continue CLI and Kilo Code have non-interactive modes, but their unattended permission and shell-tool policies need a separately reviewed adapter before they can be enabled here. OpenHands' legacy CLI is marked as no longer actively maintained upstream. Goose, Augment ACP, acoder and Hubble are also not enabled pending exact package/version, command, license and permission validation.
+Aider, OpenCode, Cline, Qwen Code, Continue CLI and Kilo Code have non-interactive modes, but their unattended permission and shell-tool policies need a separately reviewed adapter before they can be enabled here. In particular, Aider's `--yes` option accepts every confirmation, so this launcher does not enable it. OpenHands' legacy CLI is marked as no longer actively maintained upstream. Goose, Augment ACP, acoder and Hubble are also not enabled pending exact package/version, command, license and permission validation.
 
 Browse Code and CodexFlow are bridges rather than isolated coding CLIs. A bridge can expose local files, terminal commands, browser sessions or credentials to a remote chat agent; audit its authentication, tunnel and tool allowlist before connecting it to a repository. MCP is a protocol, not a security boundary by itself.
 
@@ -74,7 +73,7 @@ Validate manifests against `manifest.schema.json` before launch. Runtime validat
 
 Copy tasks.example.json and replace the examples with independent tasks. Every implementer must have a narrow, non-overlapping allowed_paths list. Review tasks must use an empty allowed_paths list and run against the implementation branch or commit in read-only mode.
 
-Allowed agent values: codex, gemini, claude, aider.
+Allowed agent values: codex, gemini, claude.
 Allowed modes: implement, review.
 Maximum manifest size: 20 tasks.
 Maximum parallel workers: 8.
@@ -102,7 +101,6 @@ No automatic PR creation or merge is implemented. Keep human merge approval and 
 - Git worktrees isolate Git state and files, not OS processes, network access, credentials or CPU/RAM. Run this tool in a disposable devcontainer/VM, as a non-admin user, without the host Docker socket.
 - Codex workspace-write is still a code-execution environment inside its workspace. Do not use danger-full-access or YOLO for routine fleet tasks.
 - Gemini auto_edit and Claude acceptEdits do not blanket-approve shell commands; a worker may pause or fail if a command requires approval.
-- Aider automatic commits are disabled.
 - allowed_paths and deny_paths are post-run diff checks, not OS-level access-control boundaries. Raw stdout/stderr are withheld by default and remain suppressed for any scope-violating task, even when `--capture-logs` is enabled. Sensitive paths are denied by default, but an untrusted process can still read or alter files inside its VM; use a disposable restricted VM/container with no host credentials or Docker socket.
 - Missing local CLIs are reported as unavailable; no agent is silently substituted.
 - The runner never installs packages, provisions credentials, bypasses quotas, accesses browser cookies, or calls production services.

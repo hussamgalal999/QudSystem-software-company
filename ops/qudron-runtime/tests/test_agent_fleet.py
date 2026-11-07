@@ -76,6 +76,13 @@ class AgentFleetTests(unittest.TestCase):
         with self.assertRaisesRegex(agent_fleet.FleetError, "cannot contain duplicates"):
             agent_fleet.load_manifest(path)
 
+    def test_checked_in_example_manifest_matches_runtime_contract(self) -> None:
+        example = Path(__file__).parents[1] / "agent-workers" / "tasks.example.json"
+        manifest = agent_fleet.load_manifest(example)
+        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(len(manifest["tasks"]), 2)
+        self.assertEqual(manifest["max_parallel"], 2)
+
     def test_manifest_rejects_path_traversal(self) -> None:
         path = self.write_manifest([{
             "id": "unsafe-task", "agent": "codex", "mode": "implement",

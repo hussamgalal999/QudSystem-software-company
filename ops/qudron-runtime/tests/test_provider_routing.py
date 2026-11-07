@@ -47,6 +47,8 @@ class ProviderRoutingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.old_db = worker.DB_PATH
         worker.DB_PATH = Path(self.temp.name) / "qudron.sqlite3"
+        # Budget reservation tables are created by the runtime initializer.
+        worker.init_db()
 
     def tearDown(self):
         worker.DB_PATH = self.old_db

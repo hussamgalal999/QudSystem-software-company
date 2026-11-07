@@ -128,7 +128,8 @@
             "review_mutated_files",
             "review_completed",
             "no_changes",
-            "completed"
+            "completed",
+            "diff_check_failed"
           ]
         },
         "changed_files": {
@@ -183,7 +184,8 @@
           "enum": [
             "scope_validation_failed",
             "worker_execution_failed",
-            null
+            null,
+            "diff_check_failed"
           ]
         },
         "logs_exported": {
@@ -223,6 +225,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "diff_check_passed": {
+          "type": "boolean"
         }
       },
       "allOf": [

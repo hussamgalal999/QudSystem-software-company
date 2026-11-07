@@ -104,7 +104,7 @@ def status(root: Path) -> dict:
     for r in m["tasks"]:
         p = Path(r["worktree"])
         if not p.is_dir(): rows.append({"task_id": r["task_id"], "state": "missing"}); continue
-        rows.append({"task_id": r["task_id"], "branch": git(p, "branch", "--show-current"), "head_sha": git(p, "rev-parse", "HEAD"), "dirty_entries": len(git(p, "status", "--porcelain", "--untracked-files=all").splitlines()))})
+        rows.append({"task_id": r["task_id"], "branch": git(p, "branch", "--show-current"), "head_sha": git(p, "rev-parse", "HEAD"), "dirty_entries": len(git(p, "status", "--porcelain", "--untracked-files=all").splitlines())})
     return {"base_sha": m["base_sha"], "tasks": rows}
 
 def matches(path: str, patterns: list[str]) -> bool:

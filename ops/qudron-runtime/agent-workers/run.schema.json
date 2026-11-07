@@ -82,7 +82,9 @@
         "status",
         "changed_files",
         "scope_violations",
-        "exit_code"
+        "exit_code",
+        "allowed_paths",
+        "deny_paths"
       ],
       "properties": {
         "task_id": {
@@ -209,6 +211,18 @@
             "string",
             "null"
           ]
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "allOf": [

@@ -121,6 +121,8 @@ class AgentFleetTests(unittest.TestCase):
                     self.assertNotIn(key, env)
                 self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
                 self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+                self.assertNotIn("QUDRON_FLEET_HOME_ROOT", env)
+                self.assertNotEqual(env["HOME"], str(isolated_home))
                 provider_home = Path(env["HOME"])
                 self.assertEqual(env["XDG_CONFIG_HOME"], str(provider_home / ".config"))
                 self.assertEqual(env["XDG_CACHE_HOME"], str(provider_home / ".cache"))
@@ -212,7 +214,7 @@ class AgentFleetTests(unittest.TestCase):
 
     def test_provider_home_root_inside_checkout_is_rejected(self) -> None:
         checkout = agent_fleet.repo_root(Path.cwd())
-        candidate = checkout / f".qudron-home-root-test-{self.tmp.name.split('/')[-1]}"
+        candidate = checkout / f".qudron-home-root-test-{Path(self.tmp.name).name}"
         old_root = os.environ.get("QUDRON_FLEET_HOME_ROOT")
         try:
             os.environ["QUDRON_FLEET_HOME_ROOT"] = str(candidate)

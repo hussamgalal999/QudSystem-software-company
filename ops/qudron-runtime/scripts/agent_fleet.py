@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import hashlib
 import json
 import os
 import re
@@ -384,14 +385,17 @@ def execute_task(
     ]
     if task["mode"] == "review" and files:
         violations = files[:]
-    patch_exported = not violations
+    execution_succeeded = exit_code == 0 and not timed_out
+    patch_exported = bool(execution_succeeded and not violations and files)
     logs_exported = bool(capture_logs and not violations)
     if logs_exported:
         safe_write(stdout_path, stdout)
         safe_write(stderr_path, stderr)
     if patch_exported:
         write_patch(prepared["worktree"], prepared["base_sha"], patch_path, files)
+        patch_sha256 = hashlib.sha256(patch_path.read_bytes()).hexdigest()
     else:
+        patch_sha256 = None
         # All-or-nothing handoff: do not export even the allowlisted subset when
         # a task has any out-of-scope change. This avoids leaking rejected file
         # contents through a mixed patch artifact.
@@ -417,7 +421,12 @@ def execute_task(
         "scope_violations": violations,
         "patch_exported": patch_exported,
         "patch_path": str(patch_path) if patch_exported else None,
-        "patch_block_reason": "scope_validation_failed" if violations else None,
+        "patch_sha256": patch_sha256,
+        "patch_block_reason": (
+            "scope_validation_failed" if violations
+            else "worker_execution_failed" if not execution_succeeded
+            else None
+        ),
         "logs_exported": logs_exported,
         "log_block_reason": "scope_validation_failed" if violations and capture_logs else None,
         "stdout_path": str(stdout_path) if logs_exported else None,

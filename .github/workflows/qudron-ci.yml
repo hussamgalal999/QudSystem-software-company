@@ -44,6 +44,7 @@ jobs:
           python -m json.tool ops/qudron-runtime/model_provider_catalog.json > /dev/null
           python -m json.tool ops/qudron-runtime/compute_provider_catalog.json > /dev/null
           python -m json.tool ops/qudron-runtime/github_repository_catalog.snapshot.json > /dev/null
+          python -m json.tool ops/qudron-runtime/agent-workers/manifest.schema.json > /dev/null
           python -m json.tool .devcontainer/devcontainer.json > /dev/null
       - name: Run unit and safety tests
         working-directory: ops/qudron-runtime

@@ -227,6 +227,15 @@ class AgentFleetTests(unittest.TestCase):
             "certificates/deploy-key.pem", agent_fleet.DEFAULT_DENY_PATHS
         ))
         self.assertTrue(agent_fleet.path_is_denied(
+            "deploy-key.pem", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            "id_rsa", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            "service-account-prod.json", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
             ".aws/credentials", agent_fleet.DEFAULT_DENY_PATHS
         ))
 

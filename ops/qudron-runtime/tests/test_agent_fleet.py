@@ -131,6 +131,14 @@ class AgentFleetTests(unittest.TestCase):
         with self.assertRaisesRegex(agent_fleet.FleetError, "Overlapping write scopes"):
             agent_fleet.load_manifest(path)
 
+    def test_aider_is_not_enabled_until_safe_noninteractive_mode_is_verified(self) -> None:
+        path = self.write_manifest([{
+            "id": "aider-disabled", "agent": "aider", "mode": "implement",
+            "allowed_paths": ["src/**"], "prompt": "make a change",
+        }])
+        with self.assertRaisesRegex(agent_fleet.FleetError, "unsupported agent"):
+            agent_fleet.load_manifest(path)
+
     def test_codex_adapter_keeps_workspace_sandbox_and_no_yolo(self) -> None:
         worktree = self.tmp / "w"
         prompt_file = self.tmp / "prompt.md"

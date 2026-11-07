@@ -1,0 +1,41 @@
+name: Qudron Engineering Worker Contracts
+on:
+  pull_request:
+    paths:
+      - 'ops/qudron-runtime/engineering_workers/**'
+      - 'ops/qudron-runtime/scripts/dev_worktree_orchestrator.py'
+      - 'ops/qudron-runtime/tests/test_dev_worktree_orchestrator.py'
+      - '.github/workflows/qudron-engineering-workers.yml'
+      - 'AGENTS.md'
+      - '.devcontainer/**'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/qudron-runtime/engineering_workers/**'
+      - 'ops/qudron-runtime/scripts/dev_worktree_orchestrator.py'
+      - 'ops/qudron-runtime/tests/test_dev_worktree_orchestrator.py'
+      - '.github/workflows/qudron-engineering-workers.yml'
+      - 'AGENTS.md'
+      - '.devcontainer/**'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile orchestrator and tests
+        run: python -m py_compile ops/qudron-runtime/scripts/dev_worktree_orchestrator.py ops/qudron-runtime/tests/test_dev_worktree_orchestrator.py
+      - name: Validate worker JSON contracts
+        run: |
+          python -m json.tool ops/qudron-runtime/engineering_workers/task.schema.json > /dev/null
+          python -m json.tool ops/qudron-runtime/engineering_workers/worker-result.schema.json > /dev/null
+          python -m json.tool ops/qudron-runtime/engineering_workers/examples/wave-001.json > /dev/null
+      - name: Run isolated worktree safety tests
+        working-directory: ops/qudron-runtime
+        run: python -m unittest discover -s tests -p 'test_dev_worktree_orchestrator.py' -v

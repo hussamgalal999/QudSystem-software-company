@@ -12,6 +12,8 @@ class WorkerBindingValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix="qudron-binding-")
         self.root = Path(self.temp.name)
+        self.old_fleet_home_root = os.environ.get("QUDRON_FLEET_HOME_ROOT")
+        os.environ["QUDRON_FLEET_HOME_ROOT"] = str(self.root / "agent-home-root")
         self.repo = self.root / "repo"
         self.repo.mkdir()
         agent_fleet.git(["init"], self.repo)
@@ -56,6 +58,10 @@ class WorkerBindingValidationTests(unittest.TestCase):
             self.repo,
             check=False,
         )
+        if self.old_fleet_home_root is None:
+            os.environ.pop("QUDRON_FLEET_HOME_ROOT", None)
+        else:
+            os.environ["QUDRON_FLEET_HOME_ROOT"] = self.old_fleet_home_root
         shutil.rmtree(self.root, ignore_errors=True)
         self.temp.cleanup()
 

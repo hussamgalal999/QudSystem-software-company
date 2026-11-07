@@ -25,6 +25,7 @@ This is a development tool, not the production Qudron queue. It does not create 
 
 - Requires a clean source checkout before starting.
 - Resolves each task's base ref to an exact commit SHA.
+- Revalidates the original worktree root, branch, and unchanged base `HEAD` at handoff; a branch switch or worker-created commit blocks patch and log export.
 - Creates one worktree and branch per task.
 - Runs up to eight tasks concurrently; default is two.
 - Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands. Each CLI receives only basic runtime variables plus that provider's explicitly allowlisted API-key variables; GitHub, generic cloud, SSH-agent, and other providers' credentials are not inherited. Codex runs ephemerally and Claude Code session persistence is disabled for worker tasks.

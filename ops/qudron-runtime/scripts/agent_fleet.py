@@ -331,6 +331,29 @@ def changed_files(
     return sorted(files)
 
 
+def verify_worker_binding(prepared: dict[str, Any]) -> dict[str, Any]:
+    """Bind the handoff to the original worktree, branch, and immutable base HEAD."""
+    worktree = Path(prepared["worktree"]).expanduser().resolve()
+    violations: list[str] = []
+    if not worktree.is_dir():
+        return {"head_sha": None, "violations": ["worktree_missing"]}
+    try:
+        actual_root = repo_root(worktree)
+    except FleetError:
+        return {"head_sha": None, "violations": ["worktree_not_a_git_repository"]}
+    if actual_root != worktree:
+        violations.append("worktree_root_mismatch")
+    branch = git(["branch", "--show-current"], worktree, check=False)
+    actual_branch = branch.stdout.strip() if branch.returncode == 0 else ""
+    if actual_branch != prepared["branch"]:
+        violations.append("worker_branch_mismatch")
+    head = git(["rev-parse", "--verify", "HEAD"], worktree, check=False)
+    actual_head = head.stdout.strip() if head.returncode == 0 else None
+    if actual_head != prepared["base_sha"]:
+        violations.append("worker_head_moved")
+    return {"head_sha": actual_head, "violations": violations}
+
+
 def write_patch(worktree: Path, base_sha: str, patch_path: Path, files: list[str]) -> None:
     # This function must only be called after every changed path has passed the
     # task's allowlist check. Passing the validated paths also limits the diff.
@@ -383,7 +406,8 @@ def execute_task(
     base_result: dict[str, Any] = {
         "task_id": task["id"], "title": task["title"], "agent": agent,
         "mode": task["mode"], "branch": prepared["branch"],
-        "base_sha": prepared["base_sha"], "worktree": str(prepared["worktree"]),
+        "base_sha": prepared["base_sha"], "head_sha": prepared["base_sha"],
+        "binding_violations": [], "worktree": str(prepared["worktree"]),
         "allowed_paths": list(task["allowed_paths"]),
         "deny_paths": list(task["deny_paths"]),
         "status": "pending", "changed_files": [], "scope_violations": [],
@@ -444,7 +468,15 @@ def execute_task(
         exit_code = 124
     # First collect path names, then validate scope. Never construct a patch
     # artifact from an untrusted worker diff before this validation succeeds.
-    files = changed_files(prepared["worktree"], prepared["base_sha"], task["deny_paths"])
+    binding = verify_worker_binding(prepared)
+    binding_violations = binding["violations"]
+    base_result["head_sha"] = binding["head_sha"]
+    base_result["binding_violations"] = binding_violations
+    try:
+        files = changed_files(prepared["worktree"], prepared["base_sha"], task["deny_paths"])
+    except (FleetError, OSError) as exc:
+        files = []
+        binding_violations.append("worktree_inspection_failed")
     violations = [] if task["mode"] == "review" else [
         p for p in files
         if not path_is_allowed(p, task["allowed_paths"]) or path_is_denied(p, task["deny_paths"])
@@ -458,8 +490,8 @@ def execute_task(
         check=False,
     )
     diff_check_passed = diff_check.returncode == 0
-    patch_exported = bool(execution_succeeded and not violations and diff_check_passed and files)
-    logs_exported = bool(capture_logs and not violations and execution_succeeded)
+    patch_exported = bool(execution_succeeded and not violations and not binding_violations and diff_check_passed and files)
+    logs_exported = bool(capture_logs and not violations and not binding_violations and execution_succeeded)
     if logs_exported:
         safe_write(stdout_path, stdout)
         safe_write(stderr_path, stderr)
@@ -476,7 +508,7 @@ def execute_task(
         status = "timed_out"
     elif exit_code != 0:
         status = "failed"
-    elif violations:
+    elif violations or binding_violations:
         status = "scope_violation" if task["mode"] == "implement" else "review_mutated_files"
     elif not diff_check_passed:
         status = "diff_check_failed"
@@ -498,14 +530,14 @@ def execute_task(
         "patch_path": str(patch_path) if patch_exported else None,
         "patch_sha256": patch_sha256,
         "patch_block_reason": (
-            "scope_validation_failed" if violations
+            "scope_validation_failed" if violations or binding_violations
             else "worker_execution_failed" if not execution_succeeded
             else "diff_check_failed" if not diff_check_passed
             else None
         ),
         "logs_exported": logs_exported,
         "log_block_reason": (
-            "scope_validation_failed" if violations and capture_logs
+            "scope_validation_failed" if (violations or binding_violations) and capture_logs
             else "worker_execution_failed" if capture_logs and not execution_succeeded
             else None
         ),

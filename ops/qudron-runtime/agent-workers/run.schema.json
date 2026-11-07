@@ -84,7 +84,9 @@
         "scope_violations",
         "exit_code",
         "allowed_paths",
-        "deny_paths"
+        "deny_paths",
+        "head_sha",
+        "binding_violations"
       ],
       "properties": {
         "task_id": {
@@ -228,6 +230,21 @@
         },
         "diff_check_passed": {
           "type": "boolean"
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "binding_violations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
         }
       },
       "allOf": [

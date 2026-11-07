@@ -24,6 +24,11 @@ VERSION = "0.1.0"
 MAX_TASKS = 20
 MAX_PARALLEL = 8
 DEFAULT_TIMEOUT_SECONDS = 3600
+DEFAULT_DENY_PATHS = (
+    ".git/**", ".env", ".env.*", "**/.env", "**/.env.*",
+    "secrets/**", "**/secrets/**", "**/*private_key*", "**/*credentials*",
+    ".ssh/**", "**/.ssh/**", "**/id_rsa*", "**/id_ed25519*",
+)
 
 # Only adapters whose non-interactive invocation and permission behaviour are
 # documented are implemented. Add more adapters only after validating the
@@ -82,13 +87,29 @@ def resolve_ref(root: Path, ref: str) -> str:
     return resolved.stdout.strip()
 
 
-def validate_relative_pattern(pattern: Any, task_id: str) -> str:
+def validate_relative_pattern(pattern: Any, task_id: str, field: str = "path") -> str:
     if not isinstance(pattern, str) or not pattern.strip():
-        raise FleetError(f"Task {task_id}: allowed_paths entries must be non-empty strings")
+        raise FleetError(f"Task {task_id}: {field} entries must be non-empty strings")
     p = PurePosixPath(pattern)
     if p.is_absolute() or ".." in p.parts or "\\" in pattern:
-        raise FleetError(f"Task {task_id}: unsafe allowed_paths pattern: {pattern!r}")
+        raise FleetError(f"Task {task_id}: unsafe {field} pattern: {pattern!r}")
     return pattern
+
+
+def patterns_overlap(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    left_tree = left.endswith("/**")
+    right_tree = right.endswith("/**")
+    left_root = left[:-3].rstrip("/") if left_tree else left
+    right_root = right[:-3].rstrip("/") if right_tree else right
+    if left_tree and (right_root == left_root or right_root.startswith(left_root + "/")):
+        return True
+    if right_tree and (left_root == right_root or left_root.startswith(right_root + "/")):
+        return True
+    # Conservative wildcard intersection: false positives are safer than two
+    # concurrent tasks silently claiming the same writable file.
+    return fnmatch.fnmatchcase(left, right) or fnmatch.fnmatchcase(right, left)
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -126,11 +147,18 @@ def load_manifest(path: Path) -> dict[str, Any]:
         allowed = raw.get("allowed_paths", [])
         if not isinstance(allowed, list):
             raise FleetError(f"Task {task_id}: allowed_paths must be a list")
-        allowed = [validate_relative_pattern(p, task_id) for p in allowed]
+        allowed = [validate_relative_pattern(p, task_id, "allowed_paths") for p in allowed]
         if mode == "implement" and not allowed:
             raise FleetError(f"Task {task_id}: implement tasks require a non-empty allowed_paths list")
         if mode == "review" and allowed:
             raise FleetError(f"Task {task_id}: review tasks must use allowed_paths: [] (read-only)")
+        deny = raw.get("deny_paths", [])
+        if not isinstance(deny, list):
+            raise FleetError(f"Task {task_id}: deny_paths must be a list")
+        deny = list(dict.fromkeys([
+            *DEFAULT_DENY_PATHS,
+            *(validate_relative_pattern(p, task_id, "deny_paths") for p in deny),
+        ]))
         base_ref = raw.get("base_ref", "HEAD")
         if not isinstance(base_ref, str) or not REF_RE.fullmatch(base_ref):
             raise FleetError(f"Task {task_id}: invalid base_ref")
@@ -145,7 +173,17 @@ def load_manifest(path: Path) -> dict[str, Any]:
             "prompt": prompt.strip(),
             "base_ref": base_ref,
             "allowed_paths": allowed,
+            "deny_paths": deny,
         })
+    implementers = [task for task in normalized if task["mode"] == "implement"]
+    for index, first in enumerate(implementers):
+        for second in implementers[index + 1:]:
+            for left in first["allowed_paths"]:
+                for right in second["allowed_paths"]:
+                    if patterns_overlap(left, right):
+                        raise FleetError(
+                            f"Overlapping write scopes: {first['id']}:{left} and {second['id']}:{right}"
+                        )
     payload["tasks"] = normalized
     max_parallel = payload.get("max_parallel", 2)
     if not isinstance(max_parallel, int) or isinstance(max_parallel, bool) or not 1 <= max_parallel <= MAX_PARALLEL:
@@ -194,7 +232,8 @@ def make_prompt(task: dict[str, Any]) -> str:
         f"{task['prompt']}\n\n"
         "BOUNDARIES\n"
         f"Allowed paths: {json.dumps(allowed, ensure_ascii=False)}\n"
-        "Do not commit, push, create a PR, merge, modify credentials/secrets, or change files outside the allowed paths.\n"
+        f"Denied paths: {json.dumps(task['deny_paths'], ensure_ascii=False)}\n"
+        "Do not commit, push, create a PR, merge, modify denied paths, or change files outside the allowed paths.\n"
         "Do not read .env files, credential stores, SSH keys, browser profiles, or unrelated private data.\n"
         "Do not publish content, send messages, make purchases, or call production services.\n"
         "For review mode, do not modify any files. Report findings with file paths, line numbers, severity, and evidence.\n"
@@ -223,6 +262,10 @@ def write_patch(worktree: Path, base_sha: str, patch_path: Path, files: list[str
 
 def path_is_allowed(path: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(path, pattern) or PurePosixPath(path).match(pattern) for pattern in patterns)
+
+
+def path_is_denied(path: str, patterns: list[str]) -> bool:
+    return path_is_allowed(path, patterns)
 
 
 def prepare_task(root: Path, task: dict[str, Any], run_id: str, worktree_root: Path, artifact_dir: Path) -> dict[str, Any]:
@@ -288,7 +331,10 @@ def execute_task(prepared: dict[str, Any], artifact_dir: Path, timeout: int) -> 
     # First collect path names, then validate scope. Never construct a patch
     # artifact from an untrusted worker diff before this validation succeeds.
     files = changed_files(prepared["worktree"], prepared["base_sha"])
-    violations = [] if task["mode"] == "review" else [p for p in files if not path_is_allowed(p, task["allowed_paths"])]
+    violations = [] if task["mode"] == "review" else [
+        p for p in files
+        if not path_is_allowed(p, task["allowed_paths"]) or path_is_denied(p, task["deny_paths"])
+    ]
     if task["mode"] == "review" and files:
         violations = files[:]
     patch_exported = not violations

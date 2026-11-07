@@ -9,7 +9,7 @@ Every worker task must declare:
 | agent | Supported CLI adapter |
 | mode | implement or review |
 | base_ref | Explicit Git ref; resolved to an immutable commit SHA |
-| allowed_paths | Narrow relative paths/globs; required for implementation |
+| allowed_paths | Narrow relative paths; exact paths or directory prefixes ending in `/**` only; required for implementation |
 | prompt | Objective, context, interfaces, acceptance criteria, non-goals and tests |
 
 ## Required prompt structure
@@ -27,8 +27,8 @@ Every worker task must declare:
 The integration owner must require:
 
 - exact base SHA and worker branch;
-- full diff and changed-file list (no patch is exported for a task with any path violation);
-- raw stdout/stderr are absent by default and may only be retained through explicit `--capture-logs` opt-in for scope-valid tasks;
+- full diff and changed-file list (a patch is exported only after successful, non-timeout execution and complete allowlist/denylist validation);\n- SHA-256 digest for every exported patch;
+- raw stdout/stderr are absent by default and may only be retained through explicit `--capture-logs` opt-in for scope-valid tasks; they remain suppressed for tasks with path violations;
 - allowed-path validation result, with no patch artifact exported if any changed path violates the allowlist;
 - test commands and actual exit codes;
 - known limitations and unverified assumptions;

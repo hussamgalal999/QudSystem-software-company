@@ -255,7 +255,7 @@ For each task, evaluate each applicable gate as:
 
 1. Each task may define a `gate_weights` object keyed by the exact gate IDs in its `verification_profile`.
 2. Every weight must be a positive number; weights must sum to **100** (tolerance 0.01).
-3. If `gate_weights` is absent, assign equal weight to every required gate: (w_i = 100/n). Do not invent weights after seeing the results.
+3. `gate_weights` is mandatory and must be committed with the task contract before evaluation. Equal weights may be chosen when the contract is authored, but the validator must reject a missing map; never infer weights after seeing results.
 4. A gate not present in `verification_profile` is not scored. A gate present in the profile cannot be silently omitted.
 5. Mark security, privacy, authorization, payment integrity, data-loss prevention and owner approval gates as **critical** in the task's `critical_gates` list. Critical gates are hard release blockers.
 

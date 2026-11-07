@@ -143,6 +143,14 @@ class AgentFleetTests(unittest.TestCase):
         self.assertFalse((artifact_dir / "wrong-path.stdout.txt").exists())
         self.assertFalse((artifact_dir / "wrong-path.stderr.txt").exists())
 
+    def test_default_denied_private_key_path_matches(self) -> None:
+        self.assertTrue(agent_fleet.path_is_denied(
+            "certificates/deploy-key.pem", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            ".aws/credentials", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+
     def test_default_denied_secret_path_is_rejected_even_when_allowlisted(self) -> None:
         codex = self.bin / "codex"
         codex.write_text(

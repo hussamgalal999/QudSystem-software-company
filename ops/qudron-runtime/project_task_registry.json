@@ -2695,9 +2695,21 @@
         "auditability",
         "fail_closed_on_missing_evidence"
       ],
-      "mandatory_gates": [],
-      "critical_gates": [],
-      "gate_weights": {},
+      "mandatory_gates": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ],
+      "critical_gates": [
+        "fail_closed_on_missing_evidence"
+      ],
+      "gate_weights": {
+        "schema_validation": 25,
+        "coverage_reproducibility": 25,
+        "auditability": 25,
+        "fail_closed_on_missing_evidence": 25
+      },
       "required_maturity": "M5"
     }
   ],

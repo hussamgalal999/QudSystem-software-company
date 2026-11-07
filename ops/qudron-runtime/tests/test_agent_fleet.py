@@ -454,6 +454,8 @@ class AgentFleetTests(unittest.TestCase):
             (worktree / "README.md").write_text("README OUTSIDE PATCH\n", encoding="utf-8")
             special_name = ":(top)README.md"
             (worktree / special_name).write_text("literal path content\n", encoding="utf-8")
+            observed = agent_fleet.changed_files(worktree, base_sha, [])
+            self.assertIn(special_name, observed)
             patch_path = self.artifacts / "literal-path.patch"
             agent_fleet.write_patch(worktree, base_sha, patch_path, [special_name])
             patch = patch_path.read_text(encoding="utf-8")

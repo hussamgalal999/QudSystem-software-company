@@ -28,6 +28,7 @@ DEFAULT_DENY_PATHS = (
     ".git/**", ".env", ".env.*", "**/.env", "**/.env.*",
     "secrets/**", "**/secrets/**", "**/*private_key*", "**/*credentials*",
     ".ssh/**", "**/.ssh/**", "**/id_rsa*", "**/id_ed25519*",
+    "*.pem", "*.key", "*.p12", "*.pfx",
     "**/*.pem", "**/*.key", "**/*.p12", "**/*.pfx",
     ".aws/**", "**/.aws/**", ".kube/**", "**/.kube/**",
     ".npmrc", "**/.npmrc", ".netrc", "**/.netrc", ".pypirc", "**/.pypirc",

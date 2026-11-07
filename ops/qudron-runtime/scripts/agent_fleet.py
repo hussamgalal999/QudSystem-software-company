@@ -41,7 +41,6 @@ AGENTS: dict[str, dict[str, str]] = {
     "codex": {"binary": "codex", "purpose": "workspace-write or read-only sandbox"},
     "gemini": {"binary": "gemini", "purpose": "auto_edit for implement; plan for review"},
     "claude": {"binary": "claude", "purpose": "acceptEdits for implement; plan for review"},
-    "aider": {"binary": "aider", "purpose": "single-shot edits; auto-commits explicitly disabled"},
 }
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
@@ -238,11 +237,6 @@ def build_agent_command(agent: str, mode: str, prompt: str, prompt_file: Path, w
         permission = "plan" if mode == "review" else "acceptEdits"
         return (["claude", "-p", prompt, "--output-format", "json",
                  "--permission-mode", permission, "--max-turns", "30"], None)
-    if agent == "aider":
-        if mode == "review":
-            raise FleetError("Aider is not enabled as a read-only reviewer in this fleet")
-        return (["aider", "--message-file", str(prompt_file), "--yes",
-                 "--no-auto-commits", "--no-pretty"], None)
     raise FleetError(f"No command adapter for agent: {agent}")
 
 

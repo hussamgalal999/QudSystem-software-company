@@ -381,6 +381,8 @@ def execute_task(
         "task_id": task["id"], "title": task["title"], "agent": agent,
         "mode": task["mode"], "branch": prepared["branch"],
         "base_sha": prepared["base_sha"], "worktree": str(prepared["worktree"]),
+        "allowed_paths": list(task["allowed_paths"]),
+        "deny_paths": list(task["deny_paths"]),
         "status": "pending", "changed_files": [], "scope_violations": [],
         "exit_code": None,
     }

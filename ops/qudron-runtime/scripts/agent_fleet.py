@@ -469,7 +469,8 @@ def run_fleet(args: argparse.Namespace) -> int:
         for item in reversed(prepared):
             git(["worktree", "remove", "--force", str(item["worktree"])], root, check=False)
         report = {"version": 1, "run_id": run_id, "status": "setup_failed",
-                  "setup_errors": setup_errors, "tasks": []}
+                  "setup_errors": setup_errors, "tasks": [],
+                  "requires_human_review": True}
         safe_write(artifact_dir / "run.json", json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
         return 2
@@ -493,6 +494,7 @@ def run_fleet(args: argparse.Namespace) -> int:
         "repository": str(root), "max_parallel": max_parallel,
         "worktree_root": str(worktree_root), "artifact_dir": str(artifact_dir),
         "tasks": results,
+        "requires_human_review": True,
         "merge_policy": "manual_only — no push, PR creation, or merge performed",
     }
     safe_write(artifact_dir / "run.json", json.dumps(report, indent=2) + "\n")

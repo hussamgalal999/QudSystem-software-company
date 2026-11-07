@@ -53,6 +53,47 @@ class AgentFleetTests(unittest.TestCase):
         path.write_text(json.dumps({"version": 1, "max_parallel": 2, "tasks": tasks}), encoding="utf-8")
         return path
 
+    def test_provider_environment_is_allowlisted_per_adapter(self) -> None:
+        saved = {key: os.environ.get(key) for key in (
+            "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
+            "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
+            "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS",
+        )}
+        os.environ.update({
+            "OPENAI_API_KEY": "openai-test-key",
+            "ANTHROPIC_API_KEY": "anthropic-test-key",
+            "GEMINI_API_KEY": "gemini-test-key",
+            "GITHUB_TOKEN": "github-token-must-not-leak",
+            "GH_TOKEN": "gh-token-must-not-leak",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret-must-not-leak",
+            "SSH_AUTH_SOCK": "/tmp/ssh-agent",
+            "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/cloud-service-account.json",
+        })
+        try:
+            codex_env = agent_fleet.build_agent_env("codex")
+            gemini_env = agent_fleet.build_agent_env("gemini")
+            claude_env = agent_fleet.build_agent_env("claude")
+            self.assertEqual(codex_env["OPENAI_API_KEY"], "openai-test-key")
+            self.assertNotIn("ANTHROPIC_API_KEY", codex_env)
+            self.assertNotIn("GEMINI_API_KEY", codex_env)
+            self.assertEqual(gemini_env["GEMINI_API_KEY"], "gemini-test-key")
+            self.assertNotIn("OPENAI_API_KEY", gemini_env)
+            self.assertEqual(claude_env["ANTHROPIC_API_KEY"], "anthropic-test-key")
+            for env in (codex_env, gemini_env, claude_env):
+                for key in (
+                    "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
+                    "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS",
+                ):
+                    self.assertNotIn(key, env)
+                self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+                self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_manifest_rejects_boolean_version_and_unknown_fields(self) -> None:
         payload = {"version": True, "tasks": []}
         path = self.tmp / "manifest.json"

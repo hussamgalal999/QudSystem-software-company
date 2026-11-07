@@ -387,7 +387,7 @@ def execute_task(
         violations = files[:]
     execution_succeeded = exit_code == 0 and not timed_out
     patch_exported = bool(execution_succeeded and not violations and files)
-    logs_exported = bool(capture_logs and not violations)
+    logs_exported = bool(capture_logs and not violations and execution_succeeded)
     if logs_exported:
         safe_write(stdout_path, stdout)
         safe_write(stderr_path, stderr)
@@ -428,7 +428,11 @@ def execute_task(
             else None
         ),
         "logs_exported": logs_exported,
-        "log_block_reason": "scope_validation_failed" if violations and capture_logs else None,
+        "log_block_reason": (
+            "scope_validation_failed" if violations and capture_logs
+            else "worker_execution_failed" if capture_logs and not execution_succeeded
+            else None
+        ),
         "stdout_path": str(stdout_path) if logs_exported else None,
         "stderr_path": str(stderr_path) if logs_exported else None,
     })

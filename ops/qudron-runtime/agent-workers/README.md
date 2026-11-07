@@ -38,10 +38,10 @@ This is a development tool, not the production Qudron queue. It does not create 
 | CLI | Implement | Review | Permission profile |
 |---|---:|---:|---|
 | Codex CLI | Yes | Yes | workspace-write or read-only sandbox |
-| Gemini CLI | Yes | Yes | auto_edit or plan approval mode |
+| Gemini CLI | Yes | Yes | auto_edit or plan (experimental plan mode must be enabled for read-only reviews) |
 | Claude Code | Yes | Yes | acceptEdits or plan permission mode |
 
-The runner does not install tools. Authenticate each CLI using its official account/provider flow. The doctor command checks local binary presence and version only; it does not make model calls or confirm quota.
+The runner does not install tools. Authenticate each CLI using its official account/provider flow. Gemini `auto_edit` approves edit tools only and can still wait for approval on other tools; its read-only `plan` mode requires the experimental planning feature to be enabled. The doctor command checks local binary presence and version only; it does not make model calls or confirm quota.
 
 ## Not enabled in this first version
 

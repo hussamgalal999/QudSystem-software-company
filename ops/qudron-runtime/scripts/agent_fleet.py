@@ -268,13 +268,28 @@ def make_prompt(task: dict[str, Any]) -> str:
     )
 
 
-def changed_files(worktree: Path, base_sha: str) -> list[str]:
-    # Intent-to-add makes new untracked files appear in a normal diff without
-    # committing or staging their contents. This step gathers paths only; it
-    # deliberately does not read patch contents into an export artifact.
+def changed_files(
+    worktree: Path,
+    base_sha: str,
+    deny_patterns: list[str],
+) -> list[str]:
+    # Intent-to-add makes ordinary untracked files appear in the diff without
+    # committing their contents. First collect only path names.
     git(["add", "-N", "--", "."], worktree, check=False)
     names = git(["diff", "--name-only", "-z", base_sha, "--"], worktree).stdout
-    return [name for name in names.split("\0") if name]
+    files = {name for name in names.split("\0") if name}
+    # Git ignores files such as .env by design. Scan ignored, untracked path
+    # names separately so a generated secret cannot bypass the denylist just
+    # because it matches .gitignore. Never read the ignored file contents.
+    ignored = git(
+        ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+        worktree,
+    ).stdout
+    files.update(
+        name for name in ignored.split("\0")
+        if name and path_is_denied(name, deny_patterns)
+    )
+    return sorted(files)
 
 
 def write_patch(worktree: Path, base_sha: str, patch_path: Path, files: list[str]) -> None:
@@ -361,7 +376,7 @@ def execute_task(
         exit_code, timed_out = 124, True
     # First collect path names, then validate scope. Never construct a patch
     # artifact from an untrusted worker diff before this validation succeeds.
-    files = changed_files(prepared["worktree"], prepared["base_sha"])
+    files = changed_files(prepared["worktree"], prepared["base_sha"], task["deny_paths"])
     violations = [] if task["mode"] == "review" else [
         p for p in files
         if not path_is_allowed(p, task["allowed_paths"]) or path_is_denied(p, task["deny_paths"])

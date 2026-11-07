@@ -182,9 +182,11 @@ class MCPToolAgentAdapter:
             parsed = json.loads(text) if text else {}
         except json.JSONDecodeError:
             parsed = {}
-        remote_id_value = parsed.get("job_id") or parsed.get("id")
-        if remote_id_value is not None and not str(remote_id_value).strip():
-            remote_id_value = None
+        remote_id_value = next(
+            (value for value in (parsed.get("job_id"), parsed.get("id"))
+             if value is not None and str(value).strip()),
+            None,
+        )
         remote_id = str(remote_id_value).strip() if remote_id_value is not None else task.task_id
         status_tool = agent.metadata.get("status_tool")
         # An MCP submit response may use either job_id or id for an asynchronous

@@ -96,6 +96,37 @@ class MCPAgentAdapterSessionTests(unittest.TestCase):
         self.assertIsNone(seen[0].get_header("Mcp-session-id"))
         self.assertIsNone(seen[1].get_header("Mcp-session-id"))
 
+    def test_empty_remote_id_uses_local_task_id_fallback(self):
+        from agent_protocol import TaskEnvelope, TaskStatus
+
+        task = TaskEnvelope(
+            task_id="local-task-0001",
+            project_id="qudron",
+            idempotency_key="mcp-empty-id-0001",
+            title="Test empty provider identifier",
+            instruction="Return a safe receipt.",
+        )
+        receipt = {"content": [{
+            "type": "text",
+            "text": json.dumps({"job_id": "", "status": "completed"}),
+        }]}
+        with patch.object(self.adapter, "_initialize_session", return_value=None), \
+             patch.object(self.adapter, "_call_tool", return_value=receipt):
+            import asyncio
+            handle = asyncio.run(self.adapter.submit(
+                AgentDescriptor(
+                    agent_id="mcp-submit", display_name="MCP Submit",
+                    provider_id="mcp-provider", adapter="mcp",
+                    endpoint_ref=self.agent.endpoint_ref,
+                    metadata={"submit_tool": "submit_task", "status_tool": "get_status"},
+                ),
+                task,
+            ))
+        self.assertEqual(handle.remote_task_id, task.task_id)
+        self.assertEqual(handle.status, TaskStatus.SUCCEEDED)
+        self.assertIsNotNone(handle.metadata["immediate_text"])
+
+
 
 if __name__ == "__main__":
     unittest.main()

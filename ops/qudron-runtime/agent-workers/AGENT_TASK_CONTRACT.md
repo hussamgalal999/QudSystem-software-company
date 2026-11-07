@@ -27,7 +27,8 @@ Every worker task must declare:
 The integration owner must require:
 
 - exact base SHA and worker branch;
-- full diff and changed-file list;
+- full diff and changed-file list (no patch is exported for a task with any path violation);
+- raw stdout/stderr are absent by default and may only be retained through explicit `--capture-logs` opt-in for scope-valid tasks;
 - allowed-path validation result, with no patch artifact exported if any changed path violates the allowlist;
 - test commands and actual exit codes;
 - known limitations and unverified assumptions;

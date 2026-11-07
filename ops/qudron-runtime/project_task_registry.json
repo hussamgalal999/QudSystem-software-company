@@ -4,7 +4,6 @@
   "snapshot_date": "2026-11-07",
   "source_branch": "feat/qudron-cli-worker-fleet-2026-11-07",
   "base_branch": "main",
-  "source_commit": "c19c4d3ce4e037503052e37ae373d7b3aad9ae96",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -2810,5 +2809,16 @@
     "needs_owner_review": 1
   },
   "total_tasks": 66,
-  "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria."
+  "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria.",
+  "evidence_source_commit": "c19c4d3ce4e037503052e37ae373d7b3aad9ae96",
+  "evidence_source_commit_semantics": "Exact executable-code commit used for the worker-fleet evidence. The registry snapshot is a later documentation/data change and has its own snapshot_validation record.",
+  "snapshot_validation": {
+    "snapshot_commit": "5cda1966279d927bb4aecfafc32613b3cd3e4010",
+    "workflow": "Qudron Runtime Checks",
+    "workflow_run_number": 655,
+    "workflow_run_id": "42390680642",
+    "conclusion": "success",
+    "unit_and_safety_test_count": 385,
+    "validated_at": "2026-11-07T16:19:29Z"
+  }
 }

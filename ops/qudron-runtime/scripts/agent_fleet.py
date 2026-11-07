@@ -288,7 +288,13 @@ def prepare_task(root: Path, task: dict[str, Any], run_id: str, worktree_root: P
     }
 
 
-def execute_task(prepared: dict[str, Any], artifact_dir: Path, timeout: int) -> dict[str, Any]:
+def execute_task(
+    prepared: dict[str, Any],
+    artifact_dir: Path,
+    timeout: int,
+    *,
+    capture_logs: bool = False,
+) -> dict[str, Any]:
     task = prepared["task"]
     agent = task["agent"]
     binary = AGENTS[agent]["binary"]
@@ -326,8 +332,6 @@ def execute_task(prepared: dict[str, Any], artifact_dir: Path, timeout: int) -> 
         stdout = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
         stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
         exit_code, timed_out = 124, True
-    safe_write(stdout_path, stdout)
-    safe_write(stderr_path, stderr)
     # First collect path names, then validate scope. Never construct a patch
     # artifact from an untrusted worker diff before this validation succeeds.
     files = changed_files(prepared["worktree"], prepared["base_sha"])
@@ -338,6 +342,10 @@ def execute_task(prepared: dict[str, Any], artifact_dir: Path, timeout: int) -> 
     if task["mode"] == "review" and files:
         violations = files[:]
     patch_exported = not violations
+    logs_exported = bool(capture_logs and not violations)
+    if logs_exported:
+        safe_write(stdout_path, stdout)
+        safe_write(stderr_path, stderr)
     if patch_exported:
         write_patch(prepared["worktree"], prepared["base_sha"], patch_path, files)
     else:
@@ -367,8 +375,10 @@ def execute_task(prepared: dict[str, Any], artifact_dir: Path, timeout: int) -> 
         "patch_exported": patch_exported,
         "patch_path": str(patch_path) if patch_exported else None,
         "patch_block_reason": "scope_validation_failed" if violations else None,
-        "stdout_path": str(stdout_path),
-        "stderr_path": str(stderr_path),
+        "logs_exported": logs_exported,
+        "log_block_reason": "scope_validation_failed" if violations and capture_logs else None,
+        "stdout_path": str(stdout_path) if logs_exported else None,
+        "stderr_path": str(stderr_path) if logs_exported else None,
     })
     return base_result
 
@@ -414,7 +424,10 @@ def run_fleet(args: argparse.Namespace) -> int:
     max_parallel = min(args.max_parallel or manifest["max_parallel"], MAX_PARALLEL)
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_parallel) as pool:
-        futures = [pool.submit(execute_task, item, artifact_dir, args.timeout) for item in prepared]
+        futures = [
+            pool.submit(execute_task, item, artifact_dir, args.timeout, capture_logs=args.capture_logs)
+            for item in prepared
+        ]
         for future in as_completed(futures):
             try:
                 results.append(future.result())
@@ -468,6 +481,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--repo", default=".")
     r.add_argument("--max-parallel", type=int, default=None)
     r.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
+    r.add_argument(
+        "--capture-logs",
+        action="store_true",
+        help="Save raw CLI stdout/stderr for in-scope tasks only; may contain proprietary or sensitive text",
+    )
     r.add_argument("--worktree-root", default=None)
     r.add_argument("--artifacts-root", default=None)
     args = parser.parse_args(argv)

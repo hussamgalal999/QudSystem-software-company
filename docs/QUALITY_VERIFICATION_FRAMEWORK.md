@@ -194,6 +194,10 @@ Every task in `project_task_registry.json` carries a `verification_profile`. The
 - [ ] `data_privacy_and_retention`
 - [ ] `rollback_and_incident_response`
 - [ ] `owner_risk_acceptance`
+- [ ] `schema_validation`
+- [ ] `coverage_reproducibility`
+- [ ] `auditability`
+- [ ] `fail_closed_on_missing_evidence`
 
 ### Product Engineering
 - [ ] `input_rights_and_source_provenance`
@@ -236,7 +240,7 @@ Minimum required maturity by area (raise it when the task has higher operational
 | Governance / Android Security / CVPen / Commercial / Growth / Communications | M5; M6 for production/customer-facing operation | Authorization, privacy, payment and real-account evidence are required |
 | Portfolio | M4 for inventory automation; M5 for claims about private or inaccessible repositories | An incomplete inventory cannot be reported as full coverage |
 
-Until the task registry contains and validates these fields, this document is an acceptance specification, not evidence that every existing registry item is already machine-validated.
+The task registry carries these fields and the CI validator enforces their structure. A valid contract is not evidence that its gates have passed; task status still depends on current, exact-scope verification.
 
 ## Scoring model
 

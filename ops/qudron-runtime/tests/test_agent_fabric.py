@@ -341,7 +341,7 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         fabric.register_agent(agent("agent", "provider", "fake"))
         receipt = await fabric.dispatch(task())
         wrong = AgentTaskHandle("other-provider", receipt.handle.remote_task_id, TaskStatus.RUNNING)
-        with self.assertRaisesRegex(AgentFabricError, "mismatched provider identity"):
+        with self.assertRaisesRegex(AgentFabricError, "different provider"):
             await fabric.poll("agent", wrong)
 
 

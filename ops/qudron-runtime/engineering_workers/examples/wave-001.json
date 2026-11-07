@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_ref": "HEAD",
+  "tasks": [
+    {
+      "task_id": "agent-fabric-contracts",
+      "title": "Review agent fabric and protocol contracts",
+      "objective": "Inspect the existing agent fabric/protocol implementation and tests. Identify correctness, lifecycle, idempotency, and failure-contract gaps. Implement only narrow, evidence-backed fixes and add regression tests. Do not duplicate the existing swarm engine or invent live-agent execution.",
+      "allowed_paths": [
+        "ops/qudron-runtime/agent_fabric.py",
+        "ops/qudron-runtime/agent_protocol.py",
+        "ops/qudron-runtime/tests/test_agent_fabric.py",
+        "ops/qudron-runtime/tests/test_agent_protocol.py"
+      ],
+      "acceptance_criteria": [
+        "Existing agent fabric and protocol behavior is inspected before changes are proposed.",
+        "Any behavior change has a focused regression test.",
+        "No secrets, external provider calls, production resources, or unrelated files are touched.",
+        "The result reports exact test commands and outcomes, or explicitly marks tests not_run/blocked."
+      ]
+    },
+    {
+      "task_id": "approval-security-review",
+      "title": "Review approval and endpoint security boundaries",
+      "objective": "Inspect approval_service and endpoint_security implementations and their tests. Look for authorization bypasses, approval replay, unsafe request parsing, scope escalation, and fail-open behavior. Make only narrowly scoped fixes supported by regression tests. Do not weaken controls to make tests pass.",
+      "allowed_paths": [
+        "ops/qudron-runtime/approval_service.py",
+        "ops/qudron-runtime/endpoint_security.py",
+        "ops/qudron-runtime/tests/test_approval_service.py",
+        "ops/qudron-runtime/tests/test_endpoint_security.py"
+      ],
+      "acceptance_criteria": [
+        "Security-sensitive logic and existing tests are reviewed before editing.",
+        "Any identified exploitable defect has a minimal regression test and fail-closed fix.",
+        "No credentials, network calls, account settings, or deployment resources are accessed.",
+        "Unconfirmed findings are reported as risks rather than presented as proven vulnerabilities."
+      ]
+    },
+    {
+      "task_id": "continuity-memory-review",
+      "title": "Review continuity store and MCP memory boundaries",
+      "objective": "Inspect the SQLite continuity store and its MCP continuity tool tests. Check transaction boundaries, task/project scoping, checkpoint integrity, retention/deletion behavior, and whether private stage output can escape bounded metadata responses. Make only scoped fixes with regression tests.",
+      "allowed_paths": [
+        "ops/qudron-runtime/continuity_store.py",
+        "ops/qudron-runtime/tests/test_continuity_store.py",
+        "ops/qudron-runtime/tests/test_mcp_continuity_tools.py"
+      ],
+      "acceptance_criteria": [
+        "The existing continuity implementation is inspected before any replacement is considered.",
+        "Private stage content remains inaccessible through bounded metadata/MCP responses.",
+        "Changes preserve project/task scope and have focused regression coverage.",
+        "No customer data or production memory database is read or modified."
+      ]
+    }
+  ]
+}

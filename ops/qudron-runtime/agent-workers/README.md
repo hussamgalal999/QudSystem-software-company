@@ -28,7 +28,7 @@ This is a development tool, not the production Qudron queue. It does not create 
 - Creates one worktree and branch per task.
 - Runs up to eight tasks concurrently; default is two.
 - Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands.
-- Captures per-task stdout/stderr and a run.json summary; a patch artifact is written only after every changed path passes the declared allowlist and denylist.
+- Writes a run.json summary and exports a patch only after every changed path passes the declared allowlist and denylist. Raw stdout/stderr are not saved by default.
 - Rejects changed files outside the declared allowed_paths scope, blocks sensitive paths by default, and exports no patch at all for a scope-violating task.
 - Rejects overlapping write scopes between concurrent implementation tasks before any worker is launched.
 - Never commits, pushes, opens a PR, or merges.
@@ -58,12 +58,15 @@ Run from the ops/qudron-runtime directory:
     python scripts/agent_fleet.py doctor --json
     python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2
 
+# Opt in to raw CLI stdout/stderr for successful in-scope tasks only:
+python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2 --capture-logs
+
 The source checkout must be clean. Default artifacts are placed next to the checkout, not inside it:
 
     ../.qudron-agent-worktrees/<run-id>/<task-id>/
     ../.qudron-agent-artifacts/<run-id>/
 
-Inspect the run.json summary, task patches, stdout and stderr before sharing anything. Artifacts may contain proprietary source code or prompt text; sanitize them before external sharing.
+Inspect the run.json summary and task patches before sharing anything. Raw CLI logs are omitted by default; use `--capture-logs` only in an approved environment and only when the output is safe to retain. Artifacts may contain proprietary source code or prompt text; sanitize them before external sharing.
 
 ## Manifest
 
@@ -98,7 +101,7 @@ No automatic PR creation or merge is implemented. Keep human merge approval and 
 - Codex workspace-write is still a code-execution environment inside its workspace. Do not use danger-full-access or YOLO for routine fleet tasks.
 - Gemini auto_edit and Claude acceptEdits do not blanket-approve shell commands; a worker may pause or fail if a command requires approval.
 - Aider automatic commits are disabled.
-- allowed_paths and deny_paths are post-run diff checks, not OS-level access-control boundaries. Sensitive paths are denied by default, but an untrusted process can still read or alter files inside its VM; use a disposable restricted VM/container with no host credentials or Docker socket.
+- allowed_paths and deny_paths are post-run diff checks, not OS-level access-control boundaries. Raw stdout/stderr are withheld by default and remain suppressed for any scope-violating task, even when `--capture-logs` is enabled. Sensitive paths are denied by default, but an untrusted process can still read or alter files inside its VM; use a disposable restricted VM/container with no host credentials or Docker socket.
 - Missing local CLIs are reported as unavailable; no agent is silently substituted.
 - The runner never installs packages, provisions credentials, bypasses quotas, accesses browser cookies, or calls production services.
 - Keep customer CVs, payment records, secrets and confidential data out of prompts unless the selected provider and environment are explicitly approved for that data class.

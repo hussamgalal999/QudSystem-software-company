@@ -26,12 +26,21 @@ CRITICAL_GATE_PATTERN = re.compile(
 
 
 def parse_profile_gates(framework_text: str) -> dict[str, set[str]]:
-    """Read canonical gate IDs from the specialty profile sections."""
-    headings = list(re.finditer(r"^### (.+)$", framework_text, re.MULTILINE))
+    """Read canonical gate IDs only from the specialty verification profiles."""
+    section = re.search(
+        r"^## Specialty-specific verification profiles\s*$([\s\S]*?)"
+        r"^### Per-task acceptance contract and validation\s*$",
+        framework_text,
+        re.MULTILINE,
+    )
+    if not section:
+        raise ValueError("Quality framework is missing its specialty profile section")
+    profile_text = section.group(1)
+    headings = list(re.finditer(r"^### (.+)$", profile_text, re.MULTILINE))
     profiles: dict[str, set[str]] = {}
     for index, heading in enumerate(headings):
-        end = headings[index + 1].start() if index + 1 < len(headings) else len(framework_text)
-        block = framework_text[heading.end():end]
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(profile_text)
+        block = profile_text[heading.end():end]
         profiles[heading.group(1).strip()] = set(
             re.findall(r"^- \[ \] `([^`]+)`", block, re.MULTILINE)
         )

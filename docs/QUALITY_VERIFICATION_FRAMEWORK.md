@@ -263,20 +263,20 @@ For each task, evaluate each applicable gate as:
 
 Let (s_i) be the gate score (1.0, 0.5 or 0.0) and (w_i) its weight.
 
-[
+$
 \text{Evidence Coverage} =
 \frac{\sum_{i=1}^{n} w_i s_i}{\sum_{i=1}^{n} w_i}\times 100
-]
+$
 
 Blocked, not-run and stale gates contribute zero to the numerator and remain in the denominator. Report their counts separately so a high score cannot hide missing access or missing tests.
 
-[
+$
 \text{Verified Completion} =
 \begin{cases}
 100, & \text{if every mandatory gate passes, all critical gates pass, and the required maturity level is reached}\\
 0, & \text{otherwise}
 \end{cases}
-]
+$
 
 Evidence Coverage is a diagnostic progress measure; Verified Completion is the acceptance decision. They must never be merged into one percentage.
 

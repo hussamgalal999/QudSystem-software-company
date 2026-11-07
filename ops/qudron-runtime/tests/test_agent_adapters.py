@@ -160,10 +160,14 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             metadata={"submit_tool": "submit_task", "status_tool": "get_status"},
         )
         calls = []
-        def fake_request(agent_descriptor, method, params=None, *, notification=False, session_id=None):
-            calls.append((method, notification))
+        def fake_request(
+            agent_descriptor, method, params=None, *,
+            notification=False, session_id=None, return_session_id=False,
+        ):
+            calls.append((method, notification, session_id))
             if method == "initialize":
-                return {"protocolVersion": adapter.protocol_version}
+                result = {"protocolVersion": adapter.protocol_version}
+                return (result, "session-1") if return_session_id else result
             if method == "tools/call":
                 return {"content": [{"type": "text", "text": json.dumps({"job_id": "remote-1"})}]}
             return {}
@@ -175,9 +179,14 @@ class AgentAdapterTests(unittest.IsolatedAsyncioTestCase):
             ))
         self.assertEqual(
             calls,
-            [("initialize", False), ("notifications/initialized", True), ("tools/call", False)],
+            [
+                ("initialize", False, ""),
+                ("notifications/initialized", True, "session-1"),
+                ("tools/call", False, "session-1"),
+            ],
         )
         self.assertEqual(handle.remote_task_id, "remote-1")
+        self.assertEqual(handle.metadata["mcp_session_id"], "session-1")
 
 
     def test_mcp_streamable_http_event_stream_response_is_parsed(self):

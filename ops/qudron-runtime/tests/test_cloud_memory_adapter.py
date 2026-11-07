@@ -111,7 +111,11 @@ class CloudMemoryAdapterTests(unittest.TestCase):
 
         class SlowOptionalClient:
             timeout_seconds = 45
+            observed_request_timeouts = []
             def get_context(self, **kwargs):
+                # Assert the configured bound at the moment the request starts,
+                # not only after the helper returns.
+                self.observed_request_timeouts.append(self.timeout_seconds)
                 return {"project": {"project_id": "qudron", "name": "Qudron"}}
 
         client = SlowOptionalClient()
@@ -119,6 +123,7 @@ class CloudMemoryAdapterTests(unittest.TestCase):
             os.environ, {"QUDRON_MEMORY_CONTEXT_TIMEOUT_SECONDS": "45"}, clear=False
         ):
             rendered = retrieve_cloud_memory_context("qudron")
+        self.assertEqual(client.observed_request_timeouts, [5.0])
         self.assertLessEqual(client.timeout_seconds, 5)
         self.assertIn("Qudron", rendered)
 

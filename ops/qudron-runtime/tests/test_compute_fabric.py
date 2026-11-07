@@ -85,6 +85,19 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.provider_id, "kaggle")
         await self.fabric.release(second)
 
+
+    async def test_expired_in_memory_lease_does_not_block_new_capacity(self):
+        self.fabric.register_provider(provider(max_concurrent_leases=1))
+        expired = ComputeLease(
+            provider_id="kaggle", lease_id="expired-lease",
+            resource_id="old-instance", expires_at=time.time() - 10,
+            endpoint_ref="https://compute.example.test/old",
+        )
+        self.fabric._leases[expired.lease_id] = ("kaggle", expired)
+        self.assertEqual(self.fabric.snapshot()["active_leases"], 0)
+        lease = await self.fabric.acquire(request(request_id="compute-after-expiry"))
+        self.assertEqual(lease.provider_id, "kaggle")
+
     async def test_unverified_or_unauthorized_provider_is_never_eligible(self):
         self.fabric.register_provider(provider("unverified", last_verified_at=None))
         self.fabric.register_provider(provider("unauthorized", authorized=False))
@@ -116,6 +129,17 @@ class ComputeFabricTests(unittest.IsolatedAsyncioTestCase):
         self.fabric.register_provider(provider("small", gpu_vram_gb=8, quota_remaining_seconds=30))
         with self.assertRaises(NoEligibleCompute):
             await self.fabric.acquire(request(min_gpu_vram_gb=24, min_runtime_seconds=600))
+
+
+    async def test_quota_only_exhaustion_rejects_vram_qualified_provider(self):
+        self.fabric.register_provider(provider(
+            "quota-empty", gpu_vram_gb=16, quota_remaining_seconds=30,
+        ))
+        with self.assertRaises(NoEligibleCompute):
+            await self.fabric.acquire(request(
+                min_gpu_vram_gb=12, min_runtime_seconds=600,
+            ))
+        self.assertEqual(self.adapter.acquired, [])
 
     async def test_short_provider_lease_is_rejected_and_compensating_release_runs(self):
         class ShortLeaseAdapter(FakeComputeAdapter):

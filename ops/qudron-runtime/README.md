@@ -262,3 +262,40 @@ Keep the submission tool approval enabled. OpenDots conversations require a Copi
 ## Social distribution
 
 The current Metricool adapter deliberately creates drafts only. Use it as the distribution layer for Facebook, Instagram, YouTube and other supported destinations after connecting the official Metricool API. The publication workflow should produce platform-specific variants, campaign IDs, media metadata, UTM tags, an approval record and post-publication evidence. No public post is considered complete until its provider returns a published ID and permalink. Never bypass Meta login or use personal cookies scraped from a browser to publish.
+
+
+## Owner approval signing keys
+
+Approval tokens use Ed25519. The trusted owner-facing process is the only component
+that receives the private signing key; Qudron workers receive only the public key.
+A worker compromise therefore does not provide the ability to mint owner approvals.
+
+Generate the key pair on a trusted owner machine:
+
+```sh
+openssl genpkey -algorithm Ed25519 -out qudron-approval-private.pem
+openssl pkey -in qudron-approval-private.pem -pubout -out qudron-approval-public.pem
+chmod 600 qudron-approval-private.pem
+```
+
+- Keep `qudron-approval-private.pem` outside the repository and outside all runtime,
+  OpenDots, model-router and agent containers.
+- Configure `QUDRON_APPROVAL_PRIVATE_KEY_FILE` only in the trusted owner issuer
+  process, which uses `ApprovalTokenIssuer.from_environment()`.
+- Place the public key in the runtime's private data mount and configure
+  `QUDRON_APPROVAL_PUBLIC_KEY_FILE` to that in-container path. Runtime code uses
+  `ApprovalService.from_environment()` and exposes verification/consumption only.
+- Never copy the private key into `.env`, GitHub Actions artifacts, Docker build
+  contexts, or agent-readable storage. Rotate by issuing a new key pair and
+  updating the owner issuer and runtime public-key file together.
+- Old HMAC tokens are intentionally invalid under version 2; issue fresh approvals
+  after deploying the matching public key.
+
+
+## Latest runtime hardening notes
+
+- MCP Streamable HTTP accepts JSON and bounded Server-Sent Events responses. MCP session IDs are captured per submitted task handle; the endpoint-level cache is only a bootstrap aid.
+- A2A discovery uses the origin-root well-known path while task operations remain relative to the configured agent endpoint path. Malformed status messages with non-list `parts` are treated as empty text.
+- Compute capacity ignores expired in-memory leases; durable admission continues to count only non-expired leases and reservations.
+- Metricool owner allowlists bind content brand, Metricool blog ID, destination ID, and social network together. A mapping approved for Facebook cannot authorize a YouTube draft.
+- Vision Guard brand markers are normalized across punctuation before brand isolation checks.

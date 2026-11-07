@@ -8,13 +8,18 @@ from workflow_orchestrator import (
     WorkflowOrchestrator, WorkflowStore, expand_execution_mode, validate_dag,
 )
 from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
-from approval_service import ApprovalService
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 
 class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.approvals = ApprovalService("a" * 40, Path(self.temp.name) / "approvals.sqlite3")
+        private_key = Ed25519PrivateKey.generate()
+        self.approval_issuer = ApprovalTokenIssuer(private_key)
+        self.approvals = ApprovalService(
+            private_key.public_key(), Path(self.temp.name) / "approvals.sqlite3"
+        )
         self.store = WorkflowStore(
             Path(self.temp.name) / "state.sqlite3",
             approval_service=self.approvals,
@@ -25,6 +30,17 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+
+    def test_consensus_quorum_must_be_within_dependency_count(self):
+        for invalid in (-1, 0, 3, True, 1.5):
+            with self.subTest(quorum=invalid):
+                with self.assertRaisesRegex(ValueError, "quorum_required"):
+                    WorkflowNode(
+                        "reduce", "Reducer", "Reduce votes",
+                        dependencies=("a", "b"),
+                        metadata={"reducer": True, "quorum_required": invalid},
+                    )
 
     async def test_consensus_reducer_runs_after_quorum_despite_failed_vote(self):
         nodes = expand_execution_mode(
@@ -206,6 +222,31 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertTrue(self.store.acquire_resources("new", claims, 30))
 
+
+    async def test_missing_approval_target_does_not_consume_valid_token(self):
+        token = self.approval_issuer.issue(
+            action="workflow.node.approve",
+            resource_id="wf-created-later/publish",
+            approved_by="owner",
+        )
+        with self.assertRaisesRegex(WorkflowError, "target was not found"):
+            self.store.approve_node("wf-created-later", "publish", token)
+
+        node = WorkflowNode(
+            "publish", "Publish", "Publish only after owner approval.",
+            requires_approval=True,
+        )
+        definition = WorkflowDefinition(
+            "wf-created-later", "qudron", "idem-created-later",
+            ExecutionMode.SEQUENTIAL, (node,),
+        )
+        self.store.create(definition)
+        self.store.approve_node("wf-created-later", "publish", token)
+        self.assertEqual(
+            self.store.snapshot("wf-created-later")["nodes"][0]["approved_by"],
+            "owner",
+        )
+
     async def test_approval_gated_node_is_not_executed(self):
         node = WorkflowNode(
             "publish", "Publish", "Publish to a public page.",
@@ -224,7 +265,7 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "waiting_for_approval")
         self.assertEqual(invoked, [])
 
-        token = self.approvals.issue(
+        token = self.approval_issuer.issue(
             action="workflow.node.approve",
             resource_id="wf-approval/publish",
             approved_by="owner",

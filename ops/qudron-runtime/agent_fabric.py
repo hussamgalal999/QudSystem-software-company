@@ -126,6 +126,9 @@ class AgentFabric:
         self._in_flight: dict[str, int] = {}
         self._active_task_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
         self._unknown_submission_leases: dict[tuple[str, str], tuple[asyncio.Semaphore, _ResizableSemaphore]] = {}
+        # Covers the admission wait and the provider submit await, before a remote
+        # task lease can be recorded. Descriptor identity must remain stable here.
+        self._pending_submissions: dict[str, int] = {}
         self._lock = asyncio.Lock()
 
     def register_adapter(self, adapter_id: str, adapter: AgentAdapter) -> None:
@@ -146,6 +149,16 @@ class AgentFabric:
         )
         self._in_flight.setdefault(descriptor.provider_id, 0)
 
+    def _mark_submission_pending(self, agent_id: str) -> None:
+        self._pending_submissions[agent_id] = self._pending_submissions.get(agent_id, 0) + 1
+
+    def _clear_submission_pending(self, agent_id: str) -> None:
+        count = self._pending_submissions.get(agent_id, 0)
+        if count <= 1:
+            self._pending_submissions.pop(agent_id, None)
+        else:
+            self._pending_submissions[agent_id] = count - 1
+
     def update_agent(self, descriptor: AgentDescriptor) -> None:
         if descriptor.agent_id not in self._agents:
             raise KeyError(descriptor.agent_id)
@@ -153,7 +166,8 @@ class AgentFabric:
             raise ValueError(f"Adapter is not registered: {descriptor.adapter}")
         current = self._agents[descriptor.agent_id]
         has_active_remote_work = (
-            any(key[0] == descriptor.agent_id for key in self._active_task_leases)
+            descriptor.agent_id in self._pending_submissions
+            or any(key[0] == descriptor.agent_id for key in self._active_task_leases)
             or any(key[0] == descriptor.agent_id for key in self._unknown_submission_leases)
         )
         if has_active_remote_work and (
@@ -267,11 +281,16 @@ class AgentFabric:
             adapter = self._adapters[agent.adapter]
             provider_slot = self._provider_slots[agent.provider_id]
             agent_slot = self._agent_slots[agent.agent_id]
-            await provider_slot.acquire()
+            self._mark_submission_pending(agent.agent_id)
             try:
-                await agent_slot.acquire()
-            except Exception:
-                provider_slot.release()
+                await provider_slot.acquire()
+                try:
+                    await agent_slot.acquire()
+                except BaseException:
+                    provider_slot.release()
+                    raise
+            except BaseException:
+                self._clear_submission_pending(agent.agent_id)
                 raise
             acquired = True
             try:
@@ -300,6 +319,7 @@ class AgentFabric:
                             raise AgentFabricError("Remote task already owns an admission lease")
                         self._active_task_leases[key] = (provider_slot, agent_slot)
                     acquired = False
+                self._clear_submission_pending(agent.agent_id)
                 return DispatchReceipt(
                     agent_id=agent.agent_id,
                     provider_id=agent.provider_id,
@@ -308,6 +328,7 @@ class AgentFabric:
                     route_reason="; ".join(failures) if failures else "highest eligible capability score",
                 )
             except asyncio.TimeoutError as exc:
+                self._clear_submission_pending(agent.agent_id)
                 # A timed-out submit may still be executing in a worker thread
                 # or may already exist remotely. Keep the admission slot until
                 # an explicit reconciliation identifies the remote outcome.
@@ -320,7 +341,17 @@ class AgentFabric:
                     f"Submission outcome is unknown after timeout for {agent.agent_id}; "
                     "reconcile the remote task before retrying or failing over"
                 ) from exc
+            except asyncio.CancelledError:
+                self._clear_submission_pending(agent.agent_id)
+                if acquired:
+                    async with self._lock:
+                        self._unknown_submission_leases[(agent.agent_id, task.task_id)] = (
+                            provider_slot, agent_slot,
+                        )
+                    acquired = False
+                raise
             except (ProviderUnavailable, ConnectionError) as exc:
+                self._clear_submission_pending(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()
@@ -328,6 +359,7 @@ class AgentFabric:
                 failures.append(f"{agent.agent_id}:{type(exc).__name__}")
                 continue
             except Exception:
+                self._clear_submission_pending(agent.agent_id)
                 if acquired:
                     provider_slot.release()
                     await agent_slot.release()
@@ -351,6 +383,9 @@ class AgentFabric:
         only after confirming that no remote task was created.
         """
         key = (agent_id, task_id)
+        release_lease = handle is None or handle.status in {
+            TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED,
+        }
         async with self._lock:
             lease = self._unknown_submission_leases.pop(key, None)
             if lease is None:
@@ -360,8 +395,13 @@ class AgentFabric:
                 if not agent or handle.provider_id != agent.provider_id:
                     self._unknown_submission_leases[key] = lease
                     raise AgentFabricError("Reconciled handle does not match the agent provider")
-                self._active_task_leases[(agent_id, handle.remote_task_id)] = lease
-        if handle is None or handle.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+                if not release_lease:
+                    active_key = (agent_id, handle.remote_task_id)
+                    if active_key in self._active_task_leases:
+                        self._unknown_submission_leases[key] = lease
+                        raise AgentFabricError("Remote task already owns an admission lease")
+                    self._active_task_leases[active_key] = lease
+        if release_lease:
             provider_slot, agent_slot = lease
             provider_slot.release()
             await agent_slot.release()

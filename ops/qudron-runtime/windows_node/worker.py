@@ -55,10 +55,10 @@ class PywinautoAutomation:
                 continue
         return result[:100]
 
-    def inspect_window(self, process_id: int) -> dict[str, Any]:
+    def inspect_window(self, process_id: int, window_handle: int) -> dict[str, Any]:
         for window in self._desktop().windows():
             try:
-                if int(window.process_id()) != process_id:
+                if int(window.process_id()) != process_id or int(window.handle) != window_handle:
                     continue
                 controls = []
                 for element in window.descendants()[:200]:
@@ -76,6 +76,7 @@ class PywinautoAutomation:
                 return {
                     "title": str(window.window_text())[:240],
                     "process_id": process_id,
+                    "handle": window_handle,
                     "controls": controls,
                     "control_count": len(controls),
                 }
@@ -92,7 +93,7 @@ class PywinautoAutomation:
         return {"process_id": process.pid, "launched": True}
 
     def invoke_control(
-        self, process_id: int, window_title: str,
+        self, process_id: int, window_handle: int, window_title: str,
         automation_id: str, control_type: str,
     ) -> dict[str, Any]:
         if not isinstance(window_title, str) or not window_title.strip():
@@ -101,9 +102,9 @@ class PywinautoAutomation:
             raise WindowsNodeError("automation_id and control_type are required")
         for window in self._desktop().windows():
             try:
-                if int(window.process_id()) != process_id:
+                if int(window.process_id()) != process_id or int(window.handle) != window_handle:
                     continue
-                if str(window.window_text()).strip() != window_title.strip():
+                if str(window.window_text()) != window_title:
                     continue
                 control = window.child_window(
                     auto_id=automation_id, control_type=control_type
@@ -117,7 +118,7 @@ class PywinautoAutomation:
         raise WindowsNodeError("Allowlisted UI control could not be located or invoked")
 
     def type_text(
-        self, process_id: int, window_title: str, automation_id: str,
+        self, process_id: int, window_handle: int, window_title: str, automation_id: str,
         control_type: str, text: str,
     ) -> dict[str, Any]:
         if not isinstance(window_title, str) or not window_title.strip():
@@ -130,12 +131,12 @@ class PywinautoAutomation:
             raise WindowsNodeError("Text input must contain at most 4,000 characters")
         for window in self._desktop().windows():
             try:
-                if int(window.process_id()) != process_id:
+                if int(window.process_id()) != process_id or int(window.handle) != window_handle:
                     continue
-                if str(window.window_text()).strip() != window_title.strip():
+                if str(window.window_text()) != window_title:
                     continue
                 control = window.child_window(
-                    auto_id=automation_id.strip(), control_type="Edit"
+                    auto_id=automation_id, control_type="Edit"
                 )
                 if not control.exists(timeout=2):
                     continue
@@ -197,7 +198,10 @@ class WindowsNode:
         ui_available = False
         if sys.platform == "win32":
             try:
-                import pywinauto  # noqa: F401
+                from pywinauto import Desktop
+                # Import success alone does not prove that this process can
+                # enumerate the user's interactive desktop session.
+                Desktop(backend="uia").windows()
                 ui_available = True
             except Exception:
                 ui_available = False
@@ -331,7 +335,9 @@ class WindowsNode:
             if action == "windows.list_windows":
                 raw = {"windows": self.automation.list_windows()}
             elif action == "windows.inspect_window":
-                raw = self.automation.inspect_window(int(params.get("process_id", 0)))
+                raw = self.automation.inspect_window(
+                    int(params.get("process_id", 0)), int(params.get("window_handle", 0))
+                )
             elif action == "windows.launch_app":
                 alias = str(params.get("app_alias", ""))
                 path = self.allowed_apps.get(alias)
@@ -340,12 +346,12 @@ class WindowsNode:
                 raw = self.automation.launch_app(path)
             elif action == "windows.invoke_control":
                 raw = self.automation.invoke_control(
-                    params["process_id"], params["window_title"],
+                    params["process_id"], params["window_handle"], params["window_title"],
                     params["automation_id"], params["control_type"],
                 )
             else:
                 raw = self.automation.type_text(
-                    params["process_id"], params["window_title"],
+                    params["process_id"], params["window_handle"], params["window_title"],
                     params["automation_id"], params["control_type"], params["text"],
                 )
             safe = self._safe_result(action, raw)

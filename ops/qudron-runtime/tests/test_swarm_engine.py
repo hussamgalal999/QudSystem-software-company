@@ -193,5 +193,12 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertNotIn("12345678901234", redacted)
         self.assertNotIn("sk-abcdefghijklmnop", redacted)
 
+    def test_parenthesized_international_phone_formats_are_redacted(self):
+        for phone in ("(415) 555-2671", "+1 (555) 123-4567", "+44 20 7946 0958"):
+            with self.subTest(phone=phone):
+                self.assertNotIn(phone, redact_sensitive_text("Call " + phone))
+        release_id = "release 1.2.3-4567890"
+        self.assertEqual(redact_sensitive_text(release_id), release_id)
+
 if __name__ == "__main__":
     unittest.main()

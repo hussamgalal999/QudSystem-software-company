@@ -5,13 +5,14 @@ import tempfile
 from pathlib import Path
 
 from agent_fabric import (
-    AgentFabric, FabricPolicy, NoEligibleAgent, ProviderUnavailable,
+    AgentFabric, AgentFabricError, FabricPolicy, NoEligibleAgent, ProviderUnavailable,
 )
 from agent_protocol import (
     AgentDescriptor, AgentTaskHandle, AgentTaskResult, DataClass,
     TaskEnvelope, TaskStatus,
 )
-from approval_service import ApprovalService
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 
 class FakeAdapter:
@@ -63,15 +64,18 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
                 super().__init__()
                 self.active = 0
                 self.max_active = 0
-                self.started = asyncio.Event()
-                self.release = asyncio.Event()
+                self.calls = 0
+                self.started = [asyncio.Event(), asyncio.Event()]
+                self.release = [asyncio.Event(), asyncio.Event()]
 
             async def submit(self, agent_descriptor, task_envelope):
+                index = self.calls
+                self.calls += 1
                 self.active += 1
                 self.max_active = max(self.max_active, self.active)
-                self.started.set()
+                self.started[index].set()
                 try:
-                    await self.release.wait()
+                    await self.release[index].wait()
                 finally:
                     self.active -= 1
                 return AgentTaskHandle(
@@ -89,19 +93,30 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         first = asyncio.create_task(fabric.dispatch(task(
             task_id="job-first", idempotency_key="idem-first",
         )))
-        await adapter.started.wait()
+        await adapter.started[0].wait()
 
-        refreshed = agent("worker", "provider", "fake", max_concurrency=1)
-        fabric.update_agent(refreshed)
+        # A provider/adapter identity change during the submit await would orphan
+        # the remote handle and its admission lease; reject that refresh.
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
+
         second = asyncio.create_task(fabric.dispatch(task(
             task_id="job-second", idempotency_key="idem-second",
         )))
         await asyncio.sleep(0.02)
-        self.assertEqual(adapter.max_active, 1)
-
-        adapter.release.set()
+        adapter.release[0].set()
         first_receipt = await first
+
+        # The second dispatch is still pending on the slot; the first completion
+        # must not clear the agent-level pending counter for both submissions.
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
+
         await fabric.poll("worker", first_receipt.handle)
+        await adapter.started[1].wait()
+        with self.assertRaises(AgentFabricError):
+            fabric.update_agent(agent("worker", "different-provider", "fake", max_concurrency=1))
+        adapter.release[1].set()
         second_receipt = await second
         await fabric.poll("worker", second_receipt.handle)
         self.assertEqual(adapter.max_active, 1)
@@ -154,6 +169,46 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fabric._agent_slots["worker"]._active, 1)
         await fabric.reconcile_submission_timeout("worker", "job-timeout", handle=None)
         self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+
+    async def test_cancelled_submission_retains_slot_until_reconciliation(self):
+        class BlockingAdapter(FakeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.started = asyncio.Event()
+                self.never = asyncio.Event()
+            async def submit(self, agent_descriptor, task_envelope):
+                self.started.set()
+                await self.never.wait()
+
+        adapter = BlockingAdapter()
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=5))
+        fabric.register_adapter("fake", adapter)
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+        dispatch = asyncio.create_task(fabric.dispatch(task(
+            task_id="job-cancelled", idempotency_key="idem-cancelled",
+        )))
+        await adapter.started.wait()
+        dispatch.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await dispatch
+        self.assertEqual(fabric._agent_slots["worker"]._active, 1)
+        await fabric.reconcile_submission_timeout("worker", "job-cancelled", handle=None)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+
+    async def test_terminal_timeout_reconciliation_does_not_leave_stale_active_lease(self):
+        class HangingAdapter(FakeAdapter):
+            async def submit(self, agent_descriptor, task_envelope):
+                await asyncio.Event().wait()
+
+        fabric = AgentFabric(FabricPolicy(request_timeout_seconds=0.01))
+        fabric.register_adapter("fake", HangingAdapter())
+        fabric.register_agent(agent("worker", "provider", "fake", max_concurrency=1))
+        with self.assertRaises(ProviderUnavailable):
+            await fabric.dispatch(task(task_id="job-terminal", idempotency_key="idem-terminal"))
+        terminal = AgentTaskHandle("provider", "remote-terminal", TaskStatus.SUCCEEDED)
+        await fabric.reconcile_submission_timeout("worker", "job-terminal", handle=terminal)
+        self.assertEqual(fabric._agent_slots["worker"]._active, 0)
+        self.assertNotIn(("worker", "remote-terminal"), fabric._active_task_leases)
 
     async def test_follow_up_and_cancel_obey_fabric_request_timeout(self):
         class HangingLifecycleAdapter(FakeAdapter):
@@ -251,7 +306,9 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_approval_requires_scoped_one_time_token(self):
         with tempfile.TemporaryDirectory() as directory:
-            service = ApprovalService("a" * 40, Path(directory) / "approvals.sqlite3")
+            private_key = Ed25519PrivateKey.generate()
+            issuer = ApprovalTokenIssuer(private_key)
+            service = ApprovalService(private_key.public_key(), Path(directory) / "approvals.sqlite3")
             fabric = AgentFabric(approval_service=service)
             adapter = FakeAdapter()
             fabric.register_adapter("fake", adapter)
@@ -261,7 +318,7 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
                 await fabric.dispatch(task(requires_approval=True, approved_by="owner"))
             self.assertEqual(adapter.submitted, [])
 
-            token = service.issue(
+            token = issuer.issue(
                 action="agent.dispatch", resource_id="qudron/job-1", approved_by="owner"
             )
             approved_task = task(requires_approval=True, approved_by="owner", approval_token=token)

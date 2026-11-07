@@ -12,7 +12,7 @@ import os
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request
 
 from endpoint_security import is_allowed_credential_endpoint, open_credential_request
@@ -75,6 +75,14 @@ class ManusAdapter:
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = self._headers()
         request = Request(url, data=data, headers=headers, method=method)
+        base = urlsplit(self.base_url)
+        target = urlsplit(url)
+        if (
+            target.scheme != base.scheme or target.netloc != base.netloc
+            or target.username is not None or target.password is not None
+            or target.fragment
+        ):
+            raise ManusAPIError("Manus request target escaped the configured API origin")
         last_error = "unknown error"
         # Retry only idempotent reads. Manus task creation and follow-up are
         # non-idempotent POSTs; a lost response must not create duplicate work
@@ -82,7 +90,7 @@ class ManusAdapter:
         max_attempts = self.retries + 1 if method.upper() in {"GET", "HEAD"} else 1
         for attempt in range(max_attempts):
             try:
-                with open_credential_request(request, timeout=self.timeout) as response:
+                with open_credential_request(request, timeout=self.timeout, endpoint_validated=True) as response:
                     raw = response.read(2_000_001)
                     if len(raw) > 2_000_000:
                         raise ManusAPIError("Manus response exceeded the 2 MB safety limit")

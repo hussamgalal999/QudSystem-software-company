@@ -27,7 +27,7 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 2. **Tier 1 — legitimate free tiers**: FreeLLM adapter or direct official connectors for Google AI Studio, Groq, OpenRouter :free, Cloudflare Workers AI, Mistral free/experiment, NVIDIA NIM trial, and other currently verified free plans. Store each user's own credentials encrypted; never pool unrelated users' accounts.
 3. **Tier 2 — authorized OAuth**: providers whose official CLI/OAuth flow explicitly permits this use. User initiates consent; tokens are encrypted, scoped, revocable and refreshed only through documented flows. Do not extract Antigravity, Google AI Studio, Meta AI, or other browser cookies/local storage. Do not use ChatGPT Web/Codex browser sessions as a hidden API.
 4. **Tier 3 — paid fallback**: DeepSeek or another low-cost provider, only when a per-task and daily/monthly budget is configured and an owner has enabled billing.
-5. **Tier 4 — no provider**: queue the job, return a clear NEEDS_PROVIDER state, and preserve its idempotency key. Never silently switch to a paid model or silently drop the task.
+5. **Tier 4 — no provider**: the current worker fails closed with a provider-configuration error and applies its configured retry/failure policy. A durable `NEEDS_PROVIDER` queue state is a required future gate, not an implemented guarantee. Never silently switch to a paid model or silently drop the task.
 
 ## Routing and safety requirements
 
@@ -37,7 +37,7 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 - Enforce hard per-order, daily and monthly cost ceilings before dispatch. Reserve budget atomically across parallel agents. Paid routes are disabled unless prices and budget are explicitly configured.
 - Never rotate keys to evade a provider's published limits or terms. Key rotation is only for separately authorized keys within the provider's allowed usage.
 - Never send CVs, contact details, payment evidence, secrets or other customer PII to anonymous endpoints. Use redaction and tenant-scoped encrypted storage.
-- Log provider/model, request ID, latency, token usage, cost, fallback reason and final status; never log credentials or raw sensitive prompts.
+- Record every model attempt (provider/model, request ID, start/end, status and bounded error) in the attempt ledger. Record token usage and known cost in the usage ledger only when available; failed or timed-out calls may have unknown provider charges and must not be reported as zero-cost. Never log credentials or raw sensitive prompts.
 - Add provider contract tests for tool calls, JSON mode, streaming, timeout, 429, 5xx, malformed output, model retirement and budget exhaustion.
 
 ## Proposed integration sequence

@@ -29,7 +29,7 @@ class ContinuityStore:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+        db = sqlite3.connect(self.database_path, timeout=30, isolation_level="DEFERRED")
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=30000")
         db.execute("PRAGMA journal_mode=WAL")
@@ -133,6 +133,9 @@ class ContinuityStore:
             CREATE INDEX IF NOT EXISTS idx_cloud_outbox_pending
               ON cloud_outbox(status,next_attempt_at,created_at);
             """)
+            # Serialize legacy-column inspection and ALTER operations across
+            # concurrent runtime starts.
+            db.execute("BEGIN IMMEDIATE")
             agent_run_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(agent_runs)")
             }
@@ -140,9 +143,16 @@ class ContinuityStore:
                 db.execute("ALTER TABLE agent_runs ADD COLUMN claim_token TEXT")
             if "lease_until" not in agent_run_columns:
                 db.execute("ALTER TABLE agent_runs ADD COLUMN lease_until REAL")
+            # Legacy running rows have no fencing token, so no current worker can
+            # prove ownership. Expire them immediately for safe reclaim.
             db.execute(
-                "UPDATE agent_runs SET lease_until=? WHERE status='running' AND lease_until IS NULL",
-                (time.time() + 3600,),
+                """UPDATE agent_runs SET lease_until=0
+                   WHERE status='running' AND claim_token IS NULL"""
+            )
+            db.execute(
+                """UPDATE agent_runs SET lease_until=?
+                   WHERE status='running' AND lease_until IS NULL AND claim_token IS NOT NULL""",
+                (time.time() - 1,),
             )
 
     @staticmethod
@@ -346,26 +356,50 @@ class ContinuityStore:
                         f"provider={next_provider or 'unresolved'}; model={next_model or 'unresolved'}"),
                 now=now,
             )
-            snapshot_status = {
-                "running": "running", "assigned": "running", "queued": "queued",
-                "paused": "blocked", "failed": "blocked", "succeeded": "idle",
-                "cancelled": "idle", "replaced": "idle", "retired": "idle",
-            }[status]
-            next_action = {
-                "queued": f"Await execution for stage: {stage}",
-                "assigned": f"Assigned stage: {stage}",
-                "running": f"Executing stage: {stage}",
-                "paused": f"Resume stage: {stage}",
-                "failed": safe_error or f"Retry or replace stage: {stage}",
-                "succeeded": "Await next assignment.",
-                "cancelled": "No further action; task cancelled.",
-                "replaced": "Superseded by a replacement instance.",
-                "retired": "Instance retired.",
-            }[status]
+            active_role_instances = db.execute(
+                """SELECT job_id,stage,status FROM agent_instances
+                   WHERE project=? AND role_id=?
+                     AND status IN ('queued','assigned','running','paused')
+                   ORDER BY updated_at DESC LIMIT 100""",
+                (project, role_id),
+            ).fetchall()
+            if active_role_instances:
+                active_statuses = {str(item["status"]) for item in active_role_instances}
+                if active_statuses & {"running", "assigned"}:
+                    snapshot_status = "running"
+                elif "queued" in active_statuses:
+                    snapshot_status = "queued"
+                else:
+                    snapshot_status = "blocked"
+                latest_active = active_role_instances[0]
+                # Multiple concurrent instances share one role snapshot, so do
+                # not falsely select one job as the role's singular current task.
+                task_id = None
+                next_action = (
+                    f"{len(active_role_instances)} active task-scoped instance(s); "
+                    f"latest stage {latest_active['stage']} is {latest_active['status']}"
+                )
+            else:
+                snapshot_status = {
+                    "running": "running", "assigned": "running", "queued": "queued",
+                    "paused": "blocked", "failed": "blocked", "succeeded": "idle",
+                    "cancelled": "idle", "replaced": "idle", "retired": "idle",
+                }[status]
+                next_action = {
+                    "queued": f"Await execution for stage: {stage}",
+                    "assigned": f"Assigned stage: {stage}",
+                    "running": f"Executing stage: {stage}",
+                    "paused": f"Resume stage: {stage}",
+                    "failed": safe_error or f"Retry or replace stage: {stage}",
+                    "succeeded": "Await next assignment.",
+                    "cancelled": "No further action; task cancelled.",
+                    "replaced": "Superseded by a replacement instance.",
+                    "retired": "Instance retired.",
+                }[status]
+                task_id = job_id if status == "failed" else None
             self._queue_agent_snapshot(
                 db, project=project, agent_id=role_id, status=snapshot_status,
-                task_id=job_id if status in {"queued", "assigned", "running", "paused", "failed"} else None,
-                next_action=next_action, now=now,
+                task_id=task_id, next_action=next_action, now=now,
             )
             updated = db.execute(
                 "SELECT * FROM agent_instances WHERE instance_id=?", (instance_id,)

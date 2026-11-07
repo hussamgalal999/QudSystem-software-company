@@ -37,7 +37,7 @@ from capability_registry import search_capabilities as search_capability_registr
 from mcp_gateway import handle_mcp_request, MCPGatewayError
 from continuity_store import ContinuityStore
 from cloud_memory_adapter import (
-    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
+    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment, merge_local_and_cloud_context,
 )
 from endpoint_security import open_credential_request
 from provider_resilience import (
@@ -197,6 +197,10 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_model_call_slots_lease
           ON model_call_slots(lease_until);
         """)
+        job_columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+        if "data_class" not in job_columns:
+            db.execute("ALTER TABLE jobs ADD COLUMN data_class TEXT NOT NULL DEFAULT 'internal'")
+        db.execute("UPDATE jobs SET data_class='internal' WHERE data_class IS NULL OR TRIM(data_class)=''")
 
 def next_local_occurrence(item: dict[str, Any], after_utc: dt.datetime) -> dt.datetime:
     """Return the next scheduled local wall-clock occurrence strictly after after_utc."""
@@ -1410,68 +1414,39 @@ def is_anonymous_freellm_route(base_url: str) -> bool:
     return False
 
 
-def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) -> None:
-    if not is_anonymous_freellm_route(base_url):
-        return
-    task_type = str(job["task_type"])
-    if task_type not in PUBLIC_KEYLESS_TASK_TYPES:
-        raise RuntimeError(
-            "Anonymous free-model routing is limited to public research and content drafts. "
-            "Configure an approved authenticated/private provider for customer data, private code, "
-            "support, finance, CVs, security incidents or confidential work."
-        )
-    lowered = user_text.lower()
-    restricted_markers = (
-        "confidential", "internal-only", "internal only", "non-public",
-        "private source", "private repository", "customer record",
-        "customer data", "payment evidence", "bank account", "password",
-        "access token", "api key", "secret key",
-    )
-    if any(marker in lowered for marker in restricted_markers):
-        raise RuntimeError(
-            "The request contains an explicit confidential/customer/credential marker; "
-            "anonymous free-model routing is blocked."
-        )
-    # Existing redaction rules cover common contact/identity/payment/token patterns.
-    # If any sensitive-looking value would be redacted, fail closed rather than ship it.
-    if redact_sensitive_text(user_text) != user_text:
-        raise RuntimeError(
-            "The prompt contains a value flagged by Qudron's sensitive-data redactor; "
-            "anonymous free-model routing is blocked."
-        )
-
-
 def classify_job_data(
-    job: sqlite3.Row | Mapping[str, Any],
+    job: sqlite3.Row | dict[str, Any],
     prior_context: str = "",
     memory_context: str = "",
 ) -> str:
-    """Use the owner-declared task class, with conservative context escalation.
+    """Return the most restrictive data class justified by task metadata and context."""
+    def field(name: str, default: Any = "") -> Any:
+        try:
+            return job[name]
+        except (KeyError, IndexError, TypeError):
+            return default
 
-    Unknown/legacy jobs are internal. Public is an explicit owner declaration,
-    never inferred from a task type or a phrase in its prompt. Private prior
-    context or memory always escalates public content to internal.
-    """
-    task_type = str(job["task_type"])
-    if task_type in {
+    task_type = str(field("task_type", "research")).strip().lower()
+    declared = str(field("data_class", "internal")).strip().lower()
+    allowed = {"public", "internal", "confidential", "restricted"}
+    if declared not in allowed:
+        declared = "internal"
+
+    # Never downgrade an explicitly restricted or confidential classification.
+    if declared == "restricted":
+        return "restricted"
+    sensitive_task_types = {
         "cvpen_cv_creation", "cvpen_ats_audit",
         "customer_support_reply", "payment_reconciliation",
-    }:
+        "engineering_review",
+    }
+    if task_type in sensitive_task_types:
+        return "confidential"
+    if declared == "confidential":
         return "confidential"
 
-    try:
-        declared = str(job["data_class"]).strip().lower()
-    except (KeyError, IndexError):
-        declared = "internal"
-    if declared not in {"public", "internal", "confidential", "restricted"}:
-        declared = "internal"
-    if declared in {"confidential", "restricted"}:
-        return declared
-
-    prompt = str(job["prompt"] or "")
-    prior = str(prior_context or "")
-    memory = str(memory_context or "")
-    combined = prompt + "\n" + prior + "\n" + memory
+    prompt = str(field("prompt", "") or "")
+    combined = "\\n".join((prompt, str(prior_context or ""), str(memory_context or "")))
     lowered = combined.lower()
     restricted_markers = (
         "confidential", "internal-only", "internal only", "non-public",
@@ -1479,14 +1454,48 @@ def classify_job_data(
         "customer data", "payment evidence", "bank account", "password",
         "access token", "api key", "secret key",
     )
-    if (
-        (declared == "public" and (prior.strip() or memory.strip()))
-        or any(marker in lowered for marker in restricted_markers)
-        or redact_sensitive_text(combined) != combined
-    ):
+    if any(marker in lowered for marker in restricted_markers):
+        return "internal"
+    if redact_sensitive_text(combined) != combined:
+        return "internal"
+    if declared == "public" and (str(prior_context or "").strip() or str(memory_context or "").strip()):
         return "internal"
     return declared
 
+
+def validate_keyless_payload(job: sqlite3.Row | dict[str, Any], user_text: str, base_url: str) -> None:
+    """Fail closed unless an anonymous FreeLLM route receives public-only material."""
+    if not is_anonymous_freellm_route(base_url):
+        return
+    task_type = str(job.get("task_type", "research")) if isinstance(job, dict) else str(job["task_type"])
+    if task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation", "engineering_review",
+    }:
+        raise RuntimeError("Anonymous FreeLLM is limited to public research; this task type is not eligible")
+
+    lowered = str(user_text or "").lower()
+    explicit_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if any(marker in lowered for marker in explicit_markers):
+        raise RuntimeError("Anonymous FreeLLM blocked explicit confidential content")
+    if redact_sensitive_text(str(user_text or "")) != str(user_text or ""):
+        raise RuntimeError("Anonymous FreeLLM blocked by sensitive-data redactor")
+
+    # The assembled user_text also contains public task instructions; it is not
+    # itself prior/private memory. Classify durable job metadata separately, then
+    # scan the complete outbound text above for explicit markers and PII.
+    classification_job = job
+    if isinstance(job, dict) and "data_class" not in job and str(job.get("task_type", "research")) == "research":
+        # Legacy direct callers may submit only a research task and its public text.
+        classification_job = {**job, "data_class": "public"}
+    classification = classify_job_data(classification_job)
+    if classification != "public":
+        raise RuntimeError("Anonymous FreeLLM is limited to public research")
 
 def call_llm(
     job: sqlite3.Row, agent: dict[str, Any], instruction: str,
@@ -1667,9 +1676,17 @@ def call_llm(
             except (TypeError, ValueError):
                 provider_cost_valid = False
             billing_state = "reported" if provider_cost_valid else ("estimated" if recorded_cost is not None else "unknown")
+            try:
+                safe_recorded_cost = (
+                    float(recorded_cost)
+                    if recorded_cost is not None and math.isfinite(float(recorded_cost)) and float(recorded_cost) >= 0
+                    else None
+                )
+            except (TypeError, ValueError):
+                safe_recorded_cost = None
             finish_model_call_attempt(
                 attempt_id, status="succeeded", billing_state=billing_state,
-                reported_cost_usd=recorded_cost,
+                reported_cost_usd=safe_recorded_cost,
             )
             attempt_id = None
             reservation_id = None
@@ -1755,7 +1772,9 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
     if not sensitive_task:
         cloud_context = retrieve_cloud_memory_context(project)
         if cloud_context:
-            memory_context = (memory_context + "\n\n" + cloud_context)[-MAX_INPUT_CHARS:]
+            memory_context = merge_local_and_cloud_context(
+                memory_context, cloud_context, max_chars=MAX_INPUT_CHARS
+            )
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             web_result = search_web(str(job["prompt"])[:128], count=5, need_content=True)

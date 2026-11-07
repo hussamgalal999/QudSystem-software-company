@@ -8,7 +8,7 @@ These rules apply to every coding agent, CLI worker, reviewer, and human contrib
 - Define independent tasks in `ops/qudron-runtime/agent-workers/tasks.example.json` format. Each implementation task must have one narrow `allowed_paths` scope.
 - The launcher resolves each task to an immutable base commit and creates one branch/worktree per task.
 - Concurrent implementation tasks must have non-overlapping write scopes. The manifest validator rejects overlaps before a CLI is started.
-- Sensitive paths are denied by default. Adding a path to `allowed_paths` does not override `deny_paths`.
+- Sensitive paths are denied by default, including common Git, Docker, Azure, AWS, Google Cloud, GitHub CLI, Kubernetes, private-key, package-manager, and Terraform state locations. Adding a path to `allowed_paths` does not override `deny_paths`.
 - The launcher records status and changed paths in `run.json`. Patch export happens only after successful execution and scope validation. Raw stdout/stderr are not saved unless `--capture-logs` is explicitly passed, and are still withheld for failed, timed-out, or scope-violating tasks.
 
 ## Scope, secrets, and isolation

@@ -20,7 +20,7 @@ CRITICAL_GATE_PATTERN = re.compile(
     r"security|privacy|authoriz|approval|payment|consent|secret|"
     r"tenant_isolation|data_classification|owner_device|retention|rollback|"
     r"risk_acceptance|license_and_secret|written_scope|credential_scope|"
-    r"least_privilege|audit_trail|critical_high|source_provenance",
+    r"least_privilege|audit_trail|critical_high|source_provenance|fail_closed",
     re.IGNORECASE,
 )
 

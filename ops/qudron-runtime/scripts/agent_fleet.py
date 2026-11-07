@@ -275,7 +275,9 @@ def safe_write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if path.is_symlink():
         raise FleetError(f"Refusing to write through artifact symlink: {path}")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    # O_EXCL prevents following either a symlink or a hard link planted at an
+    # artifact path after the worker starts. Artifact names are unique per run.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     flags |= getattr(os, "O_BINARY", 0)
     descriptor = os.open(path, flags, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

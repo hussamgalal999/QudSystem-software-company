@@ -1,0 +1,31 @@
+{
+  "name": "Qudron Python Development",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "remoteUser": "vscode",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": {
+      "label": "Qudron local health/API (only when explicitly started)",
+      "onAutoForward": "notify"
+    }
+  },
+  "containerEnv": {
+    "PYTHONTONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "github.vscode-pull-request-github"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.testing.unittestEnabled": true,
+        "python.testing.pytestEnabled": false,
+        "editor.formatOnSave": false
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qudsystem.ltd/schemas/qudron-engineering-worker-result-v1.schema.json",
+  "title": "Qudron Engineering Worker Result",
+  "description": "Evidence-oriented handoff from one isolated coding worktree. Every result requires human review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "status", "summary", "base_sha", "head_sha", "changed_files", "tests", "risks", "requires_human_review"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "task_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,39}$" },
+    "status": { "enum": ["completed", "blocked", "failed"] },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 5000 },
+    "base_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "changed_files": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "status": { "enum": ["passed", "failed", "blocked", "not_run"] },
+          "evidence": { "type": "string", "maxLength": 1000 }
+        }
+      }
+    },
+    "risks": { "type": "array", "items": { "type": "string", "maxLength": 2000 } },
+    "requires_human_review": { "const": true }
+  }
+}

@@ -174,7 +174,7 @@ class AgentFleetTests(unittest.TestCase):
         prompt = agent_fleet.make_prompt(normalized)
         for value in task["acceptance_criteria"] + task["expected_checks"] + task["known_risks"]:
             self.assertIn(value, prompt)
-        self.assertIn("the launcher does not execute", prompt.lower())
+        self.assertIn("do not execute manifest text as shell commands", prompt.lower())
 
     def test_manifest_rejects_invalid_structured_contract_lists(self) -> None:
         base = {

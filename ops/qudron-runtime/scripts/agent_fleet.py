@@ -27,13 +27,13 @@ MAX_PARALLEL = 8
 DEFAULT_TIMEOUT_SECONDS = 3600
 DEFAULT_DENY_PATHS = (
     ".git/**", ".env", ".env.*", "**/.env", "**/.env.*",
-    "secrets/**", "**/secrets/**", "**/*private_key*", "**/*credentials*",
-    ".ssh/**", "**/.ssh/**", "**/id_rsa*", "**/id_ed25519*",
+    "secrets/**", "**/secrets/**", "*private_key*", "*credentials*", "**/*private_key*", "**/*credentials*",
+    ".ssh/**", "**/.ssh/**", "id_rsa*", "id_ed25519*", "**/id_rsa*", "**/id_ed25519*",
     "*.pem", "*.key", "*.p12", "*.pfx",
     "**/*.pem", "**/*.key", "**/*.p12", "**/*.pfx",
     ".aws/**", "**/.aws/**", ".kube/**", "**/.kube/**",
     ".npmrc", "**/.npmrc", ".netrc", "**/.netrc", ".pypirc", "**/.pypirc",
-    "**/service-account*.json", "**/credentials.json",
+    "service-account*.json", "**/service-account*.json", "credentials.json", "**/credentials.json",
 )
 
 # Only adapters whose non-interactive invocation and permission behaviour are

@@ -70,6 +70,8 @@ Inspect the run.json summary and task patches before sharing anything. Raw CLI l
 
 ## Manifest
 
+Validate manifests against `manifest.schema.json` before launch. Runtime validation remains authoritative for safe path normalization, default deny paths, and non-overlapping concurrent write scopes.
+
 Copy tasks.example.json and replace the examples with independent tasks. Every implementer must have a narrow, non-overlapping allowed_paths list. Review tasks must use an empty allowed_paths list and run against the implementation branch or commit in read-only mode.
 
 Allowed agent values: codex, gemini, claude, aider.

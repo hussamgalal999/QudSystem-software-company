@@ -27,7 +27,7 @@ This is a development tool, not the production Qudron queue. It does not create 
 - Resolves each task's base ref to an exact commit SHA.
 - Creates one worktree and branch per task.
 - Runs up to eight tasks concurrently; default is two.
-- Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands. Codex runs ephemerally and Claude Code session persistence is disabled for worker tasks.
+- Uses argument arrays and subprocess execution; it does not invoke a shell to assemble commands. Each CLI receives only basic runtime variables plus that provider's explicitly allowlisted API-key variables; GitHub, generic cloud, SSH-agent, and other providers' credentials are not inherited. Codex runs ephemerally and Claude Code session persistence is disabled for worker tasks.
 - Writes a run.json summary and exports a patch only for a successful, non-timeout task with at least one change and after every changed path passes the declared allowlist and denylist. Each exported patch includes a SHA-256 digest. Raw stdout/stderr are not saved by default.
 - Rejects changed files outside the declared allowed_paths scope, blocks sensitive paths by default, and exports no patch at all for a scope-violating task.
 - Rejects overlapping write scopes between concurrent implementation tasks before any worker is launched.
@@ -100,7 +100,7 @@ No automatic PR creation or merge is implemented. Keep human merge approval and 
 
 ## Safety model and limitations
 
-- Git worktrees isolate Git state and files, not OS processes, network access, credentials or CPU/RAM. Run this tool in a disposable devcontainer/VM, as a non-admin user, without the host Docker socket.
+- Git worktrees isolate Git state and files, not OS processes, network access, credentials or CPU/RAM. Run this tool in a disposable devcontainer/VM with a dedicated isolated HOME and provider login, as a non-admin user, without host home mounts, the host Docker socket, SSH agent or production access. The environment allowlist does not make an unsafe host a safe sandbox.
 - Codex workspace-write is still a code-execution environment inside its workspace. Do not use danger-full-access or YOLO for routine fleet tasks.
 - Gemini auto_edit and Claude acceptEdits do not blanket-approve shell commands; a worker may pause or fail if a command requires approval.
 - allowed_paths and deny_paths are post-run diff checks, not OS-level access-control boundaries. Raw stdout/stderr are withheld by default and remain suppressed for any scope-violating task, even when `--capture-logs` is enabled. Sensitive paths are denied by default, but an untrusted process can still read or alter files inside its VM; use a disposable restricted VM/container with no host credentials or Docker socket.

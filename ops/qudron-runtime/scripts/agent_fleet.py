@@ -45,6 +45,17 @@ AGENTS: dict[str, dict[str, str]] = {
     "claude": {"binary": "claude", "purpose": "acceptEdits for implement; plan for review"},
 }
 
+BASE_ENV_KEYS = {
+    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_MESSAGES",
+    "TERM", "NO_COLOR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+    "SYSTEMROOT", "WINDIR", "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERPROFILE",
+}
+AGENT_ENV_KEYS = {
+    "codex": {"OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID"},
+    "gemini": {"GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"},
+    "claude": {"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"},
+}
+
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 
@@ -225,6 +236,17 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return payload
 
 
+def build_agent_env(agent: str) -> dict[str, str]:
+    """Pass only runtime basics and credentials explicitly intended for this provider."""
+    if agent not in AGENT_ENV_KEYS:
+        raise FleetError(f"Unsupported provider environment: {agent}")
+    allowed = BASE_ENV_KEYS | AGENT_ENV_KEYS[agent]
+    env = {key: value for key, value in os.environ.items() if key in allowed}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return env
+
+
 def build_agent_command(agent: str, mode: str, prompt: str, prompt_file: Path, worktree: Path) -> tuple[list[str], str | None]:
     """Return argv and optional stdin; never invoke a shell."""
     if agent == "codex":
@@ -368,7 +390,7 @@ def execute_task(
         proc = subprocess.run(
             argv, cwd=str(prepared["worktree"]), input=stdin_text, text=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
-            check=False,
+            check=False, env=build_agent_env(agent),
         )
         stdout, stderr, exit_code = proc.stdout, proc.stderr, proc.returncode
         timed_out = False
@@ -513,7 +535,8 @@ def doctor(as_json: bool = False) -> int:
         version = None
         if path:
             proc = subprocess.run([path, "--version"], text=True, stdout=subprocess.PIPE,
-                                  stderr=subprocess.STDOUT, timeout=10, check=False)
+                                  stderr=subprocess.STDOUT, timeout=10, check=False,
+                                  env=build_agent_env(name))
             version = (proc.stdout.strip().splitlines() or [""])[0][:240]
         rows.append({"agent": name, "binary": info["binary"], "installed": bool(path),
                      "path": path, "version": version, "permission_profile": info["purpose"]})

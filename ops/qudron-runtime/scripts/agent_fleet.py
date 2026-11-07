@@ -34,6 +34,11 @@ DEFAULT_DENY_PATHS = (
     ".aws/**", "**/.aws/**", ".kube/**", "**/.kube/**",
     ".npmrc", "**/.npmrc", ".netrc", "**/.netrc", ".pypirc", "**/.pypirc",
     "service-account*.json", "**/service-account*.json", "credentials.json", "**/credentials.json",
+    ".docker/**", "**/.docker/**", ".azure/**", "**/.azure/**",
+    ".config/gh/**", "**/.config/gh/**", ".config/gcloud/**", "**/.config/gcloud/**",
+    ".direnv/**", "**/.direnv/**", ".git-credentials*", "**/.git-credentials*",
+    ".gitconfig", "**/.gitconfig", ".terraform/**", "**/.terraform/**",
+    "*.tfstate", "*.tfstate.*", "**/*.tfstate", "**/*.tfstate.*",
 )
 
 # Only adapters whose non-interactive invocation and permission behaviour are

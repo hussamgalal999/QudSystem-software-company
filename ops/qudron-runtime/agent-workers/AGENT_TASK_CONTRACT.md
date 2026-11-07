@@ -24,6 +24,8 @@ Every worker task must declare:
 
 ## Review artifact contract
 
+The integration owner must validate the run report against `run.schema.json` and require `requires_human_review: true`.
+
 The integration owner must require:
 
 - exact base SHA and worker branch;

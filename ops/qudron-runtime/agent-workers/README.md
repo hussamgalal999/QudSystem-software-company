@@ -53,12 +53,14 @@ Browse Code and CodexFlow are bridges rather than isolated coding CLIs. A bridge
 
 Run from the ops/qudron-runtime directory:
 
-    python scripts/agent_fleet.py doctor
-    python scripts/agent_fleet.py doctor --json
-    python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2
+```bash
+python scripts/agent_fleet.py doctor
+python scripts/agent_fleet.py doctor --json
+python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2
 
 # Opt in to raw CLI stdout/stderr for successful in-scope tasks only:
-    python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2 --capture-logs
+python scripts/agent_fleet.py run --manifest agent-workers/tasks.example.json --max-parallel 2 --capture-logs
+```
 
 The source checkout must be clean. The example manifest is illustrative; launching it invokes the selected providers and may consume account quota. Confirm installed CLIs, authentication, spending limits and the isolated host before running any real task. Default artifacts are placed next to the checkout, not inside it:
 

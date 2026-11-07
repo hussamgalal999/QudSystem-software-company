@@ -194,6 +194,7 @@
           ],
           "enum": [
             "scope_validation_failed",
+            "worker_execution_failed",
             null
           ]
         },

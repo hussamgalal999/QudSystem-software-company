@@ -94,6 +94,22 @@ class AgentFleetTests(unittest.TestCase):
                 else:
                     os.environ[key] = value
 
+    def test_safe_write_uses_private_mode_and_refuses_symlink_targets(self) -> None:
+        artifact = self.artifacts / "private-output.txt"
+        agent_fleet.safe_write(artifact, "private\n")
+        self.assertEqual(os.stat(artifact).st_mode & 0o777, 0o600)
+        self.assertEqual(artifact.read_text(encoding="utf-8"), "private\n")
+        target = self.tmp / "sensitive-target.txt"
+        target.write_text("keep-this-content\n", encoding="utf-8")
+        link = self.artifacts / "hostile-output.txt"
+        try:
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks are unavailable on this platform")
+        with self.assertRaises(agent_fleet.FleetError):
+            agent_fleet.safe_write(link, "overwrite-attempt\n")
+        self.assertEqual(target.read_text(encoding="utf-8"), "keep-this-content\n")
+
     def test_manifest_rejects_boolean_version_and_unknown_fields(self) -> None:
         payload = {"version": True, "tasks": []}
         path = self.tmp / "manifest.json"
@@ -234,6 +250,8 @@ class AgentFleetTests(unittest.TestCase):
         artifact_dir = Path(run_report["artifact_dir"])
         saved_report = json.loads((artifact_dir / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(saved_report, run_report)
+        self.assertEqual(os.stat(artifact_dir).st_mode & 0o777, 0o700)
+        self.assertEqual(os.stat(artifact_dir / "run.json").st_mode & 0o777, 0o600)
         result = run_report["tasks"][0]
         self.assertEqual(result["status"], "completed")
         self.assertTrue(result["logs_exported"])

@@ -143,7 +143,7 @@ class MCPToolAgentAdapter:
                 raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
             self._request_sync(
                 agent, "notifications/initialized", {}, notification=True,
-                session_id=session_id,
+                session_id=session_id if session_id is not None else "",
             )
             return session_id
 

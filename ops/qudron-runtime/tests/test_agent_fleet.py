@@ -411,5 +411,38 @@ class AgentFleetTests(unittest.TestCase):
         self.assertFalse((artifact_dir / "failed-worker.stderr.txt").exists())
         self.assertFalse((artifact_dir / "failed-worker.patch").exists())
 
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group termination test")
+    def test_timeout_kills_worker_descendant_processes(self) -> None:
+        marker = self.tmp / "orphan-process-survived.txt"
+        codex = self.bin / "codex"
+        child_code = (
+            "import time; from pathlib import Path; time.sleep(2); "
+            f"Path({str(marker)!r}).write_text('survived', encoding='utf-8')"
+        )
+        codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "import subprocess, sys, time\n"
+            f"subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+            "time.sleep(30)\n",
+            encoding="utf-8",
+        )
+        codex.chmod(0o755)
+        manifest_path = self.write_manifest([{
+            "id": "timeout-worker", "agent": "codex", "mode": "implement", "base_ref": "HEAD",
+            "allowed_paths": ["generated.txt"], "prompt": "wait until timeout",
+        }])
+        task = agent_fleet.load_manifest(manifest_path)["tasks"][0]
+        artifact_dir = self.artifacts / "timeout-test"
+        worktree_root = self.worktrees / "timeout-test"
+        artifact_dir.mkdir(parents=True)
+        worktree_root.mkdir(parents=True)
+        prepared = agent_fleet.prepare_task(self.repo, task, "timeout-test-12345678", worktree_root, artifact_dir)
+        result = agent_fleet.execute_task(prepared, artifact_dir, timeout=1, capture_logs=True)
+        self.assertEqual(result["status"], "timed_out")
+        self.assertFalse(result["patch_exported"])
+        self.assertFalse(result["logs_exported"])
+        time.sleep(2.2)
+        self.assertFalse(marker.exists(), "a worker child process survived its parent's timeout")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

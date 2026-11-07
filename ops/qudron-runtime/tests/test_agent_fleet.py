@@ -293,6 +293,15 @@ class AgentFleetTests(unittest.TestCase):
         self.assertTrue(agent_fleet.path_is_denied(
             ".aws/credentials", agent_fleet.DEFAULT_DENY_PATHS
         ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            ".docker/config.json", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            ".config/gh/hosts.yml", agent_fleet.DEFAULT_DENY_PATHS
+        ))
+        self.assertTrue(agent_fleet.path_is_denied(
+            "terraform.tfstate", agent_fleet.DEFAULT_DENY_PATHS
+        ))
 
     def test_default_denied_secret_path_is_rejected_even_when_allowlisted(self) -> None:
         codex = self.bin / "codex"

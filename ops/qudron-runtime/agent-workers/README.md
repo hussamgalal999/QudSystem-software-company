@@ -67,7 +67,7 @@ The source checkout must be clean. The example manifest is illustrative; launchi
     ../.qudron-agent-worktrees/<run-id>/<task-id>/
     ../.qudron-agent-artifacts/<run-id>/
 
-Inspect the run.json summary and task patches before sharing anything. Raw CLI logs are omitted by default; use `--capture-logs` only in an approved environment and only when the output is safe to retain. Artifacts may contain proprietary source code or prompt text; sanitize them before external sharing.
+Inspect the run.json summary and task patches before sharing anything. Raw CLI logs are omitted by default; use `--capture-logs` only in an approved environment and only when the output is safe to retain. Even with opt-in, logs are withheld for failed, timed-out, or scope-violating tasks. Artifacts may contain proprietary source code or prompt text; sanitize them before external sharing.
 
 ## Manifest
 

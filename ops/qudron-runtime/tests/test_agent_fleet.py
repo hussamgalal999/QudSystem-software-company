@@ -48,6 +48,34 @@ class AgentFleetTests(unittest.TestCase):
         path.write_text(json.dumps({"version": 1, "max_parallel": 2, "tasks": tasks}), encoding="utf-8")
         return path
 
+    def test_manifest_rejects_boolean_version_and_unknown_fields(self) -> None:
+        payload = {"version": True, "tasks": []}
+        path = self.tmp / "manifest.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaises(agent_fleet.FleetError):
+            agent_fleet.load_manifest(path)
+
+        path.write_text(json.dumps({
+            "version": 1, "unexpected": True, "tasks": [{
+                "id": "valid-task", "agent": "codex", "mode": "implement",
+                "allowed_paths": ["src/**"], "prompt": "work",
+            }],
+        }), encoding="utf-8")
+        with self.assertRaisesRegex(agent_fleet.FleetError, "unsupported fields"):
+            agent_fleet.load_manifest(path)
+
+    def test_manifest_rejects_unknown_task_fields_and_duplicate_paths(self) -> None:
+        base = {
+            "id": "valid-task", "agent": "codex", "mode": "implement",
+            "allowed_paths": ["src/**"], "prompt": "work",
+        }
+        path = self.write_manifest([{**base, "surprise": "ignored?"}])
+        with self.assertRaisesRegex(agent_fleet.FleetError, "unsupported fields"):
+            agent_fleet.load_manifest(path)
+        path = self.write_manifest([{**base, "allowed_paths": ["src/**", "src/**"]}])
+        with self.assertRaisesRegex(agent_fleet.FleetError, "cannot contain duplicates"):
+            agent_fleet.load_manifest(path)
+
     def test_manifest_rejects_path_traversal(self) -> None:
         path = self.write_manifest([{
             "id": "unsafe-task", "agent": "codex", "mode": "implement",

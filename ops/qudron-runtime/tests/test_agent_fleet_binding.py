@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agent_fleet
+from scripts import agent_fleet
 
 
 class WorkerBindingValidationTests(unittest.TestCase):

@@ -1667,9 +1667,17 @@ def call_llm(
             except (TypeError, ValueError):
                 provider_cost_valid = False
             billing_state = "reported" if provider_cost_valid else ("estimated" if recorded_cost is not None else "unknown")
+            try:
+                safe_recorded_cost = (
+                    float(recorded_cost)
+                    if recorded_cost is not None and math.isfinite(float(recorded_cost)) and float(recorded_cost) >= 0
+                    else None
+                )
+            except (TypeError, ValueError):
+                safe_recorded_cost = None
             finish_model_call_attempt(
                 attempt_id, status="succeeded", billing_state=billing_state,
-                reported_cost_usd=recorded_cost,
+                reported_cost_usd=safe_recorded_cost,
             )
             attempt_id = None
             reservation_id = None

@@ -335,7 +335,7 @@ def write_patch(worktree: Path, base_sha: str, patch_path: Path, files: list[str
     # This function must only be called after every changed path has passed the
     # task's allowlist check. Passing the validated paths also limits the diff.
     diff = git(
-        ["diff", "--binary", "--no-ext-diff", base_sha, "--", *files],
+        ["--literal-pathspecs", "diff", "--binary", "--no-ext-diff", base_sha, "--", *files],
         worktree,
     ).stdout if files else ""
     safe_write(patch_path, diff)
@@ -453,7 +453,7 @@ def execute_task(
         violations = files[:]
     execution_succeeded = exit_code == 0 and not timed_out
     diff_check = git(
-        ["diff", "--check", prepared["base_sha"], "--", *files],
+        ["--literal-pathspecs", "diff", "--check", prepared["base_sha"], "--", *files],
         prepared["worktree"],
         check=False,
     )

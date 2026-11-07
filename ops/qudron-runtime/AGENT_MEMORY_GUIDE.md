@@ -11,7 +11,7 @@ The runtime adds four continuity tables in the same Qudron database file:
 | continuity_events | Audit trail of stage started/retried/resumed/completed/failed | event ID |
 | external_agent_tasks | Remote task identity and status for Manus or other approved providers | provider + external_task_id |
 
-The original project memory table remains the shared project-level memory. Agents receive shared project context and role-specific memory through separate channels only when the selected provider is authorized for the data class. Anonymous/keyless routes omit the dedicated memory channel; private role memory is never moved into always-sent prior context.
+The original project memory table remains the shared project-level memory. During swarm execution, `prior_context` may include shared project/portfolio memory, a prior-stage result, or a review draft; the first producer receives shared context, while reviewers receive shared context plus the draft. Role-specific persistent memory is added through the separate `memory_context` channel. The worker evaluates both channels together before choosing a provider. Anonymous/keyless routes omit the dedicated memory channel and accept public data only; any non-empty prior or memory context escalates a declared-public task to internal, so context-bearing jobs fail closed on anonymous routes rather than sending that context. Explicit confidential/restricted declarations retain their stricter classification, and sensitive task types/markers are escalated before route selection. Private role memory is not copied into the always-sent prior-context string.
 
 ## Provider privacy boundary
 

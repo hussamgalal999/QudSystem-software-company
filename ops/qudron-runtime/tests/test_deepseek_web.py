@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +31,20 @@ class WebTests(unittest.TestCase):
         }, clear=True), self.assertRaisesRegex(dw.WebResearchError, "DEEPSEEK_API_KEY"):
             dw.search_web("official model docs")
 
+    def test_zero_daily_cap_rejects_even_when_cached(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
+            "DEEPSEEK_API_KEY": "test",
+            "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "1",
+            "QUDRON_WEB_SEARCH_DB": str(Path(tmp) / "usage.sqlite3"),
+        }, clear=True):
+            with patch.object(dw, "open_credential_request", return_value=Resp({
+                "results": [{"title": "Cached", "content": "result"}]
+            })):
+                dw.search_web("daily cap check")
+            with patch.dict(os.environ, {"QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "0"}):
+                with self.assertRaisesRegex(dw.WebResearchError, "disabled"):
+                    dw.search_web("daily cap check")
+
     def test_search_is_metered_and_returns_structured_sources(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
             "DEEPSEEK_API_KEY": "test",
@@ -49,7 +64,7 @@ class WebTests(unittest.TestCase):
     def test_identical_search_reuses_cache_without_spending_another_call(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
             "DEEPSEEK_API_KEY": "test",
-            "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "1",
+            "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "2",
             "QUDRON_WEB_SEARCH_DB": str(Path(tmp) / "usage.sqlite3"),
         }, clear=True):
             response = Resp({"results": [{"title": "Official", "url": "https://example.com", "content": "source"}]})
@@ -66,6 +81,38 @@ class WebTests(unittest.TestCase):
     def test_cache_key_does_not_store_raw_query(self):
         self.assertNotIn("secret-looking-query", dw._cache_key("secret-looking-query", 5, True))
         self.assertEqual(dw._cache_key("Same query", 5, True), dw._cache_key(" same   QUERY ", 5, True))
+
+    def test_cache_write_failure_keeps_live_results(self):
+        with patch.dict(os.environ, {
+            "DEEPSEEK_API_KEY": "test",
+            "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "1",
+        }, clear=True):
+            with patch.object(dw, "_read_search_cache", return_value=None):
+                with patch.object(dw, "_request", return_value=({
+                    "results": [{"title": "Live result", "content": "kept"}]
+                }, {"daily_calls": 1})):
+                    with patch.object(dw, "_write_search_cache", side_effect=sqlite3.OperationalError("disk full")):
+                        result = dw.search_web("cache write should be best effort")
+            self.assertEqual(result["results"][0]["title"], "Live result")
+
+    def test_empty_search_result_is_not_cached(self):
+        with patch.dict(os.environ, {
+            "DEEPSEEK_API_KEY": "test",
+            "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "1",
+        }, clear=True):
+            with patch.object(dw, "_read_search_cache", return_value=None):
+                with patch.object(dw, "_request", return_value=({"results": []}, {"daily_calls": 1})):
+                    with patch.object(dw, "_write_search_cache") as write:
+                        result = dw.search_web("empty result")
+            write.assert_not_called()
+            self.assertEqual(result["results"], [])
+
+    def test_fetch_null_fields_are_empty_and_not_charged(self):
+        with patch.object(dw, "_request", return_value=({"title": None, "content": None}, {})):
+            result = dw.fetch_page("https://example.com")
+        self.assertEqual(result["title"], "")
+        self.assertEqual(result["content"], "")
+        self.assertEqual(result["cost_usd"], 0.0)
 
     def test_daily_call_cap_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {

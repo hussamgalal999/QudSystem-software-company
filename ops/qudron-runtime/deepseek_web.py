@@ -26,6 +26,8 @@ if not is_allowed_credential_endpoint(BASE):
 COST_PER_SUCCESS_USD = 0.00075
 DEFAULT_SEARCH_CACHE_TTL_SECONDS = 21_600
 MAX_CACHED_SEARCH_BYTES = 100_000
+MAX_SEARCH_CACHE_ROWS = 500
+MAX_SEARCH_CACHE_TOTAL_BYTES = 10_000_000
 
 
 class WebResearchError(RuntimeError):
@@ -44,8 +46,24 @@ def _connect() -> sqlite3.Connection:
     return db
 
 
+def _daily_limit() -> int:
+    try:
+        return max(0, int(os.getenv("QUDRON_WEB_SEARCH_MAX_DAILY_CALLS", "0")))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _require_search_enabled() -> None:
+    if not os.getenv("DEEPSEEK_API_KEY", "").strip():
+        raise WebResearchError("DEEPSEEK_API_KEY is not configured in the host secret manager")
+    if _daily_limit() < 1:
+        raise WebResearchError(
+            "Web search is disabled; configure QUDRON_WEB_SEARCH_MAX_DAILY_CALLS after setting a spend cap"
+        )
+
+
 def _reserve_call(kind: str) -> dict[str, object]:
-    limit = max(0, int(os.getenv("QUDRON_WEB_SEARCH_MAX_DAILY_CALLS", "0")))
+    limit = _daily_limit()
     if limit < 1:
         raise WebResearchError(
             "Web search is disabled; configure QUDRON_WEB_SEARCH_MAX_DAILY_CALLS after setting a spend cap"
@@ -81,9 +99,8 @@ def _reserve_call(kind: str) -> dict[str, object]:
 
 
 def _request(path: str, payload: dict[str, object]) -> tuple[dict[str, object], dict[str, object]]:
+    _require_search_enabled()
     key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if not key:
-        raise WebResearchError("DEEPSEEK_API_KEY is not configured in the host secret manager")
     reservation = _reserve_call(path.rsplit("/", 1)[-1])
     request = Request(
         BASE + path,
@@ -120,51 +137,75 @@ def _cache_ttl() -> int:
     return max(0, min(604_800, configured))
 
 
+def _ensure_cache_table(db: sqlite3.Connection) -> None:
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS web_search_cache("
+        "cache_key TEXT PRIMARY KEY,results_json TEXT NOT NULL,created_at REAL NOT NULL)"
+    )
+
+
 def _read_search_cache(key: str) -> list[dict[str, object]] | None:
     ttl = _cache_ttl()
     if ttl == 0:
         return None
     import time
 
-    with _connect() as db:
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS web_search_cache("
-            "cache_key TEXT PRIMARY KEY,results_json TEXT NOT NULL,created_at REAL NOT NULL)"
-        )
-        db.execute("DELETE FROM web_search_cache WHERE created_at<?", (time.time() - ttl,))
-        row = db.execute(
-            "SELECT results_json FROM web_search_cache WHERE cache_key=? AND created_at>=?",
-            (key, time.time() - ttl),
-        ).fetchone()
-    if not row:
-        return None
     try:
+        with _connect() as db:
+            _ensure_cache_table(db)
+            db.execute("DELETE FROM web_search_cache WHERE created_at<?", (time.time() - ttl,))
+            row = db.execute(
+                "SELECT results_json FROM web_search_cache WHERE cache_key=? AND created_at>=?",
+                (key, time.time() - ttl),
+            ).fetchone()
+        if not row:
+            return None
         results = json.loads(row[0])
-    except (TypeError, json.JSONDecodeError):
+        return results if isinstance(results, list) and results else None
+    except (sqlite3.Error, OSError, TypeError, json.JSONDecodeError):
+        # Cache is an optimization. A storage problem must not block live research.
         return None
-    return results if isinstance(results, list) else None
 
 
 def _write_search_cache(key: str, results: list[dict[str, object]]) -> None:
     ttl = _cache_ttl()
-    if ttl == 0:
+    if ttl == 0 or not results:
         return
     encoded = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
-    if len(encoded.encode("utf-8")) > MAX_CACHED_SEARCH_BYTES:
+    encoded_size = len(encoded.encode("utf-8"))
+    if encoded_size > MAX_CACHED_SEARCH_BYTES:
         return
     import time
 
-    with _connect() as db:
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS web_search_cache("
-            "cache_key TEXT PRIMARY KEY,results_json TEXT NOT NULL,created_at REAL NOT NULL)"
-        )
-        db.execute(
-            "INSERT INTO web_search_cache(cache_key,results_json,created_at) VALUES(?,?,?) "
-            "ON CONFLICT(cache_key) DO UPDATE SET "
-            "results_json=excluded.results_json,created_at=excluded.created_at",
-            (key, encoded, time.time()),
-        )
+    try:
+        with _connect() as db:
+            _ensure_cache_table(db)
+            db.execute(
+                "INSERT INTO web_search_cache(cache_key,results_json,created_at) VALUES(?,?,?) "
+                "ON CONFLICT(cache_key) DO UPDATE SET "
+                "results_json=excluded.results_json,created_at=excluded.created_at",
+                (key, encoded, time.time()),
+            )
+            # Bound total cache storage, not merely each individual row.
+            db.execute(
+                "DELETE FROM web_search_cache WHERE cache_key IN ("
+                "SELECT cache_key FROM web_search_cache ORDER BY created_at DESC "
+                "LIMIT -1 OFFSET ?)",
+                (MAX_SEARCH_CACHE_ROWS,),
+            )
+            rows = db.execute(
+                "SELECT cache_key,length(results_json) FROM web_search_cache "
+                "ORDER BY created_at DESC"
+            ).fetchall()
+            total_bytes = sum(int(row[1]) for row in rows)
+            for old_key, old_size in reversed(rows):
+                if total_bytes <= MAX_SEARCH_CACHE_TOTAL_BYTES:
+                    break
+                db.execute("DELETE FROM web_search_cache WHERE cache_key=?", (old_key,))
+                total_bytes -= int(old_size)
+    except (sqlite3.Error, OSError):
+        # Preserve provider results even if this best-effort cache cannot be written.
+        return
 
 
 def _bounded_results(results: object, count: int) -> list[dict[str, object]]:
@@ -194,6 +235,8 @@ def search_web(query: str, count: int = 5, need_content: bool = True) -> dict[st
     if not 1 <= count <= 10:
         raise ValueError("count must be between 1 and 10 for the bounded pilot")
 
+    # The cache must never bypass the owner's credential or daily-call policy.
+    _require_search_enabled()
     key = _cache_key(query, count, need_content)
     cached = _read_search_cache(key)
     if cached is not None:
@@ -241,8 +284,8 @@ def _safe_url(value: str) -> str:
 def fetch_page(url: str) -> dict[str, object]:
     target = _safe_url(url)
     data, usage = _request("/fetch", {"url": target})
-    title = str(data.get("title", ""))[:240]
-    content = str(data.get("content", ""))[:12_000]
+    title = str(data.get("title") or "")[:240]
+    content = str(data.get("content") or "")[:12_000]
     return {
         "url": target,
         "title": title,

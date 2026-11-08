@@ -29,11 +29,13 @@ class FakeResponse:
 
 class ManusAdapterTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = ContinuityStore(Path(self.temp.name) / "state.sqlite3")
         self.adapter = ManusAdapter("test-secret", store=self.store)
 
     def tearDown(self):
+        if hasattr(self, "store") and hasattr(self.store, "close"):
+            self.store.close()
         self.temp.cleanup()
 
     def test_create_task_uses_v2_private_task_contract_and_persists_reference(self):

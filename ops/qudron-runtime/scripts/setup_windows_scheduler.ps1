@@ -17,8 +17,8 @@ if ($Uninstall) {
 Write-Host "Setting up Windows Task Scheduler for Qudron Autonomous Guardian..." -ForegroundColor Cyan
 
 $Action = New-ScheduledTaskAction -Execute $PythonPath -Argument "`"$ScriptPath`""
-# Trigger every 15 minutes, repeating indefinitely
-$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration ([TimeSpan]::MaxValue)
+# Trigger every 15 minutes, repeating for 10 years (indefinitely)
+$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $Settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `

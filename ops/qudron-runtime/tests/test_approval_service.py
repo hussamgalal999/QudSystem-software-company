@@ -12,7 +12,7 @@ from approval_service import (
 
 class ApprovalServiceTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.database = Path(self.temp.name) / "approvals.sqlite3"
         self.private_key = Ed25519PrivateKey.generate()
         self.public_key = self.private_key.public_key()

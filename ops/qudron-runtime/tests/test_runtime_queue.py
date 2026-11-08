@@ -10,7 +10,7 @@ import qudron_worker as worker
 
 class RuntimeQueueTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self.temp.name)
         worker.DB_PATH = root / "state.sqlite3"
         worker.REPORTS_DIR = root / "reports"

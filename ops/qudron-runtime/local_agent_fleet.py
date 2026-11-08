@@ -362,7 +362,10 @@ class DurableTaskQueue:
             """, (now, row["task_id"]))
             conn.commit()
 
-        return dict(row)
+        res = dict(row)
+        res["attempts"] += 1
+        res["status"] = "running"
+        return res
 
     def complete(self, task_id: str, result_ref: str) -> None:
         now = datetime.now(timezone.utc).isoformat()

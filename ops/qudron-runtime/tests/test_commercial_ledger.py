@@ -8,7 +8,7 @@ import commercial_ledger as ledger
 
 class CommercialLedgerTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.old_path = ledger.DB_PATH
         self.old_key = os.environ.get("QUDRON_CONTACT_HMAC_KEY")
         os.environ["QUDRON_CONTACT_HMAC_KEY"] = "test-key-that-is-at-least-32-characters-long"

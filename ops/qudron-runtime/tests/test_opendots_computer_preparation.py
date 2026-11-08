@@ -24,7 +24,8 @@ class OpenDotsComputerPreparationTests(unittest.TestCase):
             token_line = next(line for line in result.splitlines() if line.startswith("COMPUTER_SUPERVISOR_TOKEN="))
             token = token_line.split("=", 1)[1]
             self.assertGreaterEqual(len(token), 48)
-            self.assertTrue(env_file.stat().st_mode & 0o077 == 0)
+            if sys.platform != "win32":
+                self.assertTrue(env_file.stat().st_mode & 0o077 == 0)
 
     def test_does_not_rotate_existing_valid_tokens(self):
         with tempfile.TemporaryDirectory() as directory:

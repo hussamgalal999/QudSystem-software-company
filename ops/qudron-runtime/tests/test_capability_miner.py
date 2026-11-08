@@ -9,7 +9,7 @@ from capability_registry import get_capability, initialize_registry
 
 class CapabilityMinerTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db = Path(self.tmp.name) / "capabilities.sqlite3"
         initialize_registry(self.db)
 

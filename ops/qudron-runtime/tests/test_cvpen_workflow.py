@@ -4,7 +4,8 @@ from pathlib import Path
 
 class CVPenWorkflowTests(unittest.TestCase):
     def test_paid_cv_workflow_has_payment_gate_before_cv_creation(self):
-        data = json.loads(Path("service_workflows.json").read_text(encoding="utf-8"))
+        wf_path = Path("service_workflows.json") if Path("service_workflows.json").exists() else Path(__file__).resolve().parent.parent / "service_workflows.json"
+        data = json.loads(wf_path.read_text(encoding="utf-8"))
         workflow = data["workflows"]["cvpen_order"]
         steps = workflow["steps"]
         ids = [step["id"] for step in steps]

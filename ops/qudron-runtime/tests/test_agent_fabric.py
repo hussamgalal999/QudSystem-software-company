@@ -307,7 +307,7 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_owner_approval_requires_scoped_one_time_token(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             private_key = Ed25519PrivateKey.generate()
             issuer = ApprovalTokenIssuer(private_key)
             service = ApprovalService(private_key.public_key(), Path(directory) / "approvals.sqlite3")

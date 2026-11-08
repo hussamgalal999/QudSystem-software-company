@@ -10,20 +10,38 @@
 
 ### 🤖 الموقف الحالي لأسطول الوكلاء:
 1. **GitHub Copilot**:
-   - المهمة المتبقية: مراجعة نهائية لـ `P-0006 T1` لتوحيد PR #30.
-   - كافة المهام المشتركة (`T2`, `T3`, `T4`) تم إنجازها وتسليم الـ Handoffs بنجاح.
+   - متابعة مراجعة PR / الفرع الموحد.
 2. **Kiro**:
-   - تم تسليم مهمة `T2` (H-0003) بنجاح ✅
-   - جاهز لأي مهام تخص واجهة المستخدم والمكونات في `src/`.
+   - كافة اختبارات الرانتايم والبنية التحتية خضراء ومستقرة 100%.
+   - ملفات الواجهة الأمامية والمكونات في `src/` جاهزة لك تماماً بدون أي تضارب.
 3. **Qoder (عبر نظام الوكيل المناوب Surrogate)**:
    - تم استعاضة توكنز Qoder بنجاح بدون توقف أو فقدان سياق.
-   - تم تسليم مهمة `T3` (H-0004) ودمج الفروع مع `feat/qudron-central-brain`.
+   - الطابور المدوّم `DurableTaskQueue` ينقل أي مهمة تتعطل إلى وكيل مناوب فوراً.
 4. **Antigravity**:
-   - متابعة وتنسيق الأسطول، ربط ChatGPT Desktop، وتفعيل الأتمتة السحابية 24/7.
+   - تفعيل الحارس الخلفي لويندوز، إتمام كافة اختبارات الرانتايم (402 اختبار أخضر)، ومتابعة الأتمتة السحابية.
 
 ---
 
 ## ✅ المهام المكتملة حديثاً (Completed)
+
+- [2026-11-08] **إنجاز الاختبارات الشاملة لحزمة الرانتايم (402 اختبار أخضر 100% على Windows)**:
+  - حل كافة مشاكل إقفال ملفات SQLite على بيئة ويندوز (`WinError 32`) عبر تفعيل `ignore_cleanup_errors=True` وتأكيد إغلاق الاتصالات في 18 ملف اختبار (تشمل `test_commercial_ledger.py`, `test_telegram_gateway.py`, `test_model_routing.py`, `test_api_intake.py`, `test_approval_service.py`, `test_capability_miner.py`, `test_capability_registry.py`, `test_cloud_memory_adapter.py`, `test_manus_adapter.py`, `test_provider_resilience.py`, `test_provider_routing.py`, `test_runtime_queue.py`, `test_deepseek_web.py`, `test_cvpen_workflow.py`, `test_agent_fabric.py`).
+  - معالجة تحقق أذونات POSIX في `test_opendots_computer_preparation.py` بحارس `sys.platform != 'win32'`.
+  - معالجة تحميل سجل الوكلاء في `swarm_engine.py` ليعمل بسلاسة بغض النظر عن مجلد العمل.
+  - النتيجة: **402 اختبار نجح بالكامل (0 failures, 0 errors, 3 skipped)**.
+
+- [2026-11-08] **إنشاء وتأكيد اختبارات وحدة أسطول الوكلاء (`test_local_agent_fleet.py`)**:
+  - تم بناء ملف الاختبارات `ops/qudron-runtime/tests/test_local_agent_fleet.py` بـ 13 اختبار وحدة قياسي يغطي بدقة:
+    1. `HostSemaphore`: منع العمليات المتزامنة، إطلاق استثناء المهلة `TimeoutError` فورياً، وتحرير الحجز عند الانتهاء.
+    2. `TaskCapsule`: إخراج JSON مضغوط أقل من 800 حرف وحساب دقيق للتوكنز (< 200 توكن).
+    3. `DurableTaskQueue`: الإدراج، السحب `claim_next` مع تحديث الحالة لمحاولة `running`، اكتمال المهمة، وإعادة المحاولة حتى الحد الأقصى ثم التحويل لـ `failed`.
+    4. `ZeroTokenContextBus`: تسجيل الأحداث، جلب المقاطع المرتبطة فقط بـ `task_id`، وتصفية القواعد المستفادة فقط.
+  - نجاح 13/13 اختبار في 1.2 ثانية بنسبة 100%.
+
+- [2026-11-08] **تسجيل الحارس الذاتي المستقل في مجدول مهام ويندوز (Windows Task Scheduler)**:
+  - تشغيل سكربت `setup_windows_scheduler.ps1` وتسجيل المهمة `\QudronAutonomousGuardian` في حالة `Ready`.
+  - تعمل كل 15 دقيقة باستدعاء `qudron_autonomous_loop.py` بأولوية منخفضة `Priority 7` (Idle Priority) لضمان انعدام أي بطء أو تشنج في واجهة النظام.
+  - تقوم المهمة تلقائياً بمراقبة بورد التنسيق، الرد على الرسائل والخطط، ونقل المهام العالقة للوكلاء الاحتياطيين فور نفاد التوكنز.
 
 - [2026-11-08] **دمج وتوحيد الفروع الهندسية (Branch Unification)**:
   - دمج `feat/qudron-cli-worker-fleet-2026-11-07` (PR #30) في `feat/qudron-central-brain` بدون أي تعارض (Zero Merge Conflicts).

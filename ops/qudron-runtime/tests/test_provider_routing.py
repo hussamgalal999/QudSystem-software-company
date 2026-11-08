@@ -45,7 +45,7 @@ def route(route_id, provider_id, model, base_url, *, primary=False, accepted=("p
 
 class ProviderRoutingTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.old_db = worker.DB_PATH
         worker.DB_PATH = Path(self.temp.name) / "qudron.sqlite3"
         worker.init_db()

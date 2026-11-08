@@ -69,6 +69,12 @@ DEFAULT_AGENT_REGISTRY = {
 }
 
 def load_agent_registry(path: str | Path | None = None) -> dict[str, Any]:
+    if path is not None:
+        p = Path(path)
+        if not p.exists():
+            candidate = Path(__file__).resolve().parent / p
+            if candidate.exists():
+                path = candidate
     if path is None or not Path(path).exists():
         return DEFAULT_AGENT_REGISTRY
     raw = json.loads(Path(path).read_text(encoding="utf-8"))

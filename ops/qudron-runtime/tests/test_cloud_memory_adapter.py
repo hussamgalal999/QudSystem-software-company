@@ -27,10 +27,12 @@ class FakeResponse:
 
 class CloudMemoryAdapterTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = ContinuityStore(Path(self.temp.name) / "state.sqlite3")
 
     def tearDown(self):
+        if hasattr(self, "store") and hasattr(self.store, "close"):
+            self.store.close()
         self.temp.cleanup()
 
 

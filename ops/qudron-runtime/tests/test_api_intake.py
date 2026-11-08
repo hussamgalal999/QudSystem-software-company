@@ -11,7 +11,7 @@ import qudron_worker as worker
 
 class AuthenticatedIntakeApiTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         worker.DB_PATH = Path(self.temp.name) / "api.sqlite3"
         worker.init_db()
         self.old_token = worker.API_TOKEN

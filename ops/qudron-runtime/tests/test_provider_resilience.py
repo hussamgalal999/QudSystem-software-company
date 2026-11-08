@@ -34,7 +34,7 @@ class FakeResponse:
 
 class ProviderResilienceTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db_path = Path(self.temp.name) / "provider-health.sqlite3"
         self.store = ProviderHealthStore(self.db_path)
 

@@ -23,7 +23,7 @@ class FakeResponse:
 class ModelRoutingTests(unittest.TestCase):
     def setUp(self):
         self.original_db_path = worker.DB_PATH
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         worker.DB_PATH = Path(self.temp.name) / "usage.sqlite3"
         worker.init_db()
 

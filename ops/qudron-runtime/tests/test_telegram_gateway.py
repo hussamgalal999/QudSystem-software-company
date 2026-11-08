@@ -92,7 +92,7 @@ class TelegramGatewayTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from telegram_gateway import TelegramGateway
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             gateway = TelegramGateway()
             gateway.notification_db_path = Path(tmp) / "notifications.sqlite3"
             gateway.owner_ids = {"111"}
@@ -110,7 +110,7 @@ class TelegramGatewayTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from telegram_gateway import TelegramGateway
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             gateway = TelegramGateway()
             gateway.notification_db_path = Path(tmp) / "notifications.sqlite3"
             gateway.owner_ids = {"111"}

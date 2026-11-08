@@ -54,7 +54,7 @@ class WorkflowNode:
         quorum = self.metadata.get("quorum_required")
         if quorum is not None:
             if type(quorum) is not int or not 1 <= quorum <= len(self.dependencies):
-                raise ValueError("quorum_required must be an integer within 1..len(dependencies)")
+                raise ValueError(f"quorum_required must be an integer within 1..{len(self.dependencies)}")
 
 
 @dataclass(frozen=True)

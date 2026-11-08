@@ -1,90 +1,49 @@
-QudSystem.V10
-# QudSystem Software Company
+# QudSystem.Ltd | Software, AI & Cybersecurity Ecosystem
 
-Welcome to the **QudSystem** repository! 🚀  
-We are a dynamic software company specializing in cutting-edge technology solutions, aiming to transform businesses and drive innovation.
+Welcome to the official repository of **QudSystem** (`QudSystem.Ltd`). We engineer autonomous AI systems, offensive/defensive cybersecurity platforms, scalable SaaS products, and smart hardware integrations designed to transform and secure modern enterprises.
 
----
+🌐 **Live Web Application:** [QudSystem Portal](https://qud-system-software-company-it-solutions-web-application.vercel.app)
 
-## 📘 About QudSystem
+![QudSystem Preview](./assets/preview.png)
 
-At **QudSystem**, we are passionate about delivering high-quality software solutions tailored to meet the unique needs of our clients. With expertise in web development, mobile applications, SaaS platforms, and cybersecurity, we strive to provide innovative and secure solutions.
+## 🚀 Core Divisions & Flagship Products
 
-### **Our Vision**  
-To lead the software industry by creating robust, scalable, and efficient solutions that empower businesses worldwide.
+### 1. Cybersecurity & Autonomous Security Agents
+* **Dragon R1:** Autonomous offensive penetration testing and ethical hacking multi-agent platform.
+* **Dragon B1:** Proactive defensive monitoring, threat detection, and incident response system.
+* **ProtectX & PenRate:** Enterprise vulnerability auditing and continuous security rating tools.
+* **Vision Guard Systems:** Smart surveillance and physical security infrastructure solutions.
 
-### **Our Mission**  
-To provide custom software solutions that enhance productivity, streamline operations, and foster growth for our clients.
+### 2. Artificial Intelligence & Developer Tooling
+* **QudMind 2.5 Labs & Agent3.5:** Autonomous multi-agent workflows and custom LLM orchestration.
+* **Mimo-cli-max:** Standalone intelligent command-line automation and developer productivity suite.
+* **CVPEN:** AI-powered resume engineering, ATS evaluation, and career optimization micro-SaaS.
+* **Kenzy AI:** Generative AI storytelling and voice-narrated visual media engine.
 
----
+### 3. Enterprise SaaS, EdTech & Digital Platforms
+* **QudSoft & Qud Project:** Custom multi-tenant SaaS architectures and enterprise resource systems.
+* **Qud School & Qudemy:** Next-generation interactive educational and technical training platforms.
+* **MyHowia:** Secure mobile digital identity and personal document wallet.
+* **BuildX:** AI-assisted architectural renovation and spatial planning platform.
+* **DMA & Social Media Forge:** Smart digital marketing automation, interactive invitations, and signage solutions.
+* **Volt Motors:** Smart electric mobility and hardware friction-booster engineering.
 
-## 🚀 Key Services
+## 🛠️ Technology Stack
 
-### 1. **Web Development**  
-   - **Front-end**: HTML, CSS, JavaScript, ReactJS  
-   - **Back-end**: Node.js, Python, PHP  
+| Layer | Technologies |
+| :--- | :--- |
+| **AI & Agents** | LangGraph, CrewAI, Ollama, Python, Custom MCP Integrations |
+| **Frontend & Mobile** | Next.js, React, TypeScript, Tailwind CSS, Jetpack Compose, Flutter |
+| **Backend & Data** | Node.js, Python (FastAPI/Django), PostgreSQL, MongoDB, Prisma |
+| **DevOps & Infra** | Docker, Nix, GitHub Actions, Cloudflare Workers, Vercel, Linux |
+| **Cybersecurity** | Autonomous Recon Agents, Wireshark, Splunk, Cisco IDS, Custom Exploits |
 
-### 2. **Mobile Application Development**  
-   - Cross-platform: Flutter, React Native  
-   - Native: Swift (iOS), Kotlin (Android)  
+## 🤝 Connect With QudSystem
 
-### 3. **SaaS Platform Development**  
-   - Scalable multi-tenant architectures  
-   - APIs for third-party integrations  
-
-### 4. **Cybersecurity Solutions**  
-   - Risk analysis  
-   - Incident response  
-   - Security monitoring (Splunk, Cisco IDS)  
-
----
-
-## 🛠️ Technologies We Use
-
-| **Category**       | **Technologies**                       |
-|---------------------|----------------------------------------|
-| **Languages**       | Python, C#, C++, JavaScript            |
-| **Frameworks**      | React, Angular, Django, Laravel        |
-| **Databases**       | MySQL, PostgreSQL, MongoDB             |
-| **Tools**           | Git, Docker, Kubernetes, Jenkins       |
-| **Cloud**           | AWS, Azure, Google Cloud               |
-| **Cybersecurity**   | Wireshark, Cisco IDS, Splunk           |
-
----
-
-## 🎯 Why Choose QudSystem?
-
-- **Tailored Solutions**: Every solution is customized to fit the specific requirements of our clients.
-- **Experienced Team**: A skilled team of software engineers, designers, and cybersecurity experts.
-- **End-to-End Service**: From ideation to deployment and support, we handle it all.
-- **Cutting-Edge Technology**: We stay updated with the latest industry trends and tools.
-
----
-
-## 🌟 Our Projects
-
-### **SaaS Platform - QudSystem**  
-A powerful multi-tenant platform designed for businesses looking to streamline their operations and enhance productivity.
-
-### **Red Crescent Training Portal**  
-An innovative platform developed for the Egyptian Red Crescent to train and empower youth in technical and emergency response skills.
-
----
-
-## 🤝 Collaborate with Us
-
-We are always looking for new challenges and opportunities to collaborate. If you're interested in working with us or have a project idea, feel free to get in touch!
-
-### **Contact Us**  
-📧 Email: [info@qudsystem.com](mailto:qudsystemltd@gmail.com)  
-🌐 Website: [www.qudsystem.com](https://qud.vercel.app/)  
-
----
+* **Website:** [qud-system-software-company-it-solutions-web-application.vercel.app](https://qud-system-software-company-it-solutions-web-application.vercel.app)
+* **GitHub Organization:** [QudSystem](https://github.com/Qudsystem)
+* **Lead Architect:** [Hussam Galal](https://github.com/hussamgalal999)
 
 ## 📄 License
 
-This repository and its contents are licensed under the [MIT License](LICENSE).
-
----
-
-Thank you for choosing **QudSystem Software Company**! Let's innovate together. 💡
+This repository and its contents are licensed under the [MIT License](./LICENSE.md).

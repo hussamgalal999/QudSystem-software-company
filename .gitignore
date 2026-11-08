@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build and Production outputs (Saves massive context & token consumption)
+dist/
+build/
+.next/
+out/
+coverage/
+*.lcov
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and Secrets (Security & Token Protection)
+.env
+.env*.local
+*.pem
+*.key
+
+# Cache & Temporary files
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# IDE & AI Assistant Local State
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.cursor/
+*.swp
+*.swo

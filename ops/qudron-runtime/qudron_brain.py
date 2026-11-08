@@ -210,8 +210,11 @@ class QudronBrain:
 
     @classmethod
     def dispatch_cloud_inference(cls, prompt: str, persona_key: str = "architect") -> dict[str, Any]:
-        """Call the free cloud-native inference router without requiring keys."""
+        """Call the free cloud-native inference router with automatic endpoint fallback."""
         system_prompt = cls.build_system_prompt(persona_key)
+        start_time = time.time()
+
+        # Primary: OpenAI-compatible endpoint
         payload = {
             "model": DEFAULT_MODEL,
             "messages": [
@@ -231,9 +234,8 @@ class QudronBrain:
             method="POST"
         )
 
-        start_time = time.time()
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 latency = round(time.time() - start_time, 2)
                 content = data["choices"][0]["message"]["content"]
@@ -243,20 +245,41 @@ class QudronBrain:
                     "persona": persona_key,
                     "latency_sec": latency,
                     "cost_usd": 0.0,
-                    "source": "Free Cloud Inference"
+                    "source": "Primary OpenAI Endpoint"
                 }
-        except Exception as e:
-            FailureLearningSystem.record_failure(
-                context=f"cloud_inference:{persona_key}",
-                error_msg=str(e),
-                preventive_rule=f"إضافة آلية إعادة محاولة مع Exponential Backoff عند انقطاع {CLOUD_INFERENCE_URL}"
-            )
-            return {
-                "success": False,
-                "error": str(e),
-                "persona": persona_key,
-                "latency_sec": round(time.time() - start_time, 2)
-            }
+        except Exception as e_primary:
+            # Fallback: Simple direct text endpoint (ultra fast)
+            try:
+                fallback_url = "https://text.pollinations.ai/"
+                fallback_req = urllib.request.Request(
+                    fallback_url,
+                    data=json.dumps({"messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]}).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "User-Agent": "Qudron-CentralBrain-Fallback/1.0"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(fallback_req, timeout=30) as resp2:
+                    content2 = resp2.read().decode("utf-8")
+                    latency2 = round(time.time() - start_time, 2)
+                    return {
+                        "success": True,
+                        "content": content2,
+                        "persona": persona_key,
+                        "latency_sec": latency2,
+                        "cost_usd": 0.0,
+                        "source": "Fallback Simple Endpoint"
+                    }
+            except Exception as e_fallback:
+                FailureLearningSystem.record_failure(
+                    context=f"cloud_inference:{persona_key}",
+                    error_msg=f"Primary: {e_primary} | Fallback: {e_fallback}",
+                    preventive_rule=f"إعادة المحاولة مع تقليص حجم prompt لتجنب الـ timeout في {CLOUD_INFERENCE_URL}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Primary failed: {e_primary}; Fallback failed: {e_fallback}",
+                    "persona": persona_key,
+                    "latency_sec": round(time.time() - start_time, 2)
+                }
 
 
 if __name__ == "__main__":

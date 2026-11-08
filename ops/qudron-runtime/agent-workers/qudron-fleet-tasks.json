@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "max_parallel": 2,
+  "tasks": [
+    {
+      "id": "fix-runtime-tests-windows",
+      "title": "Fix Windows SQLite lock and POSIX permission failures in runtime tests",
+      "agent": "codex",
+      "mode": "implement",
+      "base_ref": "HEAD",
+      "allowed_paths": [
+        "ops/qudron-runtime/tests/**",
+        "ops/qudron-runtime/qudron_worker.py",
+        "ops/qudron-runtime/continuity_store.py"
+      ],
+      "prompt": "Fix the two known Windows-specific test failures in ops/qudron-runtime/tests/:\n\n1. WinError 32 (SQLite file locked): In every test tearDown that deletes a temp directory, call conn.close() explicitly before shutil.rmtree(). Search for all TemporaryDirectory and sqlite3.connect() usages in tests and ensure explicit close() before cleanup.\n\n2. POSIX permission check os.chmod(path, 0o077): Wrap every os.chmod call that sets Unix-only permission bits with: if sys.platform != 'win32': os.chmod(...). Also skip any os.mkfifo or stat.S_IMODE assertions on win32.\n\nDo NOT change any production logic, only test isolation code. After each fix, confirm the pattern is consistent across all test files. Report which files changed, which test methods were fixed, and what the exact changes were.",
+      "acceptance_criteria": [
+        "All modified files are inside ops/qudron-runtime/tests/ or the two listed runtime files.",
+        "No production logic changes — only tearDown, setUp, and platform guards.",
+        "Report includes the exact files and line numbers changed."
+      ],
+      "expected_checks": [
+        "python -m py_compile on all changed files must succeed.",
+        "Changed test files must pass import without error."
+      ],
+      "known_risks": [
+        "Some tests may have multiple tearDown paths; all must be fixed to avoid intermittent failures.",
+        "This task uses OPENAI_API_KEY and will consume OpenAI quota."
+      ]
+    },
+    {
+      "id": "add-fleet-coordinator-tests",
+      "title": "Add focused tests for local_agent_fleet.py components",
+      "agent": "codex",
+      "mode": "implement",
+      "base_ref": "HEAD",
+      "allowed_paths": [
+        "ops/qudron-runtime/tests/test_local_agent_fleet.py"
+      ],
+      "prompt": "Write focused unit tests for ops/qudron-runtime/local_agent_fleet.py. Create a new file: ops/qudron-runtime/tests/test_local_agent_fleet.py\n\nTest these components using Python stdlib only (no third-party dependencies):\n\n1. HostSemaphore: test that max_concurrent=1 blocks a second acquire, test timeout raises TimeoutError, test release frees the slot.\n\n2. TaskCapsule: test to_compact_json() stays under 800 characters for a typical capsule, test token_estimate() returns a positive integer.\n\n3. DurableTaskQueue: use a temp SQLite file, test enqueue+claim_next returns the task, test claim_next returns None when queue is empty, test complete() sets status to done, test fail() with max attempts sets status to failed, test fail() below max attempts sets status back to pending. Use try/finally to close connections and delete the temp file on Windows.\n\n4. ZeroTokenContextBus: use a temp SQLite file, test record() stores an entry, test fetch_relevant() returns only entries matching task_id, test fetch_learned_rules() returns only rule-type entries.\n\nAll tests must pass on both Linux and Windows. Use if sys.platform != 'win32' guards for any POSIX-only checks. Use explicit conn.close() before any temp file deletion.",
+      "acceptance_criteria": [
+        "File ops/qudron-runtime/tests/test_local_agent_fleet.py is created.",
+        "All test methods use only Python stdlib.",
+        "Tests handle Windows SQLite lock by closing connections explicitly before cleanup.",
+        "Report includes exact test method names and a summary of what each tests."
+      ],
+      "expected_checks": [
+        "python -m py_compile ops/qudron-runtime/tests/test_local_agent_fleet.py must succeed.",
+        "python -m unittest ops/qudron-runtime/tests/test_local_agent_fleet must exit 0."
+      ],
+      "known_risks": [
+        "local_agent_fleet.py must exist at the expected path for imports to succeed.",
+        "This task uses OPENAI_API_KEY and will consume OpenAI quota."
+      ]
+    }
+  ]
+}

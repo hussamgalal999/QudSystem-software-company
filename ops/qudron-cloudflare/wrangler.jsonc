@@ -6,5 +6,6 @@
  "durable_objects":{"bindings":[{"name":"TASK_ADMISSION","class_name":"TaskAdmission"}]},
  "migrations":[{"tag":"v1","new_sqlite_classes":["TaskAdmission"]}],
  "workflows":[{"name":"qudron-task-workflow","binding":"QUDRON_WORKFLOW","class_name":"QudronTaskWorkflow"}],
+ "triggers":{"crons":["*/30 * * * *"]},
  "vars":{"QUDRON_AI_MODEL":"@cf/meta/llama-3.3-70b-instruct-fp8-fast","QUDRON_MAX_OUTPUT_TOKENS":"1200","QUDRON_MAX_DAILY_TASKS":"5"}
 }

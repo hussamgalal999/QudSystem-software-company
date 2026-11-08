@@ -18,11 +18,72 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertGreaterEqual(len(registry["agents"]), 20)
         self.assertIn("cvpen_cv_creation", registry["teams"])
 
-    def test_swarm_is_bounded_and_ordered(self):
+    def test_explicit_swarm_limit_is_respected_and_ordered(self):
         plan = build_swarm_plan("cvpen_cv_creation", max_agents=3)
         self.assertEqual(len(plan), 3)
         self.assertEqual(plan[0]["execution_stage"], "produce")
         self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_default_plan_uses_every_role_in_the_selected_team(self):
+        registry = load_agent_registry("agent_registry.json")
+        plan = build_swarm_plan("cvpen_cv_creation", registry=registry)
+        self.assertEqual(len(plan), len(registry["teams"]["cvpen_cv_creation"]))
+        self.assertEqual([agent["id"] for agent in plan], registry["teams"]["cvpen_cv_creation"])
+        self.assertEqual(len(plan), 10)
+        self.assertEqual(plan[0]["execution_stage"], "produce")
+        self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+        self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_registry_has_at_least_forty_specialist_identities(self):
+        registry = load_agent_registry("agent_registry.json")
+        self.assertGreaterEqual(len(registry["agents"]), 40)
+        waves = [name for name in registry["teams"] if name.startswith("qudron_wave_")]
+        self.assertEqual(len(waves), 8)
+        self.assertTrue(all(len(registry["teams"][name]) == 5 for name in waves))
+
+    def test_default_plan_gives_each_short_task_team_ten_unique_roles(self):
+        registry = load_agent_registry("agent_registry.json")
+        for task_type, members in registry["teams"].items():
+            with self.subTest(task_type=task_type):
+                plan = build_swarm_plan(task_type, registry=registry)
+                role_ids = [agent["id"] for agent in plan]
+                self.assertEqual(len(plan), max(10, len(members)))
+                self.assertEqual(len(role_ids), len(set(role_ids)))
+                self.assertTrue(set(members).issubset(set(role_ids)))
+                self.assertEqual(sum(a["execution_stage"] == "produce" for a in plan), 1)
+                self.assertEqual(sum(a["execution_stage"] == "finalize" for a in plan), 1)
+                if len(plan) == 10:
+                    self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+
+    def test_default_ten_role_swarm_runs_eight_reviews_in_parallel(self):
+        registry = load_agent_registry("agent_registry.json")
+        review_barrier = threading.Barrier(8)
+        lock = threading.Lock()
+        reviewers = []
+        final_context = {"value": ""}
+
+        def fake_call(agent, instruction, context):
+            stage = agent["execution_stage"]
+            if stage == "produce":
+                return "domain draft"
+            if stage == "review":
+                with lock:
+                    reviewers.append(agent["id"])
+                review_barrier.wait(timeout=4)
+                return f"independent review: {agent['id']}"
+            final_context["value"] = context
+            return "ten-role result"
+
+        result = execute_swarm(
+            {"task_type": "research"},
+            fake_call,
+            registry=registry,
+        )
+        self.assertIn("Agents invoked: 10", result)
+        self.assertIn("Independent reviews: 8", result)
+        self.assertEqual(len(reviewers), 8)
+        for role_id in reviewers:
+            self.assertIn(f"independent review: {role_id}", final_context["value"])
 
     def test_unknown_task_falls_back_to_research_team(self):
         self.assertEqual(build_swarm_plan("unknown")[0]["id"], "research_analyst")
@@ -132,6 +193,13 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertNotIn("01012345678", redacted)
         self.assertNotIn("12345678901234", redacted)
         self.assertNotIn("sk-abcdefghijklmnop", redacted)
+
+    def test_parenthesized_international_phone_formats_are_redacted(self):
+        for phone in ("(415) 555-2671", "+1 (555) 123-4567", "+44 20 7946 0958"):
+            with self.subTest(phone=phone):
+                self.assertNotIn(phone, redact_sensitive_text("Call " + phone))
+        release_id = "release 1.2.3-4567890"
+        self.assertEqual(redact_sensitive_text(release_id), release_id)
 
 if __name__ == "__main__":
     unittest.main()

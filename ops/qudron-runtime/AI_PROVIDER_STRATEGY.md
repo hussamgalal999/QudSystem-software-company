@@ -27,7 +27,7 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 2. **Tier 1 — legitimate free tiers**: FreeLLM adapter or direct official connectors for Google AI Studio, Groq, OpenRouter :free, Cloudflare Workers AI, Mistral free/experiment, NVIDIA NIM trial, and other currently verified free plans. Store each user's own credentials encrypted; never pool unrelated users' accounts.
 3. **Tier 2 — authorized OAuth**: providers whose official CLI/OAuth flow explicitly permits this use. User initiates consent; tokens are encrypted, scoped, revocable and refreshed only through documented flows. Do not extract Antigravity, Google AI Studio, Meta AI, or other browser cookies/local storage. Do not use ChatGPT Web/Codex browser sessions as a hidden API.
 4. **Tier 3 — paid fallback**: DeepSeek or another low-cost provider, only when a per-task and daily/monthly budget is configured and an owner has enabled billing.
-5. **Tier 4 — no provider**: queue the job, return a clear NEEDS_PROVIDER state, and preserve its idempotency key. Never silently switch to a paid model or silently drop the task.
+5. **Tier 4 — no provider**: the current worker fails closed with a provider-configuration error and applies its configured retry/failure policy. A durable `NEEDS_PROVIDER` queue state is a required future gate, not an implemented guarantee. Never silently switch to a paid model or silently drop the task.
 
 ## Routing and safety requirements
 
@@ -37,7 +37,7 @@ Give Qudron one OpenAI-compatible model interface with provider discovery, quota
 - Enforce hard per-order, daily and monthly cost ceilings before dispatch. Reserve budget atomically across parallel agents. Paid routes are disabled unless prices and budget are explicitly configured.
 - Never rotate keys to evade a provider's published limits or terms. Key rotation is only for separately authorized keys within the provider's allowed usage.
 - Never send CVs, contact details, payment evidence, secrets or other customer PII to anonymous endpoints. Use redaction and tenant-scoped encrypted storage.
-- Log provider/model, request ID, latency, token usage, cost, fallback reason and final status; never log credentials or raw sensitive prompts.
+- Record every model attempt (provider/model, request ID, start/end, status and bounded error) in the attempt ledger. Record token usage and known cost in the usage ledger only when available; failed or timed-out calls may have unknown provider charges and must not be reported as zero-cost. Never log credentials or raw sensitive prompts.
 - Add provider contract tests for tool calls, JSON mode, streaming, timeout, 429, 5xx, malformed output, model retirement and budget exhaustion.
 
 ## Proposed integration sequence
@@ -94,3 +94,61 @@ Official references:
 - **Cerebras Free:** an official free API tier is listed, but the public pricing page is old and its free-tier rate limits are described only as lower limits. Treat it as an experimental fallback until a current account quota is checked.
 
 Never use a free route as a reason to send confidential customer data to an endpoint without checking provider-specific terms.
+## Persistent provider-access resilience — 6 November 2026
+
+Qudron now has a bounded provider-access control plane for configured routes:
+
+1. **Discover and verify** — periodically performs read-only `GET /models` against explicitly configured endpoints, confirms the model ID, and records latency and availability. The probe does not spend inference tokens.
+2. **Circuit-break and recover** — stores route state in SQLite across restarts. 401/403, 429, network and server failures open a bounded circuit; the background monitor later re-tests the route instead of repeatedly sending user work into a known failure.
+3. **Route and fail over** — the worker can try an ordered chain of owner-approved OpenAI Chat Completions endpoints. The current route is recorded on the task-scoped agent instance. Each attempted route uses the shared concurrency gate, budget reservation and usage ledger.
+4. **Adapt without silent escalation** — no route may be added just because a website or model appears in public discovery. A fallback needs explicit owner approval, a supported protocol, exact price data (unless an entitlement is owner-verified free), a credential reference in the host secret manager, and an accepted data class.
+5. **Preserve data boundaries** — provider routes default to public/internal data only. CV, support and payment tasks are confidential; anonymous routes are public-only and never receive private Qudron memory.
+
+### Verified DeepSeek route reference
+
+As checked against DeepSeek's official API documentation on 6 November 2026:
+- The current Flash API identifier is `deepseek-flash`, served as **DeepSeek-V4.1-Flash-1017**.
+- The OpenAI-compatible base URL is `https://api.deepseek.com`; the read-only catalogue is `GET /models`; chat completion is `POST /chat/completions`.
+- The listed peak cache-miss input price is $0.30 per 1M tokens and output is $1.20 per 1M tokens. Off-peak and cache-hit rates are lower; Qudron uses conservative peak estimates in the sample config and should revalidate prices before activation.
+- DeepSeek documents both Chat Completions and Responses API. Qudron's current provider failover chain only activates the Chat Completions protocol; a Responses or Anthropic route is not silently treated as compatible.
+
+Official sources:
+- Model changelog and the V4.1-Flash-1017 update: https://api-docs.deepseek.com/updates/
+- Current model ID, base URL and agent integration: https://api-docs.deepseek.com/quick_start/agent_integrations/
+- Read-only model discovery: https://api-docs.deepseek.com/api/list-models/
+- Chat Completions request/response contract: https://api-docs.deepseek.com/api/create-chat-completion/
+- Current prices and rate windows: https://api-docs.deepseek.com/quick_start/pricing/
+
+### Boundaries and remaining work
+
+- Provider health is not provider quota. The owner account's current quota, region, billing state and terms must still be checked.
+- Public catalogue discovery never grants permission to use a model or an account.
+- Provider discovery currently covers the configured execution routes; adding new providers still requires a reviewed adapter/configuration and owner-approved credentials.
+- The current chat execution chain supports OpenAI Chat Completions. Anthropic, Gemini, OpenAI Responses, realtime, tools, vision and video require protocol-specific adapters and contract tests before activation.
+- There is no automatic account creation, subscription reuse, browser-cookie extraction, quota evasion, paid-plan activation or provider-term circumvention.
+
+## Remote compute qualification — official evidence reviewed 2026-11-05
+
+These are task-bounded compute candidates, not confirmed persistent Qudron workers and not free Ollama servers. Their published limits are dynamic and must be rechecked against the signed-in account before each allocation.
+
+| Provider | Documented free resource | Published limit / constraint | Qudron disposition |
+|---|---|---|---|
+| [Kaggle Notebooks](https://www.kaggle.com/docs/notebooks) | Remote notebook CPU/GPU; documented P100 and T4 x2 configurations, 4 CPU cores and about 29 GB RAM on GPU sessions | Notebook sessions up to 12 hours; GPU quota is limited and queued under demand. Kaggle's GPU guidance describes a weekly quota commonly around 30 hours, subject to change. | Candidate for owner-authorized, finite notebook jobs only. Not a 24/7 worker or guaranteed remote Ollama endpoint. |
+| [Hugging Face ZeroGPU](https://huggingface.co/docs/hub/spaces-zerogpu) | On-demand shared NVIDIA RTX Pro 6000 Blackwell; large exposes 48 GB VRAM and xlarge 96 GB | Free accounts: 5 GPU minutes/day; Gradio-only; GPU is dynamically allocated inside GPU-decorated functions. Free personal accounts in good standing may host up to two ZeroGPU Spaces. | Candidate for short inference calls via a Gradio Space, not a persistent Ollama daemon. Quota is far too small to promise continuous company-wide inference. |
+| [Google Colab Free](https://research.google.com/colaboratory/faq.html) | Variable, non-guaranteed hosted GPU/TPU notebook access | Resource limits fluctuate; free runtimes may last up to 12 hours. Managed free runtimes explicitly disallow remote-control/remote-desktop use, distributed computing workers, and containerisation used to bypass restrictions. | Excluded as a Qudron background worker or remote-control host. Use only for owner-driven interactive notebook work within Colab policy. |
+
+### Important architecture consequence
+
+1. Do not try to keep an Ollama daemon alive inside a free notebook if the provider's terms or session model do not permit it.
+2. Separate GPU inference functions (e.g. a Gradio ZeroGPU endpoint) from general-purpose remote computers (notebooks/VMs) and from persistent production hosts.
+3. For each candidate, Qudron must record account owner, official access mode, model/runtime, actual GPU/VRAM, remaining quota, queue wait, execution duration, expiry, data policy, and observed benchmark.
+4. A provider is enabled only after an owner-authorized account probe and a successful harmless live inference. A public demo page is not proof that Qudron has an allocation entitlement.
+5. Use notebook providers only for finite, checkpointed jobs that tolerate interruption. Persist code, inputs, outputs and checkpoints outside the ephemeral notebook before release.
+6. The remote-compute fabric must expose a common task contract while retaining provider-specific policy and capability checks. Never disguise a notebook session as a permanent worker.
+
+### Official references
+
+- Kaggle notebook hardware and session details: https://www.kaggle.com/docs/notebooks
+- Kaggle GPU usage guidance: https://www.kaggle.com/docs/efficient-gpu-usage
+- Hugging Face ZeroGPU quotas and hardware: https://huggingface.co/docs/hub/spaces-zerogpu
+- Colab FAQ and restricted activity/resource limits: https://research.google.com/colaboratory/faq.html

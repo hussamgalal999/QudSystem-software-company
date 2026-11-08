@@ -66,6 +66,7 @@ services:
       QUDRON_MCP_URL: http://qudron:8765/mcp
     volumes:
       - ./scripts/bootstrap_opendots_mcp.py:/app/bootstrap_opendots_mcp.py:ro
+      - ./endpoint_security.py:/app/endpoint_security.py:ro
       - opendots-data:/opendots-data:ro
       - qudron-auth:/qudron-auth:ro
     networks:

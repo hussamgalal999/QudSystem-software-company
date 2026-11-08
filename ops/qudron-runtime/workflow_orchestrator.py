@@ -1,0 +1,727 @@
+"""Unified sequential, parallel, pipeline, swarm and consensus scheduler.
+
+Every execution mode is represented as a dependency graph (DAG). SQLite
+idempotency, approval gates, expiring resource leases and artifact checkpoints
+prevent duplicate work and concurrent writers from silently overwriting each
+other. The scheduler executes only the nodes and adapters explicitly supplied.
+"""
+from __future__ import annotations
+
+import asyncio
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+import json
+from pathlib import Path
+import sqlite3
+import time
+import uuid
+from typing import Any, Awaitable, Callable, Iterable
+
+from agent_protocol import ExecutionMode, ResourceClaim, ResourceMode
+from approval_service import ApprovalService
+
+
+class WorkflowError(RuntimeError):
+    pass
+
+
+class ResourceBusy(WorkflowError):
+    pass
+
+
+@dataclass(frozen=True)
+class WorkflowNode:
+    node_id: str
+    title: str
+    instruction: str
+    dependencies: tuple[str, ...] = ()
+    assigned_agent_id: str | None = None
+    resource_claims: tuple[ResourceClaim, ...] = ()
+    requires_approval: bool = False
+    approved_by: str | None = None
+    retry_safe: bool = True
+    max_attempts: int = 2
+    persist_output: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.node_id or not self.title or not self.instruction.strip():
+            raise ValueError("node_id, title and instruction are required")
+        if self.max_attempts < 1 or self.max_attempts > 5:
+            raise ValueError("max_attempts must be between 1 and 5")
+        if self.requires_approval and self.approved_by and len(self.approved_by) > 160:
+            raise ValueError("approved_by is too long")
+        quorum = self.metadata.get("quorum_required")
+        if quorum is not None:
+            if type(quorum) is not int or not 1 <= quorum <= len(self.dependencies):
+                raise ValueError("quorum_required must be an integer within 1..len(dependencies)")
+
+
+@dataclass(frozen=True)
+class WorkflowDefinition:
+    workflow_id: str
+    project_id: str
+    idempotency_key: str
+    execution_mode: ExecutionMode
+    nodes: tuple[WorkflowNode, ...]
+    max_parallel: int = 8
+
+    def __post_init__(self) -> None:
+        if not self.workflow_id or not self.project_id or not self.idempotency_key:
+            raise ValueError("workflow_id, project_id and idempotency_key are required")
+        if not 1 <= self.max_parallel <= 128:
+            raise ValueError("max_parallel must be between 1 and 128")
+        validate_dag(self.nodes)
+
+
+@dataclass(frozen=True)
+class NodeExecutionResult:
+    status: str
+    summary: str = ""
+    artifacts: tuple[dict[str, Any], ...] = ()
+    evidence: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def validate_dag(nodes: Iterable[WorkflowNode]) -> None:
+    items = list(nodes)
+    ids = [node.node_id for node in items]
+    if len(ids) != len(set(ids)):
+        raise ValueError("workflow node IDs must be unique")
+    id_set = set(ids)
+    for node in items:
+        missing = set(node.dependencies) - id_set
+        if missing:
+            raise ValueError(f"{node.node_id} has missing dependencies: {sorted(missing)}")
+        if node.node_id in node.dependencies:
+            raise ValueError(f"{node.node_id} cannot depend on itself")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    by_id = {node.node_id: node for node in items}
+
+    def visit(node_id: str) -> None:
+        if node_id in visiting:
+            raise ValueError("workflow dependency graph contains a cycle")
+        if node_id in visited:
+            return
+        visiting.add(node_id)
+        for dependency in by_id[node_id].dependencies:
+            visit(dependency)
+        visiting.remove(node_id)
+        visited.add(node_id)
+
+    for node_id in ids:
+        visit(node_id)
+
+
+def expand_execution_mode(
+    mode: ExecutionMode, workers: list[tuple[str, str, str]],
+    *, finalizer: tuple[str, str, str] | None = None,
+) -> tuple[WorkflowNode, ...]:
+    """Compile simple role lists into common safe graph patterns.
+
+    workers are (node_id, title, instruction). Swarm/map-reduce/consensus modes
+    intentionally isolate each worker's artifact namespace; only the reducer
+    or finalizer may write the shared result resource.
+    """
+    if not workers:
+        raise ValueError("at least one worker is required")
+    if mode in {ExecutionMode.SEQUENTIAL, ExecutionMode.PIPELINE}:
+        result: list[WorkflowNode] = []
+        previous: tuple[str, ...] = ()
+        for node_id, title, instruction in workers:
+            result.append(WorkflowNode(node_id, title, instruction, previous))
+            previous = (node_id,)
+        return tuple(result)
+    if mode == ExecutionMode.PARALLEL:
+        return tuple(
+            WorkflowNode(node_id, title, instruction)
+            for node_id, title, instruction in workers
+        )
+    if mode in {ExecutionMode.SWARM, ExecutionMode.MAP_REDUCE, ExecutionMode.CONSENSUS}:
+        fanout = tuple(
+            WorkflowNode(
+                node_id, title, instruction,
+                resource_claims=(ResourceClaim(f"artifact:{node_id}", ResourceMode.WRITE),),
+                metadata={"swarm_member": True, "result_kind": mode.value},
+            )
+            for node_id, title, instruction in workers
+        )
+        reducer = finalizer or (
+            "qudron_reduce", "Qudron final synthesis",
+            "Synthesize the worker results, identify disagreements, and preserve unresolved findings.",
+        )
+        return fanout + (
+            WorkflowNode(
+                reducer[0], reducer[1], reducer[2],
+                dependencies=tuple(node[0] for node in workers),
+                resource_claims=(ResourceClaim("artifact:workflow-final", ResourceMode.WRITE),),
+                metadata={"reducer": True, "quorum_required": len(workers) // 2 + 1 if mode == ExecutionMode.CONSENSUS else None},
+            ),
+        )
+    if mode == ExecutionMode.HYBRID:
+        raise ValueError("HYBRID requires an explicit dependency graph; pass WorkflowNode dependencies")
+    raise ValueError(f"Unsupported execution mode: {mode}")
+
+
+class WorkflowStore:
+    def __init__(
+        self,
+        database_path: str | Path,
+        *,
+        approval_service: ApprovalService | None = None,
+    ):
+        self.approval_service = approval_service
+        self.path = Path(database_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._schema()
+
+    def connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA busy_timeout=30000")
+        db.execute("PRAGMA journal_mode=WAL")
+        return db
+
+    @contextmanager
+    def connection(self):
+        db = self.connect()
+        try:
+            yield db
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def _schema(self) -> None:
+        with self.connection() as db:
+            db.executescript("""
+            CREATE TABLE IF NOT EXISTS workflow_runs(
+              workflow_id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
+              idempotency_key TEXT NOT NULL UNIQUE, execution_mode TEXT NOT NULL,
+              status TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS workflow_nodes(
+              workflow_id TEXT NOT NULL, node_id TEXT NOT NULL, title TEXT NOT NULL,
+              instruction TEXT NOT NULL, dependencies_json TEXT NOT NULL,
+              agent_id TEXT, resource_claims_json TEXT NOT NULL,
+              requires_approval INTEGER NOT NULL, approved_by TEXT,
+              retry_safe INTEGER NOT NULL, max_attempts INTEGER NOT NULL,
+              attempts INTEGER NOT NULL DEFAULT 0, persist_output INTEGER NOT NULL,
+              status TEXT NOT NULL, execution_owner TEXT, output_json TEXT, artifacts_json TEXT NOT NULL DEFAULT '[]',
+              evidence_json TEXT NOT NULL DEFAULT '[]', error TEXT, metadata_json TEXT NOT NULL DEFAULT '{}',
+              created_at REAL NOT NULL, updated_at REAL NOT NULL,
+              PRIMARY KEY(workflow_id,node_id),
+              FOREIGN KEY(workflow_id) REFERENCES workflow_runs(workflow_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_workflow_nodes_status ON workflow_nodes(workflow_id,status);
+            CREATE TABLE IF NOT EXISTS workflow_resource_locks(
+              resource_key TEXT NOT NULL, owner_key TEXT NOT NULL, lock_mode TEXT NOT NULL,
+              lease_until REAL NOT NULL, updated_at REAL NOT NULL,
+              PRIMARY KEY(resource_key,owner_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_workflow_resource_lease
+              ON workflow_resource_locks(resource_key,lease_until);
+            """)
+            # Serialize schema inspection and ALTER so concurrent worker startup
+            # cannot race on the same legacy column migration.
+            db.execute("BEGIN IMMEDIATE")
+            columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(workflow_nodes)").fetchall()
+            }
+            if "execution_owner" not in columns:
+                db.execute("ALTER TABLE workflow_nodes ADD COLUMN execution_owner TEXT")
+            db.execute("COMMIT")
+
+
+    def create(self, definition: WorkflowDefinition) -> str:
+        now = time.time()
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT workflow_id FROM workflow_runs WHERE idempotency_key=?",
+                (definition.idempotency_key,),
+            ).fetchone()
+            if existing:
+                db.execute("COMMIT")
+                return str(existing["workflow_id"])
+            db.execute(
+                """INSERT INTO workflow_runs
+                   (workflow_id,project_id,idempotency_key,execution_mode,status,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (definition.workflow_id, definition.project_id, definition.idempotency_key,
+                 definition.execution_mode.value, "queued", now, now),
+            )
+            for node in definition.nodes:
+                claims = [
+                    {"resource": c.resource, "mode": c.mode.value}
+                    for c in node.resource_claims
+                ]
+                db.execute(
+                    """INSERT INTO workflow_nodes
+                    (workflow_id,node_id,title,instruction,dependencies_json,agent_id,
+                     resource_claims_json,requires_approval,approved_by,retry_safe,max_attempts,
+                     attempts,persist_output,status,metadata_json,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,'queued',?,?,?)""",
+                    (definition.workflow_id, node.node_id, node.title, node.instruction,
+                     json.dumps(node.dependencies), node.assigned_agent_id, json.dumps(claims),
+                     int(node.requires_approval),
+                     None if node.requires_approval else node.approved_by,
+                     int(node.retry_safe),
+                     node.max_attempts, int(node.persist_output),
+                     json.dumps(node.metadata, ensure_ascii=False), now, now),
+                )
+            db.execute("COMMIT")
+            return definition.workflow_id
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def rows(self, workflow_id: str) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM workflow_nodes WHERE workflow_id=? ORDER BY created_at,node_id",
+                (workflow_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def acquire_resources(
+        self, owner_key: str, claims: tuple[ResourceClaim, ...], lease_seconds: int = 120
+    ) -> bool:
+        now = time.time()
+        ordered = sorted(claims, key=lambda item: item.resource)
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM workflow_resource_locks WHERE lease_until<=?", (now,))
+            for claim in ordered:
+                conflicts = db.execute(
+                    """SELECT 1 FROM workflow_resource_locks
+                       WHERE resource_key=? AND owner_key<>? AND lease_until>?
+                         AND (?='write' OR lock_mode='write')
+                       LIMIT 1""",
+                    (claim.resource, owner_key, now, claim.mode.value),
+                ).fetchone()
+                if conflicts:
+                    db.execute("ROLLBACK")
+                    return False
+            for claim in ordered:
+                db.execute(
+                    """INSERT INTO workflow_resource_locks
+                       (resource_key,owner_key,lock_mode,lease_until,updated_at)
+                       VALUES(?,?,?,?,?)
+                       ON CONFLICT(resource_key,owner_key) DO UPDATE SET
+                       lock_mode=excluded.lock_mode,lease_until=excluded.lease_until,updated_at=excluded.updated_at""",
+                    (claim.resource, owner_key, claim.mode.value, now + lease_seconds, now),
+                )
+            db.execute("COMMIT")
+            return True
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def renew_resources(self, owner_key: str, lease_seconds: int = 120) -> bool:
+        now = time.time()
+        with self.connect() as db:
+            changed = db.execute(
+                "UPDATE workflow_resource_locks SET lease_until=?,updated_at=? WHERE owner_key=? AND lease_until>?",
+                (now + lease_seconds, now, owner_key, now),
+            ).rowcount
+        return changed > 0
+
+    def release_resources(self, owner_key: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                "DELETE FROM workflow_resource_locks WHERE owner_key=?",
+                (owner_key,),
+            )
+
+    def approve_node(self, workflow_id: str, node_id: str, approval_token: str) -> None:
+        if self.approval_service is None:
+            raise WorkflowError("Authenticated approval service is not configured")
+        db = self.connect()
+        try:
+            # Lock and validate the target before consuming the one-time token.
+            # This prevents a typo/stale target from burning an otherwise valid approval.
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT requires_approval,status,approved_by
+                   FROM workflow_nodes WHERE workflow_id=? AND node_id=?""",
+                (workflow_id, node_id),
+            ).fetchone()
+            if not row or not row["requires_approval"]:
+                raise WorkflowError("Approval target was not found or does not require approval")
+            if row["status"] not in {"queued", "waiting_for_approval"}:
+                raise WorkflowError("Approval target is not awaiting approval")
+            approval = self.approval_service.verify_and_consume(
+                approval_token,
+                action="workflow.node.approve",
+                resource_id=f"{workflow_id}/{node_id}",
+            )
+            if not approval:
+                raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
+            changed = db.execute(
+                """UPDATE workflow_nodes SET approved_by=?,status='queued',updated_at=?
+                   WHERE workflow_id=? AND node_id=? AND requires_approval=1""",
+                (str(approval["approved_by"])[:160], time.time(), workflow_id, node_id),
+            ).rowcount
+            if changed != 1:
+                raise WorkflowError("Approval target changed while approval was being applied")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def start_node(self, workflow_id: str, node_id: str, owner_key: str) -> int:
+        """Atomically claim a queued node for one specific execution attempt."""
+        now = time.time()
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT attempts,status,requires_approval,approved_by
+                   FROM workflow_nodes WHERE workflow_id=? AND node_id=?""",
+                (workflow_id, node_id),
+            ).fetchone()
+            if not row:
+                raise WorkflowError("Workflow node not found")
+            if row["status"] != "queued":
+                raise WorkflowError("Workflow node is no longer queued for this attempt")
+            if row["requires_approval"] and not row["approved_by"]:
+                raise WorkflowError("Workflow node is waiting for authenticated approval")
+            attempts = int(row["attempts"]) + 1
+            changed = db.execute(
+                """UPDATE workflow_nodes
+                   SET status='running',attempts=?,execution_owner=?,error=NULL,updated_at=?
+                   WHERE workflow_id=? AND node_id=? AND status='queued'""",
+                (attempts, owner_key, now, workflow_id, node_id),
+            ).rowcount
+            if changed != 1:
+                raise WorkflowError("Workflow node claim was lost")
+            db.commit()
+            return attempts
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def finish_node(
+        self, workflow_id: str, node_id: str, owner_key: str,
+        result: NodeExecutionResult,
+    ) -> None:
+        """Persist results only while this attempt still owns the node."""
+        now = time.time()
+        status = "succeeded" if result.status == "succeeded" else "failed"
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                """UPDATE workflow_nodes SET status=?,output_json=?,artifacts_json=?,
+                   evidence_json=?,metadata_json=?,error=?,execution_owner=NULL,updated_at=?
+                   WHERE workflow_id=? AND node_id=? AND status='running'
+                     AND execution_owner=?""",
+                (
+                    status,
+                    json.dumps({"summary": result.summary, "metadata": result.metadata}, ensure_ascii=False)
+                    if result.status == "succeeded" and self._persist_output(db, workflow_id, node_id) else None,
+                    json.dumps(result.artifacts, ensure_ascii=False),
+                    json.dumps(result.evidence, ensure_ascii=False),
+                    json.dumps(result.metadata, ensure_ascii=False),
+                    None if status == "succeeded" else result.summary[:1200],
+                    now, workflow_id, node_id, owner_key,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise WorkflowError("Stale workflow attempt cannot commit its result")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def _persist_output(self, db: sqlite3.Connection, workflow_id: str, node_id: str) -> bool:
+        row = db.execute(
+            "SELECT persist_output FROM workflow_nodes WHERE workflow_id=? AND node_id=?",
+            (workflow_id, node_id),
+        ).fetchone()
+        return bool(row and row["persist_output"])
+
+    def retry_node(
+        self, workflow_id: str, node_id: str, owner_key: str, error: str
+    ) -> bool:
+        """Release a failed attempt only if it still owns the node row."""
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT attempts,max_attempts,retry_safe,status,execution_owner
+                   FROM workflow_nodes WHERE workflow_id=? AND node_id=?""",
+                (workflow_id, node_id),
+            ).fetchone()
+            if not row:
+                raise WorkflowError("Workflow node not found")
+            if row["status"] != "running" or row["execution_owner"] != owner_key:
+                raise WorkflowError("Stale workflow attempt cannot change retry state")
+            retry = bool(row["retry_safe"]) and int(row["attempts"]) < int(row["max_attempts"])
+            changed = db.execute(
+                """UPDATE workflow_nodes SET status=?,error=?,execution_owner=NULL,updated_at=?
+                   WHERE workflow_id=? AND node_id=? AND status='running'
+                     AND execution_owner=?""",
+                (
+                    "queued" if retry else "failed", error[:1200], time.time(),
+                    workflow_id, node_id, owner_key,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise WorkflowError("Workflow retry state was concurrently changed")
+            db.commit()
+            return retry
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def set_workflow_status(self, workflow_id: str, status: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                "UPDATE workflow_runs SET status=?,updated_at=? WHERE workflow_id=?",
+                (status, time.time(), workflow_id),
+            )
+
+    def snapshot(self, workflow_id: str) -> dict[str, Any]:
+        with self.connect() as db:
+            run = db.execute(
+                "SELECT * FROM workflow_runs WHERE workflow_id=?", (workflow_id,)
+            ).fetchone()
+        if not run:
+            raise WorkflowError("Workflow not found")
+        rows = self.rows(workflow_id)
+        counts: dict[str, int] = {}
+        for row in rows:
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        return {
+            "workflow_id": workflow_id, "project_id": run["project_id"],
+            "mode": run["execution_mode"], "status": run["status"],
+            "counts": counts, "nodes": rows,
+        }
+
+
+class WorkflowOrchestrator:
+    def __init__(
+        self, store: WorkflowStore, *,
+        max_global_parallel: int = 16, lease_seconds: int = 120,
+        retry_base_seconds: float = 0.2,
+    ):
+        self.store = store
+        self.max_global_parallel = max(1, min(128, max_global_parallel))
+        self.lease_seconds = max(30, lease_seconds)
+        self.retry_base_seconds = max(0.0, retry_base_seconds)
+
+    async def _keep_lease(self, owner: str, stop: asyncio.Event) -> None:
+        interval = max(5.0, self.lease_seconds / 3)
+        while not stop.is_set():
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=interval)
+            except asyncio.TimeoutError:
+                if not self.store.renew_resources(owner, self.lease_seconds):
+                    return
+
+    async def _execute_node(
+        self, workflow_id: str, row: dict[str, Any],
+        executor: Callable[[dict[str, Any]], Awaitable[NodeExecutionResult]],
+        semaphore: asyncio.Semaphore,
+        initial_owner: str,
+    ) -> None:
+        node_id = str(row["node_id"])
+        claims = tuple(
+            ResourceClaim(item["resource"], ResourceMode(item.get("mode", "read")))
+            for item in json.loads(row["resource_claims_json"])
+        )
+        owner = initial_owner
+        for attempt in range(1, int(row["max_attempts"]) + 1):
+            if attempt > 1:
+                owner = f"{workflow_id}:{node_id}:{uuid.uuid4().hex}"
+                # A retry is a new writer and must reacquire every resource.
+                while not self.store.acquire_resources(owner, claims, self.lease_seconds):
+                    await asyncio.sleep(0.2)
+            try:
+                self.store.start_node(workflow_id, node_id, owner)
+            except WorkflowError:
+                self.store.release_resources(owner)
+                return
+
+            stop = asyncio.Event()
+            heartbeat = asyncio.create_task(self._keep_lease(owner, stop))
+            try:
+                async with semaphore:
+                    result = await executor(row)
+                if not isinstance(result, NodeExecutionResult):
+                    raise TypeError("workflow executor must return NodeExecutionResult")
+                if result.status != "succeeded":
+                    raise WorkflowError(result.summary or "Agent did not return success")
+                self.store.finish_node(workflow_id, node_id, owner, result)
+                return
+            except Exception as exc:
+                message = f"{type(exc).__name__}: {exc}"[:1200]
+                try:
+                    retry = self.store.retry_node(workflow_id, node_id, owner, message)
+                except WorkflowError:
+                    # A later attempt now owns this node. Never overwrite it.
+                    return
+                if not retry:
+                    return
+                if self.retry_base_seconds:
+                    await asyncio.sleep(min(5.0, self.retry_base_seconds * (2 ** (attempt - 1))))
+            finally:
+                stop.set()
+                await heartbeat
+                self.store.release_resources(owner)
+
+    async def run(
+        self, definition: WorkflowDefinition,
+        executor: Callable[[dict[str, Any]], Awaitable[NodeExecutionResult]],
+    ) -> dict[str, Any]:
+        workflow_id = self.store.create(definition)
+        semaphore = asyncio.Semaphore(min(definition.max_parallel, self.max_global_parallel))
+        running: dict[str, asyncio.Task[None]] = {}
+        self.store.set_workflow_status(workflow_id, "running")
+
+        node_by_id = {node.node_id: node for node in definition.nodes}
+        while True:
+            rows = self.store.rows(workflow_id)
+            by_id = {row["node_id"]: row for row in rows}
+            active_ids = set(running)
+            completed_ids = {
+                row["node_id"] for row in rows if row["status"] == "succeeded"
+            }
+            made_progress = False
+
+            for row in rows:
+                if len(running) >= min(definition.max_parallel, self.max_global_parallel):
+                    break
+                node_id = row["node_id"]
+                if node_id in active_ids or row["status"] != "queued":
+                    continue
+                if row["requires_approval"] and not row["approved_by"]:
+                    continue
+                dependencies = set(json.loads(row["dependencies_json"]))
+                node_definition = node_by_id[node_id]
+                is_consensus_reducer = (
+                    definition.execution_mode == ExecutionMode.CONSENSUS
+                    and bool(node_definition.metadata.get("reducer"))
+                )
+                successful_dependencies = dependencies & completed_ids
+                quorum_required = int(
+                    node_definition.metadata.get("quorum_required") or (len(dependencies) // 2 + 1)
+                ) if is_consensus_reducer else 0
+                if is_consensus_reducer:
+                    if len(successful_dependencies) < quorum_required:
+                        continue
+                elif not dependencies.issubset(completed_ids):
+                    continue
+                owner = f"{workflow_id}:{node_id}:{uuid.uuid4().hex}"
+                claims = tuple(
+                    ResourceClaim(item["resource"], ResourceMode(item.get("mode", "read")))
+                    for item in json.loads(row["resource_claims_json"])
+                )
+                if not self.store.acquire_resources(owner, claims, self.lease_seconds):
+                    continue
+                node_input = dict(row)
+                dependency_outputs: dict[str, Any] = {}
+                for dependency_id in dependencies:
+                    dependency_row = by_id.get(dependency_id)
+                    if not dependency_row or dependency_row.get("status") != "succeeded":
+                        continue
+                    try:
+                        dependency_outputs[dependency_id] = {
+                            "output": json.loads(dependency_row.get("output_json") or "{}"),
+                            "artifacts": json.loads(dependency_row.get("artifacts_json") or "[]"),
+                            "evidence": json.loads(dependency_row.get("evidence_json") or "[]"),
+                        }
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        dependency_outputs[dependency_id] = {
+                            "output": None, "artifacts": [], "evidence": []
+                        }
+                node_input["dependency_outputs"] = dependency_outputs
+                if is_consensus_reducer:
+                    failed_dependencies = {
+                        dependency_id for dependency_id in dependencies
+                        if dependency_id in by_id and by_id[dependency_id]["status"] == "failed"
+                    }
+                    pending_dependencies = dependencies - successful_dependencies - failed_dependencies
+                    node_input["consensus"] = {
+                        "required": quorum_required,
+                        "succeeded": sorted(successful_dependencies),
+                        "failed": sorted(failed_dependencies),
+                        "pending": sorted(pending_dependencies),
+                    }
+                running[node_id] = asyncio.create_task(
+                    self._execute_node(workflow_id, node_input, executor, semaphore, owner)
+                )
+                made_progress = True
+                active_ids.add(node_id)
+
+            if running:
+                done, _ = await asyncio.wait(
+                    tuple(running.values()), return_when=asyncio.FIRST_COMPLETED
+                )
+                for node_id, task in list(running.items()):
+                    if task in done:
+                        await task
+                        running.pop(node_id, None)
+                continue
+
+            rows = self.store.rows(workflow_id)
+            statuses = {row["node_id"]: row["status"] for row in rows}
+            if definition.execution_mode == ExecutionMode.CONSENSUS:
+                reducer = next(
+                    (node for node in definition.nodes if node.metadata.get("reducer")), None
+                )
+                reducer_status = statuses.get(reducer.node_id) if reducer else None
+                worker_ids = set(reducer.dependencies) if reducer else set()
+                quorum_required = int(
+                    reducer.metadata.get("quorum_required") or (len(worker_ids) // 2 + 1)
+                ) if reducer else 1
+                successful_votes = sum(statuses.get(node_id) == "succeeded" for node_id in worker_ids)
+                pending_votes = sum(statuses.get(node_id) in {"queued", "running"} for node_id in worker_ids)
+                if reducer_status == "succeeded" and successful_votes >= quorum_required:
+                    final_status = "succeeded"
+                elif reducer_status == "failed" or successful_votes + pending_votes < quorum_required:
+                    final_status = "failed"
+                elif any(
+                    row["requires_approval"] and not row["approved_by"] and row["status"] == "queued"
+                    for row in rows
+                ):
+                    final_status = "waiting_for_approval"
+                else:
+                    final_status = "blocked"
+            elif all(status == "succeeded" for status in statuses.values()):
+                final_status = "succeeded"
+            elif any(status == "failed" for status in statuses.values()):
+                final_status = "failed"
+            elif any(
+                row["requires_approval"] and not row["approved_by"] and row["status"] == "queued"
+                for row in rows
+            ):
+                final_status = "waiting_for_approval"
+            elif any(
+                row["status"] == "queued" and not set(json.loads(row["dependencies_json"])).issubset(
+                    {key for key, value in statuses.items() if value == "succeeded"}
+                ) for row in rows
+            ):
+                final_status = "blocked"
+            else:
+                final_status = "queued"
+            self.store.set_workflow_status(workflow_id, final_status)
+            return self.store.snapshot(workflow_id)

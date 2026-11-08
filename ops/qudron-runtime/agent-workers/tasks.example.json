@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "max_parallel": 2,
+  "tasks": [
+    {
+      "id": "worker-a-example",
+      "title": "Example isolated implementation task A",
+      "agent": "codex",
+      "mode": "implement",
+      "base_ref": "HEAD",
+      "allowed_paths": [
+        "ops/qudron-runtime/agent-workers/output/worker-a/**"
+      ],
+      "prompt": "Replace this example with a concrete task. Create or modify only files under ops/qudron-runtime/agent-workers/output/worker-a/. Add tests where appropriate and report the exact checks you ran. Do not commit or push.",
+      "acceptance_criteria": [
+        "The worker edits only the assigned worker-a directory.",
+        "The report includes changed files and the exact checks actually run."
+      ],
+      "expected_checks": [
+        "Inspect the generated patch and confirm no out-of-scope files changed."
+      ],
+      "known_risks": [
+        "This synthetic task uses a local CLI invocation and may consume provider quota when replaced with a live task."
+      ]
+    },
+    {
+      "id": "worker-b-example",
+      "title": "Example isolated implementation task B",
+      "agent": "gemini",
+      "mode": "implement",
+      "base_ref": "HEAD",
+      "allowed_paths": [
+        "ops/qudron-runtime/agent-workers/output/worker-b/**"
+      ],
+      "prompt": "Replace this example with a concrete task that does not overlap Worker A. Create or modify only files under ops/qudron-runtime/agent-workers/output/worker-b/. Add tests where appropriate and report the exact checks you ran. Do not commit or push.",
+      "acceptance_criteria": [
+        "The worker edits only the assigned worker-b directory.",
+        "The report includes changed files and the exact checks actually run."
+      ],
+      "expected_checks": [
+        "Inspect the generated patch and confirm the write scope is disjoint from worker A."
+      ],
+      "known_risks": [
+        "This synthetic task uses a local CLI invocation and may consume provider quota when replaced with a live task."
+      ]
+    }
+  ]
+}

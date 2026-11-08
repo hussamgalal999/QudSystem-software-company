@@ -1,0 +1,2867 @@
+{
+  "schema_version": 1,
+  "project": "Qudron — QudSystem Executive Orchestration Platform",
+  "snapshot_date": "2026-11-07",
+  "source_branch": "feat/qudron-cli-worker-fleet-2026-11-07",
+  "base_branch": "main",
+  "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
+  "status_definitions": {
+    "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
+    "implemented_pending_ci": "Code and contract tests have been added on this branch; CI has not validated this change yet.",
+    "implemented_unverified": "Code exists, but live service/provider/device behavior has not been verified.",
+    "open_pr": "Implementation exists on a pull request that is still open/unmerged.",
+    "candidate_not_enabled": "Candidate identified but access, entitlement, terms or actual inference has not passed a live qualification probe.",
+    "blocked_owner": "Requires owner account access, credential setup, device authorization, billing decision or external approval.",
+    "needs_owner_review": "Requires owner review of destination, safety, scope or a prior incident.",
+    "planned": "Explicitly identified work that has not been implemented.",
+    "not_started": "No implementation evidence exists.",
+    "target_unmeasured": "Strategic capacity goal; no measured validation exists.",
+    "pending_ci": "Waiting for CI on this exact branch/commit."
+  },
+  "tasks": [
+    {
+      "id": "runtime-queue",
+      "area": "Runtime",
+      "title": "SQLite queue, atomic claims, retries and stale-lease recovery",
+      "status": "ci_verified",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/tests/test_runtime_queue.py; GitHub Actions run #550 https://github.com/hussamgalal999/QudSystem-software-company/actions/runs/42293692140",
+      "current_state": "Queue, atomic claim, restart recovery, stale-lease and bounded-retry tests passed in exact code snapshot 07348ed7218135059e143d97ba632179ac69c420 (CI run #550).",
+      "acceptance_criteria": "Restart recovery, unique claims, stale lease and bounded retries remain green on the release SHA.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "bounded-swarm",
+      "area": "Runtime",
+      "title": "Bounded role-based producer/reviewer/finalizer orchestration",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "Routine and CVPen swarm contract tests are present.",
+      "current_state": "The prior test suite covers stage order and concurrent CVPen reviews, but the current full CI run exposed unrelated import failures and this task had no explicit acceptance criteria. It is not considered verified on the current candidate until the repaired full suite passes.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Unit and integration tests prove correct producer/reviewer/finalizer stage order, bounded parallel fan-out, independent reviewer inputs, finalizer receives all required evidence, failed workers are surfaced, retries are bounded, and no output is reported as verified without the required reviewer/finalizer evidence.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "workforce-44",
+      "area": "Workforce",
+      "title": "Maintain the specialist registry with validated role and team coverage",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/agent_registry.json",
+      "current_state": "The current branch contains 48 role identities across 31 teams; these are configured roles, not live model processes.",
+      "acceptance_criteria": "Validate unique IDs, all team references and coverage in CI; report the exact role/team counts on the tested commit.",
+      "verification_profile": [
+        "registry_schema_integrity",
+        "unique_role_and_team_coverage",
+        "task_to_role_routing",
+        "independent_review_and_quality_gates",
+        "concurrency_and_resource_limits",
+        "role_memory_isolation",
+        "workload_evaluation"
+      ],
+      "mandatory_gates": [
+        "registry_schema_integrity",
+        "unique_role_and_team_coverage",
+        "task_to_role_routing",
+        "independent_review_and_quality_gates",
+        "concurrency_and_resource_limits",
+        "role_memory_isolation",
+        "workload_evaluation"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "registry_schema_integrity": 14.29,
+        "unique_role_and_team_coverage": 14.29,
+        "task_to_role_routing": 14.29,
+        "independent_review_and_quality_gates": 14.29,
+        "concurrency_and_resource_limits": 14.29,
+        "role_memory_isolation": 14.29,
+        "workload_evaluation": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "agent-memory",
+      "area": "Continuity",
+      "title": "Persist project-scoped memory for each agent identity",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/continuity_store.py; tests/test_continuity_store.py",
+      "current_state": "SQLite per-agent memory and scoped retrieval code added; CI pending.",
+      "acceptance_criteria": "Memory survives process restart, is isolated by agent/project and applies expiry.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "stage-checkpoints",
+      "area": "Continuity",
+      "title": "Persist job + agent + stage checkpoint and resume completed stages",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/continuity_store.py; ops/qudron-runtime/qudron_worker.py",
+      "current_state": "Worker now reuses completed non-sensitive stage output; sensitive task outputs are not checkpointed.",
+      "acceptance_criteria": "Injected restart between stages proves completed safe stages are not re-run and sensitive data is not duplicated.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "external-task-ledger",
+      "area": "Continuity",
+      "title": "Store external agent provider/task IDs, status, last event and result references",
+      "status": "implemented_pending_ci",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/continuity_store.py",
+      "current_state": "External task table and methods added; no external run dispatch scheduler is connected yet.",
+      "acceptance_criteria": "A remote task can be looked up and continued after Qudron restart.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "continuity-mcp",
+      "area": "Continuity",
+      "title": "Expose execution continuity and per-agent memory through owner-authenticated MCP tools",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/mcp_gateway.py; tests/test_mcp_continuity_tools.py",
+      "current_state": "Read-only MCP tools added; CI pending.",
+      "acceptance_criteria": "Authorized MCP caller can query continuity and one role's scoped memory; invalid input is rejected.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "shared-project-memory",
+      "area": "Continuity",
+      "title": "Maintain short-term project and long-term portfolio memory",
+      "status": "ci_verified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/qudron_worker.py",
+      "current_state": "Existing shared project memory uses SQLite and redaction before persistence.",
+      "acceptance_criteria": "Memory scoping, TTL and redaction regressions stay green.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "cross-chat-resume",
+      "area": "Continuity",
+      "title": "Make every new ChatGPT session recover the latest project state and next action",
+      "status": "planned",
+      "priority": "P0",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md; docs/CONTINUITY_PROTOCOL.md",
+      "current_state": "Repository state manifest and session-resume protocol are being added; automatic session access is not guaranteed by ChatGPT itself.",
+      "acceptance_criteria": "New conversation reads the authoritative repo/PR state and identifies the last completed commit, tasks and next step.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "github-state-sync",
+      "area": "Continuity",
+      "title": "Automatically publish runtime checkpoints and task changes back to GitHub",
+      "status": "blocked_owner",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/project_task_registry.json",
+      "current_state": "Runtime GitHub write token and approved sync permission are not configured.",
+      "acceptance_criteria": "A least-privilege, audited sync writes sanitized state snapshots with idempotency and no secrets.",
+      "verification_profile": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "logical-agent-scale",
+      "area": "Capacity",
+      "title": "Model 10,000 logical specialist workers with persistent identity and memory",
+      "status": "target_unmeasured",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/agent_registry.json; docs/QUDRON_PROJECT_STATE.md",
+      "current_state": "Logical capacity remains a target; no 10,000-agent load test or scheduler evidence exists.",
+      "acceptance_criteria": "Load test confirms durable admission, per-agent memory and queue fairness at an agreed scale.",
+      "verification_profile": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "live-agent-scale",
+      "area": "Capacity",
+      "title": "Run 10,000 simultaneous model inference workers",
+      "status": "not_started",
+      "priority": "P3",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
+      "current_state": "Not a current promise or a safe default; upstream quotas, inference concurrency and host resources are unmeasured.",
+      "acceptance_criteria": "Only claim a tested simultaneous count after load test and provider approvals.",
+      "verification_profile": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "external-agent-scheduler",
+      "area": "External Swarm",
+      "title": "Schedule and supervise large external agent batches across approved providers",
+      "status": "planned",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/continuity_store.py",
+      "current_state": "External task ledger exists; dispatch, fair quota scheduler, poll workers and admission control remain to be built.",
+      "acceptance_criteria": "A bounded batch is dispatched, resumed, retried, cancelled and reconciled with exact per-provider counts.",
+      "verification_profile": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "browser-agent-runs",
+      "area": "External Swarm",
+      "title": "Run browser-based external agents with durable task state and artifacts",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/OPENDOTS_COMPUTERS.md",
+      "current_state": "OpenDots computers are optional infrastructure; no external browser-run coordinator is connected to Qudron yet.",
+      "acceptance_criteria": "An approved browser job creates a persistent isolated Dot computer, stores artifacts and returns verified task state.",
+      "verification_profile": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "manus-v2-adapter",
+      "area": "Manus",
+      "title": "Implement official Manus API v2 create, follow-up, message polling and task detail adapter",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/manus_adapter.py; tests/test_manus_adapter.py",
+      "current_state": "Adapter code and local contract tests added; no live API call made.",
+      "acceptance_criteria": "CI passes mocked API contracts; live task create/poll/continue is verified using authorized access and account entitlement.",
+      "verification_profile": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "manus-live-access",
+      "area": "Manus",
+      "title": "Verify authorized Manus account/API entitlement, quota and privacy conditions",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/manus_adapter.py",
+      "current_state": "No Manus credential has been supplied to Qudron; API usage/credits are not assumed free.",
+      "acceptance_criteria": "Owner confirms permitted account path and quota; first harmless test task and follow-up complete.",
+      "verification_profile": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "manus-result-bridge",
+      "area": "Manus",
+      "title": "Convert Manus progress, completion events and files into Qudron artifacts and reports",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/manus_adapter.py",
+      "current_state": "Adapter stores task references and messages; a poll/normalization worker and attachment ingestion remain pending.",
+      "acceptance_criteria": "Manus result and files are retrieved, safely stored, checksum-linked and reflected in Qudron job history.",
+      "verification_profile": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "gemini-free-access",
+      "area": "Model Supply",
+      "title": "Qualify official Gemini free access for selected high-capability models",
+      "status": "candidate_not_enabled",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/model_provider_catalog.json; AI_PROVIDER_STRATEGY.md",
+      "current_state": "Provider candidate is catalogued; no project-specific live quota or authorized automated-use probe was recorded.",
+      "acceptance_criteria": "One live harmless test confirms model ID, quota, region, terms, privacy and latency; route eligible only for allowed data classes.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "deepseek-free-access",
+      "area": "Model Supply",
+      "title": "Qualify an authorized genuinely free DeepSeek route",
+      "status": "candidate_not_enabled",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/model_provider_catalog.json",
+      "current_state": "The catalog contains paid API pricing; paid API access is not eligible under the user's free-source rule.",
+      "acceptance_criteria": "Find an official free route that allows automation and verify its actual quota; otherwise keep DeepSeek disabled.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "qwen-free-access",
+      "area": "Model Supply",
+      "title": "Qualify official high-capability Qwen access and allowed integration mode",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/AI_PROVIDER_STRATEGY.md",
+      "current_state": "No verified live Qwen route, quota or account probe is stored.",
+      "acceptance_criteria": "A documented official free access path passes quality, terms and health checks.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "glm-free-access",
+      "area": "Model Supply",
+      "title": "Qualify GLM high-capability access and exact model identity",
+      "status": "candidate_not_enabled",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/AI_PROVIDER_STRATEGY.md",
+      "current_state": "Names such as GLM versions must be reconciled against official model IDs and current free quotas.",
+      "acceptance_criteria": "Official model ID, reasoning quality, free quota and automated use permissions are measured.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "provider-quality-router",
+      "area": "Model Supply",
+      "title": "Route by capability, data sensitivity, current quota, health and actual inference evidence",
+      "status": "implemented_unverified",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/qudron_worker.py; model_provider_catalog.json",
+      "current_state": "Generic endpoint profiles and FreeLLM gateway exist; no full multi-provider policy-aware quality router is live. The current worker fails closed with a provider-configuration error when no qualified provider exists; durable NEEDS_PROVIDER queue state is not implemented.",
+      "acceptance_criteria": "Eligibility tests prevent paid/weak/incompatible providers from receiving tasks; all fallbacks are auditable; provider absence preserves a task in a durable NEEDS_PROVIDER state rather than generic retry/failure churn.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "freellm-sidecar",
+      "area": "Model Supply",
+      "title": "Integrate FreeLLM sidecar as optional low-quota free-source gateway",
+      "status": "implemented_unverified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/Dockerfile.freellm; docker-compose.yml",
+      "current_state": "CI builds the pinned sidecar and smoke-tests auth/health; no real upstream inference has been proved for this deployment.",
+      "acceptance_criteria": "Run live doctor and harmless inference per enabled route; record quota, latency and privacy class.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "omniroute",
+      "area": "Model Supply",
+      "title": "Review and conditionally integrate OmniRoute after license/security/resource review",
+      "status": "not_started",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/AI_PROVIDER_STRATEGY.md",
+      "current_state": "Evaluated as candidate only; not integrated or enabled.",
+      "acceptance_criteria": "Isolated staging review confirms official connectors, license, security boundaries, resource use and free-tier policy.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "openclaw-zero-token",
+      "area": "Model Supply",
+      "title": "Evaluate OpenClaw browser-login connector without session scraping or terms bypass",
+      "status": "not_started",
+      "priority": "P2",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
+      "current_state": "Not integrated. Browser-based access must preserve provider login, terms and protected session boundaries.",
+      "acceptance_criteria": "Security review and provider-term review pass; only documented owner-authorized access modes are enabled.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "token-capacity-100b",
+      "area": "Model Supply",
+      "title": "Measure total eligible free inference capacity toward the 100B-token objective",
+      "status": "target_unmeasured",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/model_provider_catalog.json",
+      "current_state": "100B tokens is a target, not an entitlement or current capacity measurement.",
+      "acceptance_criteria": "Sum verified daily/monthly quotas and measured success; publish measured capacity and uncertainty.",
+      "verification_profile": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "artemis-branch",
+      "area": "Android",
+      "title": "Merge Google Artemis MCP integration after review and CI",
+      "status": "open_pr",
+      "priority": "P0",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
+      "current_state": "PR #22 is open Draft, not merged; CI run #244 succeeded on its candidate branch.",
+      "acceptance_criteria": "Owner reviews and approves PR; merge only after final branch validation.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "android-device-authorization",
+      "area": "Android",
+      "title": "Authorize the owner's Android device for ADB and run Artemis diagnosis",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "PR #22 (open/unmerged): docs/ARTEMIS_E2E_RUNBOOK.md on the Artemis branch",
+      "current_state": "No physical device was accessed in this session; owner must accept Android USB debugging and provide a live host.",
+      "acceptance_criteria": "Artemis mobile_diagnose reports ready/degraded with exact device identity and no credential probing.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "android-physical-e2e",
+      "area": "Android",
+      "title": "Run Qudron-to-Artemis-to-phone trace-verified physical end-to-end test",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "PR #22 (open/unmerged): docs/ARTEMIS_E2E_RUNBOOK.md; ops/qudron-runtime/tests/test_artemis_android_e2e.py",
+      "current_state": "Test is opt-in and has not been executed on the owner's device.",
+      "acceptance_criteria": "A read-only battery workflow completes through Qudron MCP and trace evidence matches ADB reference.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "android-app-inventory",
+      "area": "Android",
+      "title": "Inventory installed apps and accessible app capabilities on the owner's device",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
+      "current_state": "No device inventory has been collected.",
+      "acceptance_criteria": "Owner-approved package inventory is stored with timestamp and app scope; private app data is not scraped.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "android-security-lab",
+      "area": "Android Security",
+      "title": "Build authorized static/dynamic app security assessment and evidence workflow",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
+      "current_state": "No full APK/static/dynamic scanner pipeline is currently connected.",
+      "acceptance_criteria": "Permission, storage, network, exported component and input validation checks produce reproducible reports for in-scope apps only.",
+      "verification_profile": [
+        "written_scope_and_authorization",
+        "static_and_dynamic_test_coverage",
+        "permission_and_exported_component_review",
+        "network_and_storage_assessment",
+        "reproducible_findings_and_severity",
+        "non_destructive_execution",
+        "responsible_disclosure_report"
+      ],
+      "mandatory_gates": [
+        "written_scope_and_authorization",
+        "static_and_dynamic_test_coverage",
+        "permission_and_exported_component_review",
+        "network_and_storage_assessment",
+        "reproducible_findings_and_severity",
+        "non_destructive_execution",
+        "responsible_disclosure_report"
+      ],
+      "critical_gates": [
+        "written_scope_and_authorization"
+      ],
+      "gate_weights": {
+        "written_scope_and_authorization": 14.29,
+        "static_and_dynamic_test_coverage": 14.29,
+        "permission_and_exported_component_review": 14.29,
+        "network_and_storage_assessment": 14.29,
+        "reproducible_findings_and_severity": 14.29,
+        "non_destructive_execution": 14.29,
+        "responsible_disclosure_report": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "android-app-automation",
+      "area": "Android",
+      "title": "Delegate real tasks to apps, browsers and AI apps installed on the phone",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
+      "current_state": "Artemis primitives exist in an open PR; app-specific workflows and per-action verifiers are not implemented.",
+      "acceptance_criteria": "At least one owner-selected app workflow is completed, resumed, traced and verified end-to-end.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "android-log-evidence",
+      "area": "Android",
+      "title": "Collect bounded screenshots, hierarchy, trace and relevant Logcat evidence",
+      "status": "implemented_unverified",
+      "priority": "P2",
+      "evidence": "PR #22 (open/unmerged): docs/INTEGRATION_ARTEMIS.md on the Artemis branch",
+      "current_state": "Artemis documents the path; no physical-device evidence has been produced.",
+      "acceptance_criteria": "A harmless authorized run returns trace and bounded relevant log excerpts on the actual device.",
+      "verification_profile": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "repo-inventory-503",
+      "area": "Portfolio",
+      "title": "Preserve the connected snapshot of approximately 503 GitHub repositories",
+      "status": "implemented_unverified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/github_repository_catalog.snapshot.json",
+      "current_state": "A point-in-time metadata snapshot exists; it does not prove all repositories/files were inspected.",
+      "acceptance_criteria": "Snapshot provenance, accessibility gaps and timestamp are shown in the portfolio dashboard.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "dynamic-github-scan",
+      "area": "Portfolio",
+      "title": "Run recurring read-only GitHub inventory across all intended repositories",
+      "status": "blocked_owner",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/github_inventory.py",
+      "current_state": "No runtime GitHub owner/token was configured; private-repository coverage may be incomplete.",
+      "acceptance_criteria": "Least-privilege read-only token is configured and inventory runs with explicit truncation/error reporting.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "portfolio-500-projects",
+      "area": "Portfolio",
+      "title": "Review and rank 500+ projects for productization",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/CAPABILITY_MINER.md; github_repository_catalog.snapshot.json",
+      "current_state": "Snapshot discovery is not project review; no evidence-backed 500-project assessment is complete.",
+      "acceptance_criteria": "Each accessible project gets an owner, build/quality/security/license score, target customer, next step and disposition.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "productization-pipeline",
+      "area": "Portfolio",
+      "title": "Turn selected repositories into maintained QudSystem products and services",
+      "status": "not_started",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/COMMERCIAL_HIVE_ROADMAP.md",
+      "current_state": "Productization is still a roadmap, not a live per-project pipeline.",
+      "acceptance_criteria": "Selected repos have product briefs, CI, roadmap, demo, release gates and support ownership.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "feedback-loop",
+      "area": "Portfolio",
+      "title": "Capture customer/user feedback and convert it into ranked fixes and product opportunities",
+      "status": "not_started",
+      "priority": "P1",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md",
+      "current_state": "No complete feedback ingestion, deduplication and prioritization loop is connected.",
+      "acceptance_criteria": "Feedback from approved channels links to product, issue, evidence, owner and released fix.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "project-pm-pages",
+      "area": "Portfolio",
+      "title": "Provide per-project PM boards, subtasks, progress, decisions and reports",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "docs/CONTINUITY_PROTOCOL.md",
+      "current_state": "OpenDots pages are being provisioned; project-specific PM database/workflows are not implemented.",
+      "acceptance_criteria": "Every project has an owner, milestones, blockers, agent runs and evidence-linked activity.",
+      "verification_profile": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "metricool-adapter",
+      "area": "Growth",
+      "title": "Integrate the read-only Metricool analytics/calendar and draft-only write adapter",
+      "status": "implemented_unverified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/metricool_client.py; tests/test_metricool_client.py",
+      "current_state": "Code and tests exist; no Qudron host API token is installed.",
+      "acceptance_criteria": "A live read sync and draft creation succeed with verified account/brand permissions.",
+      "verification_profile": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "metricool-runtime-access",
+      "area": "Growth",
+      "title": "Connect Qudron runtime to the correct Hossam personal Metricool destinations",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "ops/growth-engine/STATE.md",
+      "current_state": "ChatGPT Metricool connector does not transfer its session to Qudron; runtime token and brand permissions are absent.",
+      "acceptance_criteria": "Owner-approved runtime token is installed in secret manager and destinations are reverified before any write.",
+      "verification_profile": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "visionguard-channel-fix",
+      "area": "Growth",
+      "title": "Resolve wrong-brand Facebook destination issue and isolate Vision Guard publishing",
+      "status": "needs_owner_review",
+      "priority": "P0",
+      "evidence": "GitHub issue #16; ops/growth-engine/STATE.md",
+      "current_state": "Issue #16 tracks a prior destination mismatch; no separate Vision Guard destination is confirmed.",
+      "acceptance_criteria": "Verify each brand/page account binding and block wrong-brand cross-posting in contract tests.",
+      "verification_profile": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "telegram-owner-channel",
+      "area": "Communications",
+      "title": "Activate owner-only Telegram command gateway and verify allowlist",
+      "status": "blocked_owner",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/telegram_gateway.py; tests/test_telegram_gateway.py",
+      "current_state": "Bot token and numeric owner chat ID are not configured in private secrets.",
+      "acceptance_criteria": "Owner /status, /usage and /task smoke test passes; unauthorized chat is ignored.",
+      "verification_profile": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "whatsapp-cloud-api",
+      "area": "Communications",
+      "title": "Connect official WhatsApp Business Cloud API with opt-in and human handoff",
+      "status": "not_started",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/COMMERCIAL_HIVE_ROADMAP.md",
+      "current_state": "No verified WABA, Meta credentials, signed webhook or Chatwoot inbox is connected.",
+      "acceptance_criteria": "Sandbox and end-to-end opt-in, template, signed webhook, handoff and deletion tests pass.",
+      "verification_profile": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "opendots-voice",
+      "area": "Communications",
+      "title": "Activate OpenDots in-app voice with an authorized realtime provider",
+      "status": "blocked_owner",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/OPENDOTS_INTEGRATION.md",
+      "current_state": "Voice credentials are not configured; realtime model access is not verified.",
+      "acceptance_criteria": "Microphone, audio, interruption, hangup, persisted receipt and privacy are verified.",
+      "verification_profile": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "pstn-voice",
+      "area": "Communications",
+      "title": "Evaluate approved Egyptian PSTN/SMS calling path",
+      "status": "not_started",
+      "priority": "P3",
+      "evidence": "ops/qudron-runtime/COMMERCIAL_HIVE_ROADMAP.md",
+      "current_state": "Requires provider, Egyptian number availability, pricing, consent and regulatory checks.",
+      "acceptance_criteria": "An approved, priced, consent-based and audited pilot is tested.",
+      "verification_profile": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cvpen-workflow-design",
+      "area": "CVPen",
+      "title": "Maintain the 12-stage CVPen workflow specification",
+      "status": "implemented_unverified",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/service_workflows.json",
+      "current_state": "Workflow is marked designed/not connected; it is not a customer intake service.",
+      "acceptance_criteria": "Workflow tests and owner-approved scope stay current.",
+      "verification_profile": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cvpen-secure-intake",
+      "area": "CVPen",
+      "title": "Build authenticated tenant-isolated secure CV file intake and deletion",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "ops/revenue-operations/CVPEN_SUPERVISED_PILOT_LAUNCH_PACK.md",
+      "current_state": "No secure upload, encrypted customer store, malware scan or deletion workflow exists.",
+      "acceptance_criteria": "Security, tenant isolation, access audit, retention and backup deletion tests pass.",
+      "verification_profile": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cvpen-document-pipeline",
+      "area": "CVPen",
+      "title": "Implement and test PDF/DOCX extraction, generation and rendered QA",
+      "status": "not_started",
+      "priority": "P1",
+      "evidence": "ops/revenue-operations/architecture-and-rollout-2026-11-04.md",
+      "current_state": "Existing free checker is limited; full PDF/DOCX extraction and render/QA are incomplete.",
+      "acceptance_criteria": "Synthetic and permissioned documents round-trip through extraction/render with human QA.",
+      "verification_profile": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cvpen-psp",
+      "area": "CVPen",
+      "title": "Connect licensed PSP, signed webhook verification, reconciliation and idempotent fulfillment",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/payment_guard.py; commercial_ledger.py",
+      "current_state": "Generic HMAC primitive and local ledger exist; no PSP-specific adapter or merchant settlement connection.",
+      "acceptance_criteria": "Sandbox tests reject wrong signature/order/amount/currency and duplicate events; settlement reconciles with provider.",
+      "verification_profile": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "commercial-ledger",
+      "area": "Commercial",
+      "title": "Operationalize lead/order ledger for consent, quote, settlement and acceptance",
+      "status": "implemented_unverified",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/commercial_ledger.py; tests/test_commercial_ledger.py",
+      "current_state": "Local SQLite primitive exists; no authenticated service API or live PSP reconciliation.",
+      "acceptance_criteria": "Internal pilot records consent, order state, verified payment event, delivery and acceptance without storing raw PII.",
+      "verification_profile": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "mandatory_gates": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "critical_gates": [
+        "consent_and_order_state_machine",
+        "payment_provider_signature"
+      ],
+      "gate_weights": {
+        "consent_and_order_state_machine": 14.29,
+        "quote_and_price_integrity": 14.29,
+        "payment_provider_signature": 14.29,
+        "idempotent_fulfillment": 14.29,
+        "settlement_and_reconciliation": 14.29,
+        "delivery_acceptance_evidence": 14.29,
+        "margin_and_cost_reporting": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cloudflare-adapter",
+      "area": "Infrastructure",
+      "title": "Maintain Cloudflare Worker control-plane adapter and CI",
+      "status": "implemented_unverified",
+      "priority": "P2",
+      "evidence": "ops/qudron-cloudflare/README.md",
+      "current_state": "Adapter code and CI exist; no account deployment or live Workers AI request is proven.",
+      "acceptance_criteria": "Contract and deployment gates pass in isolated Cloudflare account.",
+      "verification_profile": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "cloudflare-deploy",
+      "area": "Infrastructure",
+      "title": "Deploy Cloudflare pilot with authenticated intake, daily caps and Workers AI probe",
+      "status": "blocked_owner",
+      "priority": "P1",
+      "evidence": "ops/qudron-cloudflare/README.md",
+      "current_state": "Scoped Cloudflare credentials and account configuration are not installed.",
+      "acceptance_criteria": "Deploy /health/auth/idempotency/capacity test and verify Neurons usage without unexpected billing.",
+      "verification_profile": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "private-runtime-host",
+      "area": "Infrastructure",
+      "title": "Deploy persistent Qudron Python/Docker runtime on an owner-approved always-on host",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/DEPLOYMENT_RUNBOOK.md",
+      "current_state": "No permanent host/deployment was verified; repository source is not a running service.",
+      "acceptance_criteria": "Private host, encrypted persistence, health, firewall, secrets, backups and rollback are verified.",
+      "verification_profile": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "backup-restore",
+      "area": "Infrastructure",
+      "title": "Test encrypted backup, restore, migration and restart recovery on real host",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/PRODUCTION_READINESS_GATE.md",
+      "current_state": "No host or tested backup restore evidence is recorded.",
+      "acceptance_criteria": "Restore drill recovers queue, memory, reports, external task refs and idempotency without lost work.",
+      "verification_profile": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "operations-monitoring",
+      "area": "Infrastructure",
+      "title": "Monitor queue age, failures, CPU/RAM, provider health, quotas and last success",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/DEPLOYMENT_RUNBOOK.md",
+      "current_state": "Current status snapshot is limited; no deployed alerting service is confirmed.",
+      "acceptance_criteria": "Operational alerts fire on stale queue, agent failures, provider cooldown, disk and backup staleness.",
+      "verification_profile": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "approval-governance",
+      "area": "Governance",
+      "title": "Enforce approvals for external publishing, messaging, payments, account changes and device mutation",
+      "status": "implemented_unverified",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/scripts/generate_approval_keys.py; ops/qudron-runtime/scripts/issue_approval.py; ops/qudron-runtime/APPROVAL_KEY_OPERATIONS.md; ops/qudron-runtime/tests/test_approval_service.py",
+      "current_state": "Ed25519 asymmetric approval signing/verifying, owner-only key generation and token-issuance utilities, and public-key-only runtime verification tests are implemented. The owner private key and runtime public-key secret mount are not provisioned in deployment, so production approval issuance is not enabled.",
+      "acceptance_criteria": "Every high-impact tool requires user approval and stores approver, target, diff, timestamp and outcome.",
+      "verification_profile": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "image-to-code",
+      "area": "Product Engineering",
+      "title": "Complete public upload-to-design-to-React/Next/Figma workflow",
+      "status": "not_started",
+      "priority": "P2",
+      "evidence": "ops/qudron-runtime/vision_adapter.py; CONNECTOR_AND_MULTIMODAL_STATUS.md",
+      "current_state": "Bounded local image callable exists; no public upload, issue-attachment intake or full pipeline.",
+      "acceptance_criteria": "A permissioned image produces code, screenshot comparison, design file and test evidence.",
+      "verification_profile": [
+        "input_rights_and_source_provenance",
+        "design_fidelity_measurement",
+        "generated_code_quality",
+        "automated_build_and_tests",
+        "visual_regression_and_accessibility",
+        "design_tool_export_integrity",
+        "security_and_dependency_review"
+      ],
+      "mandatory_gates": [
+        "input_rights_and_source_provenance",
+        "design_fidelity_measurement",
+        "generated_code_quality",
+        "automated_build_and_tests",
+        "visual_regression_and_accessibility",
+        "design_tool_export_integrity",
+        "security_and_dependency_review"
+      ],
+      "critical_gates": [
+        "input_rights_and_source_provenance",
+        "security_and_dependency_review"
+      ],
+      "gate_weights": {
+        "input_rights_and_source_provenance": 14.29,
+        "design_fidelity_measurement": 14.29,
+        "generated_code_quality": 14.29,
+        "automated_build_and_tests": 14.29,
+        "visual_regression_and_accessibility": 14.29,
+        "design_tool_export_integrity": 14.29,
+        "security_and_dependency_review": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "service-pilot",
+      "area": "Commercial",
+      "title": "Launch one supervised QudSystem offer with scope, price, delivery and margin evidence",
+      "status": "planned",
+      "priority": "P1",
+      "evidence": "ops/revenue-operations/SERVICE_READINESS_AND_LAUNCH_CATALOGUE.md",
+      "current_state": "Launch catalogue is a recommendation; no paid order or verified revenue is established by it.",
+      "acceptance_criteria": "Owner approves one offer; one supervised pilot is delivered and acceptance/time/cost/margin recorded.",
+      "verification_profile": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "mandatory_gates": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "critical_gates": [
+        "consent_and_order_state_machine",
+        "payment_provider_signature"
+      ],
+      "gate_weights": {
+        "consent_and_order_state_machine": 14.29,
+        "quote_and_price_integrity": 14.29,
+        "payment_provider_signature": 14.29,
+        "idempotent_fulfillment": 14.29,
+        "settlement_and_reconciliation": 14.29,
+        "delivery_acceptance_evidence": 14.29,
+        "margin_and_cost_reporting": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "security-review",
+      "area": "Governance",
+      "title": "Complete independent threat model, security review, rollback and release approval",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/PRODUCTION_READINESS_GATE.md",
+      "current_state": "Pre-production gate remains open.",
+      "acceptance_criteria": "Independent review closes all critical/high risks with test evidence and owner approval.",
+      "verification_profile": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "ci-release-gate",
+      "area": "Release",
+      "title": "Pass full CI for this continuity branch and its final merge candidate",
+      "status": "ci_verified",
+      "priority": "P0",
+      "evidence": "GitHub Actions run 42315960184 (run #568), commit 8146ab1eccc3909e56768abbee808e6819b2ee1a, PR #26.",
+      "current_state": "Qudron Runtime Checks run 568 completed successfully on exact repair-branch commit 8146ab1eccc3909e56768abbee808e6819b2ee1a. Unit/safety tests, runtime and FreeLLM builds, OpenDots/Compose validation, FreeLLM health/auth smoke test and timezone database check all passed. Independent review, owner key provisioning and live deployment gates remain open.",
+      "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
+      "verification_profile": [
+        "exact_commit_ci_green",
+        "dependency_and_secret_security_scan",
+        "integration_and_smoke_tests",
+        "independent_code_review",
+        "deployment_and_health_evidence",
+        "backup_and_rollback_drill",
+        "release_manifest_and_signoff"
+      ],
+      "mandatory_gates": [
+        "exact_commit_ci_green",
+        "dependency_and_secret_security_scan",
+        "integration_and_smoke_tests",
+        "independent_code_review",
+        "deployment_and_health_evidence",
+        "backup_and_rollback_drill",
+        "release_manifest_and_signoff"
+      ],
+      "critical_gates": [
+        "dependency_and_secret_security_scan",
+        "backup_and_rollback_drill"
+      ],
+      "gate_weights": {
+        "exact_commit_ci_green": 14.29,
+        "dependency_and_secret_security_scan": 14.29,
+        "integration_and_smoke_tests": 14.29,
+        "independent_code_review": 14.29,
+        "deployment_and_health_evidence": 14.29,
+        "backup_and_rollback_drill": 14.29,
+        "release_manifest_and_signoff": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "technical-debt-closure",
+      "area": "Governance",
+      "title": "Close or explicitly accept every known technical debt item before production",
+      "status": "not_started",
+      "priority": "P0",
+      "evidence": "docs/QUDRON_PROJECT_STATE.md; project_task_registry.json",
+      "current_state": "There are open integration, deployment, provider, security and customer-data gates.",
+      "acceptance_criteria": "No unowned high/critical debt; every accepted risk has owner, expiry, mitigation and evidence.",
+      "verification_profile": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "remote-compute-fabric",
+      "area": "Capacity",
+      "title": "Build a unified authorized remote-compute discovery and allocation fabric for strong hosted inference, Ollama-on-remote-GPU, cloud computers, notebooks and browser workers",
+      "status": "implemented_pending_ci",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/compute_fabric.py; ops/qudron-runtime/compute_provider_catalog.json; ops/qudron-runtime/tests/test_compute_fabric.py",
+      "current_state": "Provider-neutral compute admission and lease contract with authorization, health freshness, capability, RAM/VRAM, runtime, quota, data-class and concurrent-lease gates is implemented. Provider discovery, account-specific probes, durable lease recovery, and real provisioning/release adapters remain open; no GPU provider is enabled.",
+      "acceptance_criteria": "Discover only official/authorized providers; record exact resource class, GPU/VRAM/RAM/CPU, region, eligibility, free quota, expiry, network, data terms and cost; run a harmless benchmark; provision and release on demand; persist jobs/checkpoints/artifacts; enforce isolation, quotas, budget caps and cancellation; pass restart, security and failure-injection tests; never label a provider free or available without live evidence.",
+      "verification_profile": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "quality-contract-validator",
+      "area": "Governance",
+      "title": "Machine-validate task-specific critical gates, gate weights and required maturity",
+      "status": "ci_verified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/quality_contract_validator.py; ops/qudron-runtime/tests/test_quality_contract_validator.py; docs/QUALITY_VERIFICATION_FRAMEWORK.md",
+      "current_state": "All 64 registry tasks carry mandatory_gates, critical_gates, gate_weights and required_maturity; the canonical-profile validator and negative regression tests passed in CI run 568 on commit 8146ab1eccc3909e56768abbee808e6819b2ee1a.",
+      "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. The validator rejects unknown gate IDs and missing fields; tests cover invalid IDs, missing weights, invalid maturity, critical-gate subsets, weight sums and status-count consistency.",
+      "verification_profile": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ],
+      "mandatory_gates": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ],
+      "critical_gates": [
+        "fail_closed_on_missing_evidence"
+      ],
+      "gate_weights": {
+        "schema_validation": 25,
+        "coverage_reproducibility": 25,
+        "auditability": 25,
+        "fail_closed_on_missing_evidence": 25
+      },
+      "required_maturity": "M5"
+    },
+    {
+      "id": "cli-worker-fleet",
+      "area": "Runtime",
+      "title": "Run bounded Codex, Gemini and Claude CLI workers with isolated task worktrees and verified handoff",
+      "status": "ci_verified",
+      "priority": "P0",
+      "evidence": "PR #30 commit a4af838578964ba645ea76f0be8b914b94d25ef0; GitHub Actions Qudron Runtime Checks run #668 (389 unit/safety tests; all workflow steps passed); ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet_binding.py; ops/qudron-runtime/agent-workers/manifest.schema.json; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "One standalone CLI launcher supports Codex, Gemini and Claude adapters, one worktree/branch per task, up to eight bounded tasks, disjoint path allowlists, sensitive-path denial, provider-specific environment allowlists, required QUDRON_FLEET_HOME_ROOT outside the checkout, separate private codex/gemini/claude HOME directories, HOME-derived XDG/Windows config paths, process-tree timeout cleanup, immutable worktree/branch/base-HEAD validation, structured acceptance criteria/expected checks/known risks, patch SHA-256 and mandatory human review. Exact-head CI run #668 passed all 389 unit/safety tests and every workflow step, including runtime/FreeLLM images, Compose, FreeLLM health/authentication and timezone checks. CI uses fake CLI executables; no live provider logins or real CLI sessions have been demonstrated. The launcher remains standalone, not yet dispatched from Qudron queue/MCP/Agent Fabric.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Exact-head CI must cover CLI adapter command contracts, task worktrees, concurrency and non-overlapping scopes, default secret deny rules, provider environment allowlists, required external QUDRON_FLEET_HOME_ROOT, separate private per-provider homes, timeout/process cleanup, structured task metadata, safe artifact export, immutable worktree/branch/base binding, patch integrity and mandatory human review. CI proves code contracts only; it does not prove live provider authentication, a secure remote host or production execution.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "real-cli-worker-e2e",
+      "area": "External Swarm",
+      "title": "Execute and independently verify three authorized real CLI workers in separate remote environments",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "PR #30 worker-fleet contract; Vercel connected-team project inventory; Railway workspace inventory; Replit Qudron/QudSystem app search",
+      "current_state": "No Qudron project or named sandbox is present in the connected Vercel project search; the connected Railway workspace has zero projects; the connected Replit account has no Qudron/QudSystem app. No owner-approved isolated compute environment or CLI login has been configured. Daytona/E2B trial credits and GitHub Codespaces monthly quotas are possible short pilot resources, not permanent free compute. No three-worker real-provider E2E, independent live Security/QA review, or provider artifact handoff has occurred.",
+      "acceptance_criteria": "Use three separately isolated, owner-approved remote environments with dedicated non-shared HOME roots and no host-home, Docker-socket, SSH-agent or production-secret mounts; configure each provider CLI through its official login path in its own HOME; verify provider/model identity, entitlements, quotas and budget limits; run non-overlapping Architecture, Development and Security/QA tasks; collect task IDs, timestamps, changed-file manifests, immutable base/head SHAs, patch hashes, sanitized logs and costs; require independent security review and human approval; run exact-head CI before applying patches or merging. Never treat Git worktrees alone as OS isolation.",
+      "verification_profile": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [
+        "artifact_integrity_and_provenance",
+        "quota_and_cost_limits"
+      ],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "cli-worker-fleet-runtime-integration",
+      "area": "Runtime",
+      "title": "Integrate the CLI worker fleet through an authenticated remote-executor service and Qudron's queue/MCP control plane",
+      "status": "planned",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/mcp_gateway.py; ops/qudron-runtime/continuity_store.py; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "The CLI launcher is a standalone developer tool and has no call site from qudron_worker.py, mcp_gateway.py or Agent Fabric. Do not run provider CLIs inside the core Qudron worker as a shortcut; integration must dispatch to a disposable restricted remote executor with a dedicated per-provider HOME and least-privilege network/filesystem/credentials.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Implement an owner-authenticated, schema-validated remote-executor contract; persist fleet/run/task/agent/branch/worktree lifecycle in continuity storage; use disposable restricted VMs/containers with per-provider HOME roots, no host mounts, Docker socket, SSH agent or production secrets; enforce provider/data-class allowlists, task path scopes, deny patterns, timeout, concurrency and budget caps; reconcile restart/cancel/timeout without orphaning processes/worktrees; expose run status and artifacts through MCP; attach immutable base/head SHAs, changed-file manifests and patch hashes; require independent reviewer evidence and human approval before patches are applied or PRs are merged; pass unit, integration, restart, cancellation, isolation, security and exact-head CI.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "restart_and_failure_recovery",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
+    }
+  ],
+  "computed_status_counts": {
+    "ci_verified": 5,
+    "implemented_pending_ci": 8,
+    "planned": 12,
+    "blocked_owner": 11,
+    "target_unmeasured": 2,
+    "not_started": 15,
+    "candidate_not_enabled": 3,
+    "implemented_unverified": 9,
+    "open_pr": 1,
+    "needs_owner_review": 1
+  },
+  "total_tasks": 67,
+  "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria.",
+  "evidence_source_commit": "a4af838578964ba645ea76f0be8b914b94d25ef0",
+  "evidence_source_commit_semantics": "Exact executable CLI fleet implementation commit validated by the most recent exact-head CI run.",
+  "snapshot_validation": {
+    "snapshot_commit": "a4af838578964ba645ea76f0be8b914b94d25ef0",
+    "workflow": "Qudron Runtime Checks",
+    "workflow_run_number": 668,
+    "workflow_run_id": "42392998310",
+    "conclusion": "success",
+    "unit_and_safety_test_count": 389
+  }
+}

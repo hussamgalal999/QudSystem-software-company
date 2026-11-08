@@ -62,4 +62,4 @@ export default{async fetch(request:Request,env:Env):Promise<Response>{
  const match=url.pathname.match(/^\/api\/tasks\/([A-Za-z0-9._:-]{1,100})$/);
  if(request.method==="GET"&&match){try{const instance=await env.QUDRON_WORKFLOW.get(match[1]),s=await instance.status();return json({taskId:match[1],...s});}catch{return json({error:"task_not_found"},404);}}
  return json({error:"not_found"},404);
-}};
+,async scheduled(event:any,env:Env,ctx:any):Promise<void>{console.log("Qudron 24/7 Cloud Guardian triggered at",new Date().toISOString());}};

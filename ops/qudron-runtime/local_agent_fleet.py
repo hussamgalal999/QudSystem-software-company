@@ -111,6 +111,7 @@ class AgentRole(str, Enum):
     GEMINI_CLI  = "gemini-cli"
     CLAUDE_CLI  = "claude-cli"
     CODEX_CLI   = "codex-cli"
+    CHATGPT_DESKTOP = "chatgpt-desktop"
 
 
 @dataclass
@@ -198,11 +199,20 @@ AGENT_REGISTRY: dict[AgentRole, AgentCapability] = {
         is_local=True,
         max_parallel=1,
     ),
+    AgentRole.CHATGPT_DESKTOP: AgentCapability(
+        agent_id=AgentRole.CHATGPT_DESKTOP,
+        domains=["desktop-automation", "fullstack", "codex", "interactive-chat"],
+        can_write=True,
+        can_review=True,
+        wakeup_api="windows-node",
+        is_local=True,
+        max_parallel=1,
+    ),
 }
 
 # خريطة الوكلاء المناوبين الاحتياطيين عند نفاد التوكنز أو الخمول
 STANDBY_SURROGATES: dict[AgentRole, list[AgentRole]] = {
-    AgentRole.QODER: [AgentRole.ANTIGRAVITY, AgentRole.OPENCODE, AgentRole.GEMINI_CLI],
+    AgentRole.QODER: [AgentRole.CHATGPT_DESKTOP, AgentRole.ANTIGRAVITY, AgentRole.OPENCODE, AgentRole.GEMINI_CLI],
     AgentRole.KIRO: [AgentRole.CLAUDE_CLI, AgentRole.COPILOT, AgentRole.ANTIGRAVITY],
     AgentRole.COPILOT: [AgentRole.ANTIGRAVITY, AgentRole.CODEX_CLI],
     AgentRole.ANTIGRAVITY: [AgentRole.GEMINI_CLI, AgentRole.COPILOT],
@@ -210,6 +220,7 @@ STANDBY_SURROGATES: dict[AgentRole, list[AgentRole]] = {
     AgentRole.GEMINI_CLI: [AgentRole.ANTIGRAVITY],
     AgentRole.CLAUDE_CLI: [AgentRole.KIRO],
     AgentRole.CODEX_CLI: [AgentRole.COPILOT],
+    AgentRole.CHATGPT_DESKTOP: [AgentRole.CODEX_CLI, AgentRole.ANTIGRAVITY],
 }
 
 

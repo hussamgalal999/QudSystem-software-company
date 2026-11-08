@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from telegram_gateway import format_status, format_usage, parse_command, parse_owner_ids
 
@@ -28,6 +28,21 @@ class TelegramGatewayTests(unittest.TestCase):
         })
         self.assertIn("daily: calls=3", result)
         self.assertIn("known_cost_usd=0.04", result)
+
+    def test_unapproved_internal_url_fails_before_network(self):
+        import os
+        from telegram_gateway import TelegramGateway
+        with patch.dict(os.environ, {"QUDRON_INTERNAL_URL": "http://qudron.attacker:8765"}, clear=False):
+            with self.assertRaisesRegex(ValueError, "QUDRON_INTERNAL_URL"):
+                TelegramGateway()
+
+    def test_request_rejects_unapproved_target_before_network(self):
+        from telegram_gateway import TelegramGateway
+        gateway = TelegramGateway()
+        with patch("telegram_gateway.open_credential_request") as opener:
+            with self.assertRaisesRegex(ValueError, "not an approved service"):
+                gateway._request("https://attacker.example/collect", headers={"Authorization": "Bearer test"})
+            opener.assert_not_called()
 
     def test_non_owner_messages_are_ignored(self):
         from telegram_gateway import TelegramGateway

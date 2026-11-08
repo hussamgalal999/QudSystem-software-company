@@ -6,10 +6,13 @@ Qudron is a self-hosted operating layer for QudSystem. It separates ChatGPT's in
 
 ## Specialist swarm registry
 
-The registry contains 36 specialist roles covering research, evidence review, brand, copy, video, localization, SEO, sales, privacy, customer success, CV strategy/writing/ATS/fact review/QA, finance operations, payment evidence review, compliance, product, engineering, reliability, QA, data, and strategy.
+The registry currently contains 48 role identities across 31 specialist teams. Eight five-role waves cover the original 40-role programme; eight additional specialists remain in dedicated Android, provider-access, external-dispatch, platform-operations and memory/continuity teams.
 
-These are **role-specialized AI workers**, not separately hosted models or human employees. A job selects a team; the producer runs first, independent reviewers execute concurrently within a bounded fan-out, then a finalizer receives the accumulated review notes. Routine jobs remain capped at five stages by default. CVPen paid-CV creation has a dedicated ten-agent team: one writer, eight independent reviews, and a final QA agent. Configure QUDRON_MAX_SWARM_AGENTS (default 5, maximum 5) to cap routine calls. CVPen uses QUDRON_MAX_CVPEN_AGENTS (default 10, maximum 10) and QUDRON_MAX_PARALLEL_REVIEWS (default 8). This increases per-order model cost, so CVPen creation fails closed until QUDRON_CVPEN_JOB_BUDGET_USD and exact input/output model prices are configured. Each specialist can be routed to a different OpenAI-compatible model profile. Queue throughput now defaults to eight queue workers, while the shared SQLite-backed gate defaults to sixteen and permits up to thirty-two simultaneous upstream model requests across those workers. These are concurrency ceilings, not guaranteed throughput: provider RPM/TPM quotas, the configured spend budget, host CPU/memory, and the model gateway remain limiting factors. Keep the per-task team composition specialist-specific rather than adding generic reviewers that do not improve the task.
+These are **role-specialized AI workers**, not separately hosted models or human employees. A job selects its registered team; the producer runs first, independent reviewers execute within bounded fan-out, and the finalizer receives available worker outputs and evidence.
 
+`QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK` is the global ceiling on planned role assignments (default 10,000; maximum 10,000). This is **not** a promise of 10,000 live model calls. Actual upstream concurrency remains bounded by `QUDRON_MAX_CONCURRENT_MODEL_CALLS` (default 16; hard maximum 32), provider RPM/TPM quotas, spend budgets and host resources. `QUDRON_MAX_PARALLEL_REVIEWS` separately bounds reviewer fan-out. For backward compatibility, setting `QUDRON_MAX_SWARM_AGENTS` or `QUDRON_MAX_CVPEN_AGENTS` applies an additional per-task cap; the smaller of that legacy cap and the global ceiling is used. Leave the legacy variables unset to use the registry's full team composition.
+
+CVPen paid-CV creation has a dedicated ten-role team: one writer, eight independent reviews, and one final QA role. It fails closed until `QUDRON_CVPEN_JOB_BUDGET_USD` and exact input/output model prices are configured. Each specialist can be routed to a different OpenAI-compatible model profile. Queue throughput defaults to eight queue workers; these are scheduling limits, not guaranteed throughput. Keep each task's team specialist-specific rather than adding generic reviewers that do not improve the result.
 ## Model routing and cost control
 
 Set the default LLM_BASE_URL / LLM_MODEL. Optional profiles:
@@ -29,7 +32,7 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
 - Configure exact input/output rates per million tokens for each keyed/custom profile. Anonymous FreeLLM routes default to zero provider-price estimates while the daily cap and provider quotas remain active; cost is reported as an estimate, not an invoice guarantee.
 - Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. CVPen creation additionally requires a per-order USD cap; the sum of provider usage and outstanding reservations for that order cannot exceed it.  Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
-- Fast/Balanced/Reasoning routing keeps routine work bounded to five specialists. CVPen uses ten specialists only for the CV-creation task and requires a per-order spend cap plus configured price rates before the first model request.
+- Fast/Balanced/Reasoning routing serves the selected specialist team when swarm mode is enabled. By default, the planner retains every role in that team and targets at least ten task-scoped role assignments only when no explicit `max_agents` or legacy per-task cap is configured and the effective global assignment cap is at least ten. `QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK` (default 10,000) is a planning ceiling, not a count of live agents or concurrent model calls; a lower configured value can produce fewer assignments. `QUDRON_MAX_CONCURRENT_MODEL_CALLS` (default 16, hard maximum 32), the shared model-call gate, provider quotas, host capacity, and spend controls bound actual upstream calls. The eight local queue workers limit active queue jobs; they are not an upstream model-call cap because each job may fan out into multiple model and review calls. `QUDRON_MAX_PARALLEL_REVIEWS` defaults to 16 (hard maximum 32). For backward compatibility, `QUDRON_MAX_SWARM_AGENTS` and `QUDRON_MAX_CVPEN_AGENTS` may impose a smaller per-task cap. CVPen's dedicated CV-creation team has ten specialist assignments when its caps allow them and still requires a per-order spend cap plus configured price rates before the first model request.
 
 ## Start with Docker
 
@@ -222,6 +225,20 @@ The included FreeLLM sidecar is the default OpenAI-compatible gateway when `LLM_
 
 When no provider keys are configured, `FREELM_KEYLESS=auto` selects only documented anonymous/free routes. To force official provider keys only, set `FREELM_KEYLESS=0`. Add keys via the host secret manager (not Git) when available. The router handles provider/model discovery and failover; Qudron still records call/token usage and maintains its own budget/concurrency gates.
 
+## Continuous model-provider access and recovery
+
+Qudron keeps a provider access radar for owner-configured routes. The runtime probes the read-only model catalogue endpoint (GET `/models`) on a bounded interval, checks that the configured model is actually advertised, records latency/failures in the shared SQLite database, and applies a persistent circuit breaker after authentication, quota, network or server errors. A provider returning to health is re-tested and may re-enter the route chain.
+
+The inference path can use an owner-approved ordered fallback chain through `QUDRON_PROVIDER_ROUTES_JSON`. Each route must declare its profile, exact endpoint/model, protocol, price class, accepted data classes, and an environment-variable reference to its key. The raw key is never placed in JSON, status responses or logs. The currently implemented execution chain accepts OpenAI Chat Completions routes; providers requiring Anthropic Messages, Gemini GenerateContent or OpenAI Responses need their respective adapter before they can be activated through this chain.
+
+For DeepSeek V4.1 Flash, the official API model ID is `deepseek-flash` (currently served as V4.1-Flash-1017), using `https://api.deepseek.com`. The current official peak cache-miss input rate is $0.30 per 1M tokens and output is $1.20 per 1M tokens; off-peak and cache-hit prices differ. The example in `.env.example` is commented out and must be revalidated against the official pricing page and the owner's account before enabling it.
+
+**No silent privilege or spend escalation:** a fallback is eligible only when explicitly enabled and owner-approved. Paid routes need exact input/output prices and the same local per-task/daily/monthly budget controls. Verified free routes require an explicit owner attestation; an endpoint is never treated as free merely because it responds. The runtime never scrapes browser cookies, borrows another user's subscription, evades rate limits, or silently changes a blocked paid route to a paid alternative.
+
+Provider data classes default to `public,internal`. Customer CVs, support cases and payment workflows are classified as confidential and will not be sent to a route until `QUDRON_PROVIDER_DATA_CLASSES` and the route's own `accepted_data_classes` explicitly permit it. Anonymous FreeLLM remains public-only and never receives Qudron's private memory.
+
+The health probe is deliberately read-only: it proves that the catalogue endpoint is reachable and advertises a model, not that an inference request succeeds or that quota/billing is available. A successful inference, usage record and real account entitlement remain distinct verification steps.
+
 ## Batch task intake and capacity
 
 - `POST /jobs` remains available for one job.
@@ -245,3 +262,40 @@ Keep the submission tool approval enabled. OpenDots conversations require a Copi
 ## Social distribution
 
 The current Metricool adapter deliberately creates drafts only. Use it as the distribution layer for Facebook, Instagram, YouTube and other supported destinations after connecting the official Metricool API. The publication workflow should produce platform-specific variants, campaign IDs, media metadata, UTM tags, an approval record and post-publication evidence. No public post is considered complete until its provider returns a published ID and permalink. Never bypass Meta login or use personal cookies scraped from a browser to publish.
+
+
+## Owner approval signing keys
+
+Approval tokens use Ed25519. The trusted owner-facing process is the only component
+that receives the private signing key; Qudron workers receive only the public key.
+A worker compromise therefore does not provide the ability to mint owner approvals.
+
+Generate the key pair on a trusted owner machine:
+
+```sh
+openssl genpkey -algorithm Ed25519 -out qudron-approval-private.pem
+openssl pkey -in qudron-approval-private.pem -pubout -out qudron-approval-public.pem
+chmod 600 qudron-approval-private.pem
+```
+
+- Keep `qudron-approval-private.pem` outside the repository and outside all runtime,
+  OpenDots, model-router and agent containers.
+- Configure `QUDRON_APPROVAL_PRIVATE_KEY_FILE` only in the trusted owner issuer
+  process, which uses `ApprovalTokenIssuer.from_environment()`.
+- Place the public key in the runtime's private data mount and configure
+  `QUDRON_APPROVAL_PUBLIC_KEY_FILE` to that in-container path. Runtime code uses
+  `ApprovalService.from_environment()` and exposes verification/consumption only.
+- Never copy the private key into `.env`, GitHub Actions artifacts, Docker build
+  contexts, or agent-readable storage. Rotate by issuing a new key pair and
+  updating the owner issuer and runtime public-key file together.
+- Old HMAC tokens are intentionally invalid under version 2; issue fresh approvals
+  after deploying the matching public key.
+
+
+## Latest runtime hardening notes
+
+- MCP Streamable HTTP accepts JSON and bounded Server-Sent Events responses. MCP session IDs are captured per submitted task handle; the endpoint-level cache is only a bootstrap aid.
+- A2A discovery uses the origin-root well-known path while task operations remain relative to the configured agent endpoint path. Malformed status messages with non-list `parts` are treated as empty text.
+- Compute capacity ignores expired in-memory leases; durable admission continues to count only non-expired leases and reservations.
+- Metricool owner allowlists bind content brand, Metricool blog ID, destination ID, and social network together. A mapping approved for Facebook cannot authorize a YouTube draft.
+- Vision Guard brand markers are normalized across punctuation before brand isolation checks.

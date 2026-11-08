@@ -1,5 +1,6 @@
 import os
 import stat
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +11,7 @@ import qudron_worker as worker
 
 class QueueBatchTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db = Path(self.tmp.name) / "qudron.sqlite3"
         self.db_patch = patch.object(worker, "DB_PATH", self.db)
         self.db_patch.start()
@@ -110,7 +111,8 @@ class PrivateTokenTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertGreaterEqual(len(first), 48)
             self.assertEqual(target.read_text().strip(), first)
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+            if sys.platform != "win32":
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
 
 
 class KeylessProviderPolicyTests(unittest.TestCase):

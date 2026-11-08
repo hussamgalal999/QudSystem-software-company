@@ -1,0 +1,209 @@
+name: Qudron Agent Fleet — Cloud Worker
+
+# يعمل هذا الـ workflow حتى لو جهازك مغلق
+# يُشغَّل يدوياً أو عند push لفرع fleet/*
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: 'Path to task manifest JSON (relative to repo root)'
+        required: true
+        default: 'ops/qudron-runtime/agent-workers/qudron-fleet-tasks.json'
+      task_id:
+        description: 'Run a single task ID (leave empty to run all tasks in manifest)'
+        required: false
+        default: ''
+      max_parallel:
+        description: 'Max parallel workers (1-4, safe default is 1)'
+        required: false
+        default: '1'
+      dry_run:
+        description: 'Dry run: validate manifest only, do not execute agents'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+  push:
+    branches:
+      - 'fleet/**'
+    paths:
+      - 'ops/qudron-runtime/agent-workers/*.json'
+
+jobs:
+  fleet:
+    name: Run Agent Fleet
+    runs-on: ubuntu-latest
+    # لا permissions إضافية — read-only للكود، لا push
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate manifest (always)
+        run: |
+          python -c "
+          import json, sys
+          path = '${{ github.event.inputs.manifest || 'ops/qudron-runtime/agent-workers/qudron-fleet-tasks.json' }}'
+          with open(path) as f:
+              data = json.load(f)
+          tasks = data.get('tasks', [])
+          print(f'Manifest valid: {len(tasks)} task(s)')
+          for t in tasks:
+              print(f'  - {t[\"id\"]}: {t[\"title\"]} [{t[\"agent\"]}]')
+          "
+
+      - name: Check which agents are available on PATH
+        id: agents
+        run: |
+          for agent in codex gemini claude; do
+            if command -v "$agent" >/dev/null 2>&1; then
+              echo "$agent is available"
+              echo "${agent}_available=true" >> $GITHUB_OUTPUT
+            else
+              echo "$agent is NOT on PATH — tasks using it will show status=unavailable"
+              echo "${agent}_available=false" >> $GITHUB_OUTPUT
+            fi
+          done
+
+      - name: Build and start FreeLLM keyless proxy
+        run: |
+          docker build \
+            -f ops/qudron-runtime/Dockerfile.freellm \
+            -t qudron-freellm:ci \
+            ops/qudron-runtime
+          docker run -d --name freellm \
+            -p 4000:4000 \
+            -e FREELM_KEYLESS=auto \
+            qudron-freellm:ci
+          # انتظر حتى يصبح جاهزاً (max 30s)
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:4000/health >/dev/null 2>&1; then
+              echo "FreeLLM proxy ready on :4000"
+              break
+            fi
+            echo "Waiting for FreeLLM... attempt $i"
+            sleep 2
+          done
+
+      - name: Verify FreeLLM keyless inference
+        run: |
+          python - <<'PY'
+          import urllib.request, json, sys
+          payload = json.dumps({
+              "model": "auto",
+              "messages": [{"role": "user", "content": "Reply with OK only."}],
+              "max_tokens": 5
+          }).encode()
+          req = urllib.request.Request(
+              "http://localhost:4000/v1/chat/completions",
+              data=payload,
+              headers={"Content-Type": "application/json",
+                       "Authorization": "Bearer keyless"},
+              method="POST"
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  data = json.loads(r.read())
+                  reply = data["choices"][0]["message"]["content"]
+                  print(f"FreeLLM keyless inference OK: {reply[:50]}")
+          except Exception as e:
+              print(f"FreeLLM inference failed (will still try fleet): {e}")
+          PY
+
+      - name: Install codex CLI
+        run: |
+          npm install -g @openai/codex 2>/dev/null \
+            && echo "codex installed" \
+            || echo "codex not available — tasks using it will show unavailable"
+
+      - name: Set up fleet home directory
+        run: |
+          mkdir -p /tmp/qudron-fleet-home
+          chmod 700 /tmp/qudron-fleet-home
+          echo "QUDRON_FLEET_HOME_ROOT=/tmp/qudron-fleet-home" >> $GITHUB_ENV
+
+      - name: Run fleet (dry-run mode)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "DRY RUN — manifest validated, FreeLLM proxy running, no agent tasks executed."
+          echo "Set dry_run=false to run tasks."
+
+      - name: Run fleet tasks via FreeLLM keyless proxy
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          # FreeLLM proxy — لا key حقيقي مطلوب
+          OPENAI_BASE_URL: "http://localhost:4000/v1"
+          OPENAI_API_KEY: "keyless"
+          # مفاتيح اختيارية: إذا أضفتها في GitHub Secrets تحسّن الجودة
+          # بدونها يعمل النظام بالكامل عبر llm7.io + AI Horde + Kilo
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY:   ${{ secrets.GROQ_API_KEY }}
+          QUDRON_FLEET_HOME_ROOT: /tmp/qudron-fleet-home
+        run: |
+          MANIFEST="${{ github.event.inputs.manifest || 'ops/qudron-runtime/agent-workers/qudron-fleet-tasks.json' }}"
+          EXTRA_ARGS=""
+
+          if [ -n "${{ github.event.inputs.task_id }}" ]; then
+            EXTRA_ARGS="--task ${{ github.event.inputs.task_id }}"
+          fi
+
+          PARALLEL="${{ github.event.inputs.max_parallel || '1' }}"
+
+          python ops/qudron-runtime/scripts/agent_fleet.py \
+            --manifest "$MANIFEST" \
+            --worktree-root /tmp/qudron-fleet-worktrees \
+            --artifact-dir /tmp/qudron-fleet-artifacts \
+            --max-parallel "$PARALLEL" \
+            $EXTRA_ARGS \
+            2>&1 | tee /tmp/fleet-run.log
+
+      - name: Stop FreeLLM proxy
+        if: always()
+        run: docker rm -f freellm 2>/dev/null || true
+
+      - name: Show run results
+        if: always()
+        run: |
+          if [ -f /tmp/qudron-fleet-artifacts/run.json ]; then
+            echo "=== Run Results ==="
+            python -c "
+          import json
+          with open('/tmp/qudron-fleet-artifacts/run.json') as f:
+              run = json.load(f)
+          tasks = run.get('tasks', [])
+          for t in tasks:
+              status = t.get('status', '?')
+              icon = '✅' if status == 'completed' else '⚠️' if status in ('review_completed','no_changes') else '❌'
+              print(f'{icon} {t[\"task_id\"]}: {status}')
+              if t.get('changed_files'):
+                  for f in t['changed_files']:
+                      print(f'   • {f}')
+              if t.get('scope_violations'):
+                  print(f'   ⛔ SCOPE VIOLATIONS: {t[\"scope_violations\"]}')
+              if t.get('error'):
+                  print(f'   ERROR: {t[\"error\"]}')
+          "
+          else
+            echo "No run.json found — dry run or early failure."
+            cat /tmp/fleet-run.log 2>/dev/null || true
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-run-${{ github.run_id }}
+          path: /tmp/qudron-fleet-artifacts/
+          retention-days: 7
+          # الـ patches والـ prompts فقط — لا secrets، لا logs إلا إذا طُلب

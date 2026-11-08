@@ -114,6 +114,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(result["content"], "")
         self.assertEqual(result["cost_usd"], 0.0)
 
+    def test_cache_is_bounded_by_row_count_and_total_bytes(self):
+        self.assertGreater(dw.MAX_SEARCH_CACHE_TOTAL_BYTES, dw.MAX_CACHED_SEARCH_BYTES)
+        self.assertGreater(dw.MAX_SEARCH_CACHE_ROWS, 0)
+
     def test_daily_call_cap_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
             "DEEPSEEK_API_KEY": "test",

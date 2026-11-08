@@ -252,7 +252,12 @@ def search_web(query: str, count: int = 5, need_content: bool = True) -> dict[st
         "/search", {"query": query, "count": count, "need_content": bool(need_content)}
     )
     results = _bounded_results(data.get("results", []), count)
-    _write_search_cache(key, results)
+    if results:
+        # The cache is optional: never discard successful provider output on a cache error.
+        try:
+            _write_search_cache(key, results)
+        except (sqlite3.Error, OSError):
+            pass
     usage["cached"] = False
     usage["provider_calls"] = 1
     return {

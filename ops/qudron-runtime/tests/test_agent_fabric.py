@@ -299,7 +299,9 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         adapter = FakeAdapter()
         fabric.register_adapter("fake", adapter)
         fabric.register_agent(agent("agent", "provider", "fake"))
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(
+            AgentFabricError, "Task is waiting for authenticated owner approval"
+        ):
             await fabric.dispatch(task(requires_approval=True))
         self.assertEqual(adapter.submitted, [])
 
@@ -314,7 +316,9 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
             fabric.register_adapter("fake", adapter)
             fabric.register_agent(agent("agent", "provider", "fake"))
 
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(
+                AgentFabricError, "Task is waiting for authenticated owner approval"
+            ):
                 await fabric.dispatch(task(requires_approval=True, approved_by="owner"))
             self.assertEqual(adapter.submitted, [])
 
@@ -324,7 +328,10 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
             approved_task = task(requires_approval=True, approved_by="owner", approval_token=token)
             receipt = await fabric.dispatch(approved_task)
             self.assertEqual(receipt.agent_id, "agent")
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(
+                AgentFabricError,
+                "Owner approval token is invalid, expired, out of scope, or already used",
+            ):
                 await fabric.dispatch(approved_task)
             self.assertEqual(len(adapter.submitted), 1)
 
@@ -334,7 +341,7 @@ class AgentFabricTests(unittest.IsolatedAsyncioTestCase):
         fabric.register_agent(agent("agent", "provider", "fake"))
         receipt = await fabric.dispatch(task())
         wrong = AgentTaskHandle("other-provider", receipt.handle.remote_task_id, TaskStatus.RUNNING)
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(AgentFabricError, "different provider"):
             await fabric.poll("agent", wrong)
 
 

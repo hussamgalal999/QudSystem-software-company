@@ -28,6 +28,7 @@ class SwarmEngineTests(unittest.TestCase):
         registry = load_agent_registry("agent_registry.json")
         plan = build_swarm_plan("cvpen_cv_creation", registry=registry)
         self.assertEqual(len(plan), len(registry["teams"]["cvpen_cv_creation"]))
+        self.assertEqual([agent["id"] for agent in plan], registry["teams"]["cvpen_cv_creation"])
         self.assertEqual(len(plan), 10)
         self.assertEqual(plan[0]["execution_stage"], "produce")
         self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)

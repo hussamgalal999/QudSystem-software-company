@@ -19,7 +19,7 @@ TOOLS: list[dict[str, Any]] = [
             "Submit an internal Qudron research, analysis, or draft job. "
             "Allowed task types are research, social_post_draft, video_script, "
             "translation, seo_plan, lead_research, product_review, "
-            "engineering_review, strategy_review, and risk_review. "
+            "engineering_review, strategy_review, risk_review, and the eight Qudron execution-wave task types. "
             "This queues work; it does not publish content, contact customers, "
             "handle CV customer data, process payments, or change production systems."
         ),
@@ -41,6 +41,10 @@ TOOLS: list[dict[str, Any]] = [
                         "research", "social_post_draft", "video_script", "translation",
                         "seo_plan", "lead_research", "product_review",
                         "engineering_review", "strategy_review", "risk_review",
+                        "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+                        "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+                        "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+                        "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
                     ],
                 },
                 "idempotency_key": {
@@ -87,6 +91,10 @@ TOOLS: list[dict[str, Any]] = [
                                     "research", "social_post_draft", "video_script", "translation",
                                     "seo_plan", "lead_research", "product_review",
                                     "engineering_review", "strategy_review", "risk_review",
+                        "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+                        "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+                        "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+                        "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
                                 ],
                             },
                             "idempotency_key": {
@@ -154,7 +162,7 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "qudron_get_continuity",
-        "description": "Read persisted agent-stage checkpoints, agent-memory counts, external task states, and recent execution events. This is the durable continuity record, not a claim that every provider is online.",
+        "description": "Read bounded continuity metadata: recent agent instances, recent stage records, checkpoint-presence indicators, memory counts, external-task states, cloud-outbox counts, and recent events. This tool does not expose stored stage output, private customer content, or provider credentials.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
     },
@@ -261,7 +269,7 @@ def handle_mcp_request(
             "serverInfo": SERVER_INFO,
             "instructions": (
                 "Qudron provides read-only status/report tools and an approval-gated "
-                "job submission tool. It also exposes durable per-agent memory and resumable execution state."
+                "job submission tool. It also exposes bounded continuity metadata and sanitized per-agent memory. The continuity summary shows recent instance/stage status and whether checkpoint output exists, but does not return stored stage-output content."
             ),
         }
         return {"jsonrpc": "2.0", "id": request_id, "result": result}

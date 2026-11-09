@@ -26,6 +26,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type check
         run: npm run typecheck
+      - name: Test Worker request boundary behavior
+        run: npm test
       - name: Validate Worker bundle
         run: npm run build
       - name: Validate D1 deployment ID wiring

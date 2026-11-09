@@ -24,9 +24,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swarm_engine import execute_swarm, load_agent_registry, redact_sensitive_text
@@ -34,6 +35,16 @@ from deepseek_web import search_web, WebResearchError
 from capability_miner import mine_from_environment
 from capability_registry import search_capabilities as search_capability_registry
 from mcp_gateway import handle_mcp_request, MCPGatewayError
+from continuity_store import ContinuityStore
+from cloud_memory_adapter import (
+    CloudMemoryClient, CloudMemoryError, context_packet_to_text, flush_from_environment,
+)
+from endpoint_security import open_credential_request
+from provider_resilience import (
+    ProviderCatalogueStore, ProviderHealthStore, ProviderRouteError, _base_url, catalogue_discovery_snapshot,
+    eligible_routes, load_provider_routes, probe_due_catalogue_providers,
+    probe_due_routes, route_health_snapshot,
+)
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("QUDRON_DB_PATH", str(APP_DIR / "data" / "qudron.sqlite3")))
@@ -58,9 +69,12 @@ MAX_PENDING_JOBS = max(1000, min(1_000_000, int(os.getenv("QUDRON_MAX_PENDING_JO
 MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("QUDRON_MAX_OUTPUT_TOKENS", "1200"))))
 MAX_INPUT_CHARS = max(4000, min(60000, int(os.getenv("QUDRON_MAX_INPUT_CHARS", "24000"))))
 SWARM_ENABLED = os.getenv("QUDRON_SWARM_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-MAX_SWARM_AGENTS = max(1, min(5, int(os.getenv("QUDRON_MAX_SWARM_AGENTS", "5"))))
-MAX_CVPEN_AGENTS = max(1, min(10, int(os.getenv("QUDRON_MAX_CVPEN_AGENTS", "10"))))
-MAX_PARALLEL_REVIEWS = max(1, min(8, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "8"))))
+# This is a task admission guard, not a role catalogue or live-model concurrency claim.
+# Multiple tasks may each create their own role-scoped execution records.
+MAX_ROLE_ASSIGNMENTS_PER_TASK = max(
+    1, min(10_000, int(os.getenv("QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK", "10000")))
+)
+MAX_PARALLEL_REVIEWS = max(1, min(32, int(os.getenv("QUDRON_MAX_PARALLEL_REVIEWS", "16"))))
 MAX_CONCURRENT_MODEL_CALLS = max(1, min(32, int(os.getenv("QUDRON_MAX_CONCURRENT_MODEL_CALLS", "16"))))
 MODEL_CALL_SLOT_TIMEOUT_SECONDS = max(5, min(900, int(os.getenv("QUDRON_MODEL_CALL_SLOT_TIMEOUT_SECONDS", "120"))))
 AGENT_REGISTRY: dict[str, Any] = {}
@@ -68,6 +82,10 @@ EXTERNAL_API_TASK_TYPES = {
     "research", "social_post_draft", "video_script", "translation",
     "seo_plan", "lead_research", "product_review", "engineering_review",
     "strategy_review", "risk_review",
+    "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+    "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+    "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+    "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
 }
 
 ALLOWED_TASK_TYPES = {
@@ -76,6 +94,10 @@ ALLOWED_TASK_TYPES = {
     "cvpen_ats_audit", "customer_support_reply", "payment_reconciliation",
     "product_review", "engineering_review", "strategy_review", "risk_review",
     "incident_triage", "capability_mining",
+    "qudron_wave_01_architecture", "qudron_wave_02_runtime_models",
+    "qudron_wave_03_security_governance", "qudron_wave_04_opendots_experience",
+    "qudron_wave_05_platform_release", "qudron_wave_06_market_commercial",
+    "qudron_wave_07_cvpen_product", "qudron_wave_08_quality_payment",
 }
 STOP = threading.Event()
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -120,6 +142,7 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS jobs (
           id TEXT PRIMARY KEY, job_key TEXT UNIQUE, title TEXT NOT NULL,
           role TEXT NOT NULL, task_type TEXT NOT NULL, prompt TEXT NOT NULL,
+          data_class TEXT NOT NULL DEFAULT 'internal',
           status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
           run_after TEXT NOT NULL, locked_by TEXT, lock_until TEXT,
           result_path TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -151,6 +174,20 @@ def init_db() -> None:
           profile TEXT NOT NULL, reserved_cost_usd REAL NOT NULL,
           created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS llm_call_attempts (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+          profile TEXT NOT NULL, provider_id TEXT NOT NULL, model TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'in_flight',
+          billing_state TEXT NOT NULL DEFAULT 'pending',
+          estimated_cost_usd REAL, reported_cost_usd REAL,
+          error_class TEXT, started_at TEXT NOT NULL, finished_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_started
+          ON llm_call_attempts(started_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_job
+          ON llm_call_attempts(job_id, started_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_attempts_billing
+          ON llm_call_attempts(billing_state, started_at);
         CREATE INDEX IF NOT EXISTS idx_llm_reservations_created
           ON llm_usage_reservations(created_at);
         CREATE TABLE IF NOT EXISTS model_call_slots (
@@ -478,10 +515,15 @@ def mcp_get_models() -> dict[str, Any]:
         if not isinstance(provider, dict):
             continue
         auth_env = str(provider.get("auth_env", ""))
+        auth_file_env = str(provider.get("auth_file_env", ""))
+        auth_value = os.getenv(auth_env, "").strip() if auth_env else ""
+        if not auth_value and auth_file_env:
+            auth_path = os.getenv(auth_file_env, "").strip()
+            auth_value = _read_secret_file(auth_path) if auth_path else ""
         models = provider.get("models", [])
         providers.append({
             "provider": provider.get("provider"),
-            "auth_configured": bool(auth_env and os.getenv(auth_env, "").strip()),
+            "auth_configured": bool(auth_value),
             "candidate_models": [
                 {
                     "id": model.get("id"),
@@ -499,7 +541,11 @@ def mcp_get_models() -> dict[str, Any]:
             ],
         })
 
-    base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    raw_base_url = (os.getenv("LLM_BASE_URL", "") or "").rstrip("/")
+    try:
+        base_url = _base_url(raw_base_url, allow_private_http=True) if raw_base_url else ""
+    except ProviderRouteError:
+        base_url = ""
     model_url = base_url + ("/models" if base_url.endswith("/v1") else "/v1/models") if base_url else ""
     gateway = {
         "configured": bool(base_url),
@@ -516,7 +562,7 @@ def mcp_get_models() -> dict[str, Any]:
             headers["Authorization"] = f"Bearer {key}"
         try:
             request = urllib.request.Request(model_url, headers=headers, method="GET")
-            with urllib.request.urlopen(request, timeout=5) as response:
+            with open_credential_request(request, timeout=5, endpoint_validated=True) as response:
                 data = json.loads(response.read(1_000_001).decode("utf-8"))
             gateway["catalogue_reachable"] = True
             gateway["status"] = "catalogue_reachable_inference_unverified"
@@ -528,12 +574,50 @@ def mcp_get_models() -> dict[str, Any]:
         except Exception:
             gateway["status"] = "unreachable_or_unauthorized"
 
+    configured_routes = []
+    for profile in ("fast", "balanced", "reasoning"):
+        try:
+            configured_routes.extend(load_provider_routes(
+                profile, environ=os.environ, secret_reader=_read_secret_file,
+                anonymous_detector=is_anonymous_freellm_route,
+            ))
+        except Exception:
+            # Configuration errors are reported as unavailable, never as a reason
+            # to guess credentials or try an undocumented provider route.
+            continue
+    route_by_id = {item["route_id"]: item for item in route_health_snapshot(DB_PATH)}
+    catalogue_by_provider = {
+        item["provider_id"]: item for item in catalogue_discovery_snapshot(DB_PATH)
+    }
+    for provider in providers:
+        provider["live_catalogue_discovery"] = catalogue_by_provider.get(
+            str(provider.get("provider", "")),
+            {"status": "not_probed", "models": []},
+        )
+    route_status = []
+    seen_routes = set()
+    for route in configured_routes:
+        if route.route_id in seen_routes:
+            continue
+        seen_routes.add(route.route_id)
+        record = route.safe_record()
+        health = route_by_id.get(route.route_id)
+        record["health"] = health or {
+            "status": "not_probed",
+            "model_available": False,
+            "consecutive_failures": 0,
+        }
+        route_status.append(record)
+
     return {
         "catalogue_as_of": catalog.get("as_of") if isinstance(catalog, dict) else None,
         "policy": catalog.get("policy") if isinstance(catalog, dict) else "No catalogue policy available.",
         "gateway": gateway,
         "providers": providers,
-        "note": "A provider key being configured or a model appearing in a catalogue is not proof of live inference. No paid inference request was made by this read-only tool.",
+        "configured_execution_routes": route_status,
+        "provider_health": route_health_snapshot(DB_PATH),
+        "catalogue_discovery": catalogue_discovery_snapshot(DB_PATH),
+        "note": "A configured key or discovered model is not proof of paid quota or successful inference. Discovery uses only read-only official model-list endpoints; it never activates models or makes paid inference calls.",
     }
 
 
@@ -647,6 +731,9 @@ def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     prompt = str(payload.get("prompt", "")).strip()
     role = str(payload.get("role", "Qudron Task Agent")).strip()
     key = str(payload.get("idempotency_key", "")).strip()
+    data_class = str(payload.get("data_class", "internal")).strip().lower()
+    if data_class not in {"public", "internal", "confidential", "restricted"}:
+        raise ValueError("data_class must be public, internal, confidential, or restricted")
     if not title or len(title) > 160:
         raise ValueError("title is required and must be <= 160 characters")
     if not prompt or len(prompt) > 8000:
@@ -656,7 +743,7 @@ def _validate_api_job(payload: dict[str, Any]) -> dict[str, str]:
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,120}", key):
         raise ValueError("idempotency_key must be 8-120 safe ASCII characters")
     return {"task_type": task_type, "title": title, "prompt": prompt,
-            "role": role, "idempotency_key": key}
+            "role": role, "idempotency_key": key, "data_class": data_class}
 
 
 def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -680,10 +767,10 @@ def enqueue_api_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
             raise ValueError("queue_capacity_reached: Qudron's pending-job limit has been reached")
         db.execute(
             """INSERT INTO jobs
-            (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+            (id,job_key,title,role,task_type,prompt,data_class,status,attempts,run_after,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,'pending',0,?,?,?)""",
             (job_id, job_key, item["title"], item["role"], item["task_type"],
-             item["prompt"], now, now, now),
+             item["prompt"], item["data_class"], now, now, now),
         )
         db.commit()
     return {"id": job_id, "status": "pending", "title": item["title"]}, True
@@ -732,10 +819,10 @@ def enqueue_api_batch(payload: dict[str, Any]) -> dict[str, Any]:
             job_id = uuid.uuid4().hex
             db.execute(
                 """INSERT INTO jobs
-                (id,job_key,title,role,task_type,prompt,status,attempts,run_after,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,'pending',0,?,?,?)""",
+                (id,job_key,title,role,task_type,prompt,data_class,status,attempts,run_after,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,'pending',0,?,?,?)""",
                 (job_id, job_key, item["title"], item["role"], item["task_type"],
-                 item["prompt"], now, now, now),
+                 item["prompt"], item["data_class"], now, now, now),
             )
             result_by_key[item["idempotency_key"]] = {
                 "created": True,
@@ -823,6 +910,47 @@ def retrieve_memory_context(project: str, limit: int = 10) -> str:
     return "\n".join(lines)[:8000]
 
 
+def model_route_metadata(agent: dict[str, Any]) -> tuple[str, str, str]:
+    """Return non-secret routing identity for an agent assignment."""
+    profile = str(agent.get("profile", "balanced")).lower()
+    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
+              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
+    base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).strip()
+    model_name = (os.getenv(f"{prefix}_MODEL") or LLM_MODEL).strip()[:160]
+    try:
+        provider_id = urlsplit(base_url).hostname or "unconfigured"
+    except ValueError:
+        provider_id = "invalid_endpoint"
+    return profile, provider_id[:160], model_name or "unresolved"
+
+
+def retrieve_cloud_memory_context(project: str, limit: int = 25) -> str:
+    """Load optional bounded project context; local SQLite remains authoritative."""
+    try:
+        client = CloudMemoryClient.from_environment()
+    except (CloudMemoryError, ValueError) as exc:
+        logging.warning("Cloud memory context unavailable during client setup (%s)", type(exc).__name__)
+        return ""
+    if client is None:
+        return ""
+    try:
+        # Optional cloud context must never hold a worker behind the full
+        # provider timeout. Local SQLite remains the immediate fallback.
+        try:
+            context_timeout = float(os.getenv("QUDRON_MEMORY_CONTEXT_TIMEOUT_SECONDS", "2"))
+        except (TypeError, ValueError):
+            context_timeout = 2.0
+        client.timeout_seconds = max(1.0, min(5.0, context_timeout))
+        packet = client.get_context(project_id=project, limit=max(1, min(100, limit)))
+        rendered = context_packet_to_text(packet, max_chars=8000)
+    except (CloudMemoryError, ValueError) as exc:
+        logging.warning("Cloud memory context fetch failed (%s); continuing with local memory", type(exc).__name__)
+        return ""
+    if not rendered:
+        return ""
+    return redact_sensitive_text(rendered)[:8000]
+
+
 def any_model_profile_configured() -> bool:
     for prefix in ("LLM_FAST", "LLM_BALANCED", "LLM_REASONING"):
         base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).strip()
@@ -893,8 +1021,13 @@ def release_model_call_slot(slot_id: str | None) -> None:
         db.execute("DELETE FROM model_call_slots WHERE id=?", (slot_id,))
 
 
-def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
-                         payload_bytes: int, task_type: str | None = None) -> str | None:
+def reserve_model_budget(
+    job_id: str, agent_id: str, profile: str, model: str,
+    payload_bytes: int, task_type: str | None = None, *,
+    input_rate_override: float | None = None,
+    output_rate_override: float | None = None,
+    verified_free_route: bool = False,
+) -> str | None:
     daily_budget = configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD")
     monthly_budget = configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD")
     cvpen_job_budget = (
@@ -918,14 +1051,23 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
             )
         return None
     input_rate, output_rate = profile_cost_rates(profile)
+    if input_rate_override is not None:
+        input_rate = input_rate_override
+    if output_rate_override is not None:
+        output_rate = output_rate_override
     profile_prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
                       "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
     selected_base_url = (os.getenv(f"{profile_prefix}_BASE_URL") or LLM_BASE_URL).strip()
-    anonymous_free_route = is_anonymous_freellm_route(selected_base_url)
+    # A task-scoped route's own entitlement and price override must win over
+    # the default profile URL. Otherwise a FreeLLM primary could accidentally
+    # make a paid fallback look free in the budget ledger.
+    explicit_route_pricing = input_rate_override is not None or output_rate_override is not None
+    anonymous_free_route = verified_free_route or (
+        not explicit_route_pricing and is_anonymous_freellm_route(selected_base_url)
+    )
     if anonymous_free_route:
-        # Anonymous routes are quota-limited free-tier endpoints; no paid key is
-        # configured. Record their provider charge as zero, but keep the daily
-        # budget and provider quotas active. Never infer zero cost for keyed APIs.
+        # Only an anonymous route or an explicitly owner-verified free route may
+        # use a zero provider price estimate. Daily/model-call caps remain active.
         input_rate = 0.0 if input_rate is None else input_rate
         output_rate = 0.0 if output_rate is None else output_rate
     if not anonymous_free_route and (input_rate == 0 or output_rate == 0) and os.getenv(
@@ -959,6 +1101,15 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
         reservation_cutoff = (
             now - dt.timedelta(seconds=max(600, LLM_TIMEOUT * 3))
         ).isoformat(timespec="seconds")
+        # Recover attempts interrupted after the request may have reached the provider.
+        # They remain an uncertain-cost exposure until reconciled, not a fabricated $0.
+        db.execute(
+            """UPDATE llm_call_attempts
+               SET status='interrupted', billing_state='unknown',
+                   error_class='worker_interrupted', finished_at=?
+               WHERE status='in_flight' AND started_at<?""",
+            (stamp, reservation_cutoff),
+        )
         db.execute(
             "DELETE FROM llm_usage_reservations WHERE created_at<?",
             (reservation_cutoff,),
@@ -972,7 +1123,12 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE job_id=?",
                 (job_id,),
             ).fetchone()[0]
-            if float(job_spent or 0) + float(job_reserved or 0) + estimated_cost > cvpen_job_budget:
+            job_uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE job_id=? AND billing_state='unknown'""",
+                (job_id,),
+            ).fetchone()[0]
+            if float(job_spent or 0) + float(job_reserved or 0) + float(job_uncertain or 0) + estimated_cost > cvpen_job_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"CVPen per-order model budget reached for job {job_id}; "
@@ -988,7 +1144,12 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
                 (day,),
             ).fetchone()[0]
-            if float(spent or 0) + float(reserved or 0) + estimated_cost > daily_budget:
+            uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE started_at LIKE ? AND billing_state='unknown'""",
+                (day,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > daily_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"Qudron daily model budget reached; estimated call cost {estimated_cost:.6f} USD "
@@ -1004,7 +1165,12 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
                 "SELECT COALESCE(SUM(reserved_cost_usd),0) FROM llm_usage_reservations WHERE created_at LIKE ?",
                 (month,),
             ).fetchone()[0]
-            if float(spent or 0) + float(reserved or 0) + estimated_cost > monthly_budget:
+            uncertain = db.execute(
+                """SELECT COALESCE(SUM(estimated_cost_usd),0) FROM llm_call_attempts
+                   WHERE started_at LIKE ? AND billing_state='unknown'""",
+                (month,),
+            ).fetchone()[0]
+            if float(spent or 0) + float(reserved or 0) + float(uncertain or 0) + estimated_cost > monthly_budget:
                 db.rollback()
                 raise RuntimeError(
                     f"Qudron monthly model budget reached; estimated call cost {estimated_cost:.6f} USD "
@@ -1020,8 +1186,12 @@ def reserve_model_budget(job_id: str, agent_id: str, profile: str, model: str,
     return reservation_id
 
 
-def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
-                       response_data: dict[str, Any], reservation_id: str | None) -> None:
+def record_model_usage(
+    job_id: str, agent_id: str, profile: str, model: str,
+    response_data: dict[str, Any], reservation_id: str | None, *,
+    input_rate_override: float | None = None,
+    output_rate_override: float | None = None,
+) -> float | None:
     usage = response_data.get("usage")
     if not isinstance(usage, dict):
         usage = {}
@@ -1038,6 +1208,10 @@ def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
     completion_tokens = safe_count(completion_tokens)
     total_tokens = safe_count(total_tokens)
     input_rate, output_rate = profile_cost_rates(profile)
+    if input_rate_override is not None:
+        input_rate = input_rate_override
+    if output_rate_override is not None:
+        output_rate = output_rate_override
     provider_cost = usage.get("cost", usage.get("total_cost"))
     cost_usd: float | None = None
     try:
@@ -1069,6 +1243,58 @@ def record_model_usage(job_id: str, agent_id: str, profile: str, model: str,
         if reservation_id:
             db.execute("DELETE FROM llm_usage_reservations WHERE id=?", (reservation_id,))
         db.commit()
+    return cost_usd
+
+
+def start_model_call_attempt(
+    job_id: str, agent_id: str, profile: str, provider_id: str,
+    model: str, reservation_id: str | None,
+) -> str:
+    """Persist a safe model-call attempt before network I/O; never stores prompts or secrets."""
+    attempt_id = uuid.uuid4().hex
+    stamp = iso_now()
+    with connect_db() as db:
+        estimated = None
+        if reservation_id:
+            reservation = db.execute(
+                "SELECT reserved_cost_usd FROM llm_usage_reservations WHERE id=?",
+                (reservation_id,),
+            ).fetchone()
+            if reservation is not None:
+                estimated = float(reservation["reserved_cost_usd"])
+        db.execute(
+            """INSERT INTO llm_call_attempts
+               (id,job_id,agent_id,profile,provider_id,model,status,billing_state,
+                estimated_cost_usd,started_at)
+               VALUES(?,?,?,?,?,?,'in_flight','pending',?,?)""",
+            (attempt_id, job_id, agent_id, profile, provider_id[:120], model[:160], estimated, stamp),
+        )
+    return attempt_id
+
+
+def finish_model_call_attempt(
+    attempt_id: str | None, *, status: str, billing_state: str,
+    error_class: str | None = None, reported_cost_usd: float | None = None,
+) -> None:
+    """Close an attempt using a bounded status, safe error label and explicit billing certainty."""
+    if not attempt_id:
+        return
+    if status not in {"succeeded", "failed", "rejected", "interrupted"}:
+        raise ValueError("Unsupported model attempt status")
+    if billing_state not in {"reported", "estimated", "unknown", "not_charged"}:
+        raise ValueError("Unsupported model attempt billing state")
+    if reported_cost_usd is not None and (
+        not math.isfinite(float(reported_cost_usd)) or float(reported_cost_usd) < 0
+    ):
+        raise ValueError("reported_cost_usd must be finite and non-negative")
+    safe_error = re.sub(r"[^A-Za-z0-9_.:-]", "_", str(error_class or ""))[:80] or None
+    with connect_db() as db:
+        db.execute(
+            """UPDATE llm_call_attempts
+               SET status=?,billing_state=?,error_class=?,reported_cost_usd=?,finished_at=?
+               WHERE id=? AND status='in_flight'""",
+            (status, billing_state, safe_error, reported_cost_usd, iso_now(), attempt_id),
+        )
 
 
 def release_model_budget_reservation(reservation_id: str | None) -> None:
@@ -1108,16 +1334,44 @@ def model_usage_snapshot(recent_limit: int = 20) -> dict[str, Any]:
                ORDER BY created_at DESC LIMIT ?""",
             (max(1, min(100, recent_limit)),),
         ).fetchall()
+        daily_attempts = db.execute(
+            """SELECT COUNT(*) attempts,
+                      SUM(CASE WHEN status='succeeded' THEN 1 ELSE 0 END) succeeded,
+                      SUM(CASE WHEN status IN ('failed','rejected','interrupted') THEN 1 ELSE 0 END) failed,
+                      SUM(CASE WHEN status='in_flight' THEN 1 ELSE 0 END) in_flight,
+                      SUM(CASE WHEN billing_state='unknown' THEN 1 ELSE 0 END) uncertain_billing,
+                      COALESCE(SUM(CASE WHEN billing_state='unknown' THEN estimated_cost_usd ELSE 0 END),0) uncertain_cost_exposure_usd
+               FROM llm_call_attempts WHERE started_at LIKE ?""",
+            (day,),
+        ).fetchone()
+        monthly_attempts = db.execute(
+            """SELECT COUNT(*) attempts,
+                      SUM(CASE WHEN billing_state='unknown' THEN 1 ELSE 0 END) uncertain_billing,
+                      COALESCE(SUM(CASE WHEN billing_state='unknown' THEN estimated_cost_usd ELSE 0 END),0) uncertain_cost_exposure_usd
+               FROM llm_call_attempts WHERE started_at LIKE ?""",
+            (month,),
+        ).fetchone()
+        recent_attempts = db.execute(
+            """SELECT job_id,agent_id,profile,provider_id,model,status,billing_state,
+                      estimated_cost_usd,reported_cost_usd,error_class,started_at,finished_at
+               FROM llm_call_attempts ORDER BY started_at DESC LIMIT ?""",
+            (max(1, min(100, recent_limit)),),
+        ).fetchall()
     return {
         "day_utc": now.date().isoformat(),
         "month_utc": now.strftime("%Y-%m"),
         "daily": dict(totals),
         "monthly": dict(month_totals),
+        "attempts_daily": dict(daily_attempts),
+        "attempts_monthly": dict(monthly_attempts),
+        "uncertain_cost_exposure_daily_usd": float(daily_attempts["uncertain_cost_exposure_usd"] or 0),
+        "uncertain_cost_exposure_monthly_usd": float(monthly_attempts["uncertain_cost_exposure_usd"] or 0),
         "reserved_in_flight_usd": float(pending_reserved or 0),
         "daily_budget_usd": configured_budget("QUDRON_DAILY_MODEL_BUDGET_USD"),
         "monthly_budget_usd": configured_budget("QUDRON_MONTHLY_MODEL_BUDGET_USD"),
-        "cost_note": "Costs are provider-reported or calculated from configured per-million-token rates; null means the provider usage or rate was unavailable.",
+        "cost_note": "Successful usage is provider-reported or calculated from configured rates. Failed/uncertain attempts are separate; uncertain estimated exposure remains in budget checks until reconciled.",
         "recent": [dict(row) for row in recent],
+        "recent_attempts": [dict(row) for row in recent_attempts],
     }
 
 
@@ -1187,23 +1441,80 @@ def validate_keyless_payload(job: sqlite3.Row, user_text: str, base_url: str) ->
         )
 
 
-def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
-             prior_context: str, memory_context: str) -> str:
+def classify_job_data(
+    job: sqlite3.Row | Mapping[str, Any],
+    prior_context: str = "",
+    memory_context: str = "",
+) -> str:
+    """Use the owner-declared task class, with conservative context escalation.
+
+    Unknown/legacy jobs are internal. Public is an explicit owner declaration,
+    never inferred from a task type or a phrase in its prompt. Private prior
+    context or memory always escalates public content to internal.
+    """
+    task_type = str(job["task_type"])
+    if task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }:
+        return "confidential"
+
+    try:
+        declared = str(job["data_class"]).strip().lower()
+    except (KeyError, IndexError):
+        declared = "internal"
+    if declared not in {"public", "internal", "confidential", "restricted"}:
+        declared = "internal"
+    if declared in {"confidential", "restricted"}:
+        return declared
+
+    prompt = str(job["prompt"] or "")
+    prior = str(prior_context or "")
+    memory = str(memory_context or "")
+    combined = prompt + "\n" + prior + "\n" + memory
+    lowered = combined.lower()
+    restricted_markers = (
+        "confidential", "internal-only", "internal only", "non-public",
+        "private source", "private repository", "customer record",
+        "customer data", "payment evidence", "bank account", "password",
+        "access token", "api key", "secret key",
+    )
+    if (
+        (declared == "public" and (prior.strip() or memory.strip()))
+        or any(marker in lowered for marker in restricted_markers)
+        or redact_sensitive_text(combined) != combined
+    ):
+        return "internal"
+    return declared
+
+
+def call_llm(
+    job: sqlite3.Row, agent: dict[str, Any], instruction: str,
+    prior_context: str, memory_context: str,
+    on_route_selected: Callable[[str, str, str], None] | None = None,
+) -> str:
     profile = str(agent.get("profile", "balanced")).lower()
-    prefix = {"fast": "LLM_FAST", "balanced": "LLM_BALANCED",
-              "reasoning": "LLM_REASONING"}.get(profile, "LLM_BALANCED")
-    base_url = (os.getenv(f"{prefix}_BASE_URL") or LLM_BASE_URL).rstrip("/")
-    api_key = os.getenv(f"{prefix}_API_KEY") or LLM_API_KEY
-    if not api_key:
-        api_key = _read_secret_file(
-            os.getenv(f"{prefix}_API_KEY_FILE") or os.getenv("LLM_API_KEY_FILE", "")
-        )
-    model = os.getenv(f"{prefix}_MODEL") or LLM_MODEL
-    if not base_url or not model:
+    if profile not in {"fast", "balanced", "reasoning"}:
+        profile = "balanced"
+    routes = load_provider_routes(
+        profile, environ=os.environ, secret_reader=_read_secret_file,
+        anonymous_detector=is_anonymous_freellm_route,
+    )
+    if not routes:
         raise RuntimeError(
-            f"LLM profile '{profile}' is not configured: set {prefix}_BASE_URL and "
-            f"{prefix}_MODEL or the default LLM_BASE_URL and LLM_MODEL."
+            f"LLM profile '{profile}' is not configured with an authorized Chat Completions provider. "
+            "Configure an owner-approved route; do not use browser cookies or undocumented sessions."
         )
+
+    data_class = classify_job_data(job, prior_context, memory_context)
+    health_store = ProviderHealthStore(DB_PATH)
+    candidates = eligible_routes(routes, health_store, data_class=data_class)
+    if not candidates:
+        raise RuntimeError(
+            f"No healthy, owner-approved provider route accepts the task data class '{data_class}'. "
+            "The task is preserved; configure or verify an eligible route."
+        )
+
     system = (
         "You are a specialist AI worker inside Qudron, the operating system for QudSystem. "
         "Brand values: trust, quality, speed, commitment; Made in Egypt. "
@@ -1213,59 +1524,221 @@ def call_llm(job: sqlite3.Row, agent: dict[str, Any], instruction: str,
         f"Your specialist identity is {agent.get('name', agent.get('id', 'Specialist'))}. "
         f"Responsibilities: {agent.get('responsibilities', 'Complete the assigned specialist stage.')}"
     )
-    anonymous_route = is_anonymous_freellm_route(base_url)
-    if anonymous_route:
-        # Never send Qudron's persistent internal memory to anonymous public APIs.
-        memory_context = "[omitted: private Qudron memory is not sent to anonymous providers]"
-    user = (
+    common_user = (
         f"Role: {job['role']}\nTask type: {job['task_type']}\nTitle: {job['title']}\n\n"
         f"Original task and instructions:\n{str(job['prompt'])[:MAX_INPUT_CHARS]}\n\n"
         f"Current stage instructions:\n{instruction}\n\n"
         f"Prior stage context:\n{str(prior_context or '[none]')[-MAX_INPUT_CHARS // 2:]}\n\n"
-        f"Relevant memory:\n{str(memory_context or '[none]')[-4000:]}\n\n"
         "Return a practical deliverable. Use Egyptian Arabic by default for Arabic social/video "
         "copy unless instructed otherwise. Do not expose hidden reasoning."
     )
-    validate_keyless_payload(job, user, base_url)
-    payload = json.dumps({
-        "model": model,
-        "temperature": 0.3 if profile == "reasoning" else 0.4,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-    }).encode("utf-8")
-    reservation_id = reserve_model_budget(
-        str(job["id"]), str(agent.get("id", "unknown")), profile, model, len(payload),
-        str(job["task_type"])
-    )
-    slot_id = None
-    try:
-        slot_id = acquire_model_call_slot(
-            str(job["id"]), str(agent.get("id", "unknown"))
+
+    failures: list[str] = []
+    for route in candidates:
+        if route.protocol != "openai_chat_completions":
+            # Defense in depth; the route loader currently filters this already.
+            failures.append(f"{route.provider_id}:unsupported_protocol")
+            continue
+        route_memory = (
+            "[omitted: private Qudron memory is not sent to anonymous providers]"
+            if route.anonymous else str(memory_context or "[none]")[-4000:]
         )
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        request = urllib.request.Request(
-            f"{base_url}/chat/completions", data=payload, headers=headers, method="POST"
-        )
+        user = common_user + "\n\nRelevant memory:\n" + route_memory
+        if route.anonymous:
+            try:
+                validate_keyless_payload(job, user, route.base_url)
+            except RuntimeError:
+                failures.append(f"{route.provider_id}:anonymous_data_policy_denied")
+                continue
+
+        payload = json.dumps({
+            "model": route.model,
+            "temperature": 0.3 if profile == "reasoning" else 0.4,
+            "max_tokens": MAX_OUTPUT_TOKENS,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }).encode("utf-8")
+
         try:
-            with urllib.request.urlopen(request, timeout=LLM_TIMEOUT) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1500]
-            raise RuntimeError(f"LLM HTTP {exc.code}: {detail}") from exc
-        record_model_usage(
-            str(job["id"]), str(agent.get("id", "unknown")), profile, model, data, reservation_id
-        )
-        reservation_id = None
-    finally:
-        release_model_call_slot(slot_id)
-        release_model_budget_reservation(reservation_id)
-    choices = data.get("choices") or []
-    answer = choices[0].get("message", {}).get("content") if choices else None
-    if not isinstance(answer, str) or not answer.strip():
-        raise RuntimeError("LLM returned an empty response")
-    return answer.strip()
+            reservation_id = reserve_model_budget(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.model, len(payload), str(job["task_type"]),
+                input_rate_override=route.input_usd_per_1m,
+                output_rate_override=route.output_usd_per_1m,
+                verified_free_route=route.verified_free,
+            )
+        except RuntimeError as exc:
+            message = str(exc).lower()
+            if any(token in message for token in (
+                "budget reached", "budget cap", "per-order", "daily model budget",
+                "monthly model budget", "cvpen per-order",
+            )):
+                # A provider fallback must never turn into a spend-limit bypass.
+                raise
+            failures.append(f"{route.provider_id}:pricing_or_budget_gate")
+            continue
+
+        slot_id = None
+        attempt_id = None
+        try:
+            slot_id = acquire_model_call_slot(
+                str(job["id"]), str(agent.get("id", "unknown"))
+            )
+            if on_route_selected:
+                on_route_selected(route.provider_id, route.model, profile)
+            attempt_id = start_model_call_attempt(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.provider_id, route.model, reservation_id,
+            )
+            headers = {"Content-Type": "application/json", "Accept": "application/json"}
+            if route.api_key:
+                headers["Authorization"] = f"Bearer {route.api_key}"
+            request = urllib.request.Request(
+                f"{route.base_url.rstrip('/')}/chat/completions",
+                data=payload, headers=headers, method="POST",
+            )
+            try:
+                with open_credential_request(request, timeout=LLM_TIMEOUT, endpoint_validated=True) as response:
+                    raw = response.read(4_000_001)
+                    if len(raw) > 4_000_000:
+                        raise RuntimeError("provider_response_too_large")
+                    data = json.loads(raw.decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                code = int(exc.code)
+                error_class = f"http_{code}"
+                health_store.mark_call_failure(route, error_class)
+                billing_state = "not_charged" if code in {400, 401, 403, 404, 413, 422, 429} else "unknown"
+                finish_model_call_attempt(
+                    attempt_id, status="rejected" if code in {400, 422} else "failed",
+                    billing_state=billing_state, error_class=error_class,
+                )
+                attempt_id = None
+                failures.append(f"{route.provider_id}:{error_class}")
+                if code in {400, 422}:
+                    # Invalid task payloads are request-wide; route-local errors
+                    # may proceed to an approved fallback.
+                    raise RuntimeError(f"Provider rejected the request ({error_class}).") from None
+                continue
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                health_store.mark_call_failure(route, "network_unavailable")
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class="network_unavailable",
+                )
+                attempt_id = None
+                failures.append(f"{route.provider_id}:network_unavailable")
+                continue
+            except (UnicodeDecodeError, json.JSONDecodeError, RuntimeError) as exc:
+                error_class = "invalid_or_oversized_response"
+                health_store.mark_call_failure(route, error_class)
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class=error_class,
+                )
+                attempt_id = None
+                failures.append(f"{route.provider_id}:{error_class}")
+                continue
+
+            choices = data.get("choices") if isinstance(data, dict) else None
+            answer = (
+                choices[0].get("message", {}).get("content")
+                if isinstance(choices, list) and choices and isinstance(choices[0], dict)
+                else None
+            )
+            if not isinstance(answer, str) or not answer.strip():
+                health_store.mark_call_failure(route, "empty_or_incompatible_response")
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class="empty_or_incompatible_response",
+                )
+                attempt_id = None
+                failures.append(f"{route.provider_id}:empty_or_incompatible_response")
+                continue
+
+            recorded_cost = record_model_usage(
+                str(job["id"]), str(agent.get("id", "unknown")), profile,
+                route.model, data, reservation_id,
+                input_rate_override=route.input_usd_per_1m,
+                output_rate_override=route.output_usd_per_1m,
+            )
+            usage = data.get("usage") if isinstance(data, dict) else None
+            provider_cost = usage.get("cost", usage.get("total_cost")) if isinstance(usage, dict) else None
+            try:
+                provider_cost_valid = provider_cost is not None and math.isfinite(float(provider_cost)) and float(provider_cost) >= 0
+            except (TypeError, ValueError):
+                provider_cost_valid = False
+            billing_state = "reported" if provider_cost_valid else ("estimated" if recorded_cost is not None else "unknown")
+            try:
+                safe_recorded_cost = (
+                    float(recorded_cost)
+                    if recorded_cost is not None and math.isfinite(float(recorded_cost)) and float(recorded_cost) >= 0
+                    else None
+                )
+            except (TypeError, ValueError):
+                safe_recorded_cost = None
+            finish_model_call_attempt(
+                attempt_id, status="succeeded", billing_state=billing_state,
+                reported_cost_usd=safe_recorded_cost,
+            )
+            attempt_id = None
+            reservation_id = None
+            health_store.mark_call_success(route)
+            return answer.strip()
+        except Exception as exc:
+            # Do not persist prompts, credentials, response bodies, or exception text.
+            if attempt_id:
+                finish_model_call_attempt(
+                    attempt_id, status="failed", billing_state="unknown",
+                    error_class=type(exc).__name__,
+                )
+                attempt_id = None
+            raise
+        finally:
+            release_model_call_slot(slot_id)
+            release_model_budget_reservation(reservation_id)
+
+    summary = ", ".join(failures[:8]) if failures else "no eligible route"
+    raise RuntimeError(
+        "All eligible provider routes are unavailable or failed their safety/health checks: "
+        + summary
+    )
+
+
+def configured_max_agents(
+    task_type: str, *, swarm_enabled: bool = SWARM_ENABLED
+) -> int:
+    """Honor legacy per-task concurrency caps while retaining the new global ceiling."""
+    if not swarm_enabled:
+        return 1
+    legacy_key = (
+        "QUDRON_MAX_CVPEN_AGENTS"
+        if str(task_type).startswith("cvpen_")
+        else "QUDRON_MAX_SWARM_AGENTS"
+    )
+    raw = os.getenv(legacy_key, "").strip()
+    if not raw:
+        return max(1, MAX_ROLE_ASSIGNMENTS_PER_TASK)
+    try:
+        legacy_limit = int(raw)
+    except ValueError:
+        logging.warning("Ignoring invalid %s value; using global role-assignment ceiling", legacy_key)
+        return max(1, MAX_ROLE_ASSIGNMENTS_PER_TASK)
+    return max(1, min(MAX_ROLE_ASSIGNMENTS_PER_TASK, legacy_limit))
+
+
+def build_agent_memory_note(
+    *, job: Mapping[str, Any], task_type: str, stage: str,
+    output: str, sensitive_task: bool,
+) -> str:
+    safe_title = redact_sensitive_text(str(job.get("title", ""))).strip()[:160]
+    note = (
+        f"Completed {task_type} stage '{stage}' for job {job.get('id', '')} "
+        f"({safe_title})."
+    )
+    if not sensitive_task:
+        safe_excerpt = redact_sensitive_text(output).strip()[:1200]
+        if safe_excerpt:
+            note += "\nRedacted outcome excerpt: " + safe_excerpt
+    return note
 
 
 def execute_job_swarm(job: sqlite3.Row) -> str:
@@ -1279,7 +1752,18 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         summary = mine_from_environment(max_repositories=max_repositories)
         return "# GitHub capability mining run\n\n```json\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n```"
     project = infer_project(job)
+    task_type = str(job["task_type"])
+    # Do not retrieve cloud context for customer/financial workflows. Their
+    # content stays on the approved local path unless a separate data policy is added.
+    sensitive_task = task_type in {
+        "cvpen_cv_creation", "cvpen_ats_audit",
+        "customer_support_reply", "payment_reconciliation",
+    }
     memory_context = retrieve_memory_context(project)
+    if not sensitive_task:
+        cloud_context = retrieve_cloud_memory_context(project)
+        if cloud_context:
+            memory_context = (memory_context + "\n\n" + cloud_context)[-MAX_INPUT_CHARS:]
     if str(job["task_type"]) == "research" and os.getenv("QUDRON_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             web_result = search_web(str(job["prompt"])[:128], count=5, need_content=True)
@@ -1301,13 +1785,113 @@ def execute_job_swarm(job: sqlite3.Row) -> str:
         except WebResearchError:
             memory_context += "\n\nLIVE WEB RESEARCH UNAVAILABLE: no live sources were retrieved. Mark current claims unverified and do not invent citations."
     registry = AGENT_REGISTRY or load_agent_registry(AGENT_REGISTRY_PATH)
-    if SWARM_ENABLED and str(job["task_type"]) == "cvpen_cv_creation":
-        max_agents = MAX_CVPEN_AGENTS
-    else:
-        max_agents = MAX_SWARM_AGENTS if SWARM_ENABLED else 1
+    # Do not silently truncate a specialist team to five or ten roles. The plan
+    # uses every configured role; this task-scoped ceiling is a separate safety
+    # control, while provider calls remain bounded by the shared model-call gate.
+    max_agents = configured_max_agents(task_type)
+
+    continuity = ContinuityStore(DB_PATH)
+    job_lease_owner = str(job["locked_by"]) if job["locked_by"] else None
+    # Customer/financial workflows keep no intermediate model output in agent
+    # checkpoints or memories. Their resumable metadata is retained, but content
+    # is re-executed rather than persisted in an extra memory store.
 
     def invoke(agent: dict[str, Any], instruction: str, prior: str) -> str:
-        return call_llm(job, agent, instruction, prior, memory_context)
+        agent_id = str(agent["id"])
+        stage = str(agent.get("execution_stage", "execute"))
+        profile, provider_id, model_name = model_route_metadata(agent)
+        instance = continuity.create_agent_instance(
+            job_id=str(job["id"]), project=project, role_id=agent_id, stage=stage,
+            model_profile=profile, provider_id=provider_id, model_name=model_name,
+        )
+        instance_id = str(instance["instance_id"])
+        stage_claim = continuity.begin_stage(
+            job_id=str(job["id"]), project=project, agent_id=agent_id, stage=stage,
+            job_lease_owner=job_lease_owner,
+        )
+        if stage_claim.get("completed"):
+            continuity.transition_agent_instance(
+                instance_id, "succeeded", model_profile=profile,
+                provider_id=provider_id, model_name=model_name,
+            )
+            logging.info("Resumed completed agent instance %s for role %s/%s and job %s",
+                         instance_id, agent_id, stage, job["id"])
+            return str(stage_claim["output"])
+        if not stage_claim.get("claimed"):
+            raise RuntimeError(
+                f"Agent stage {agent_id}/{stage} is already owned by another worker; "
+                "defer execution until its lease expires or the owner completes it."
+            )
+        claim_token = str(stage_claim["claim_token"])
+        continuity.transition_agent_instance(
+            instance_id, "running", model_profile=profile,
+            provider_id=provider_id, model_name=model_name,
+            allow_retry_from_succeeded=(
+                str(instance.get("status")) == "succeeded"
+                and sensitive_task
+                and bool(stage_claim.get("claimed"))
+            ),
+        )
+
+        personal_memory = continuity.agent_memory_context(
+            project=project, agent_id=agent_id, limit=6
+        )
+        # Keep private role memory in the dedicated memory channel. call_llm
+        # removes this channel for anonymous/keyless routes; prior_context is
+        # always sent and must contain only task-scoped, policy-approved context.
+        combined_memory = "\n\n".join(
+            item for item in (memory_context, personal_memory) if item
+        )
+        try:
+            def on_route_selected(provider_id: str, model_name: str, selected_profile: str) -> None:
+                continuity.transition_agent_instance(
+                    instance_id, "running", model_profile=selected_profile,
+                    provider_id=provider_id, model_name=model_name,
+                )
+
+            output = call_llm(
+                job, agent, instruction, prior, combined_memory,
+                on_route_selected=on_route_selected,
+            )
+            if not isinstance(output, str) or not output.strip():
+                raise RuntimeError(f"Agent returned empty output: {agent_id}")
+            safe_note = build_agent_memory_note(
+                job=job, task_type=task_type, stage=stage,
+                output=output, sensitive_task=sensitive_task,
+            )
+            continuity.complete_stage(
+                job_id=str(job["id"]), project=project, agent_id=agent_id,
+                stage=stage, claim_token=claim_token, job_lease_owner=job_lease_owner,
+                output=None if sensitive_task else output, memory_note=safe_note,
+            )
+        except Exception as exc:
+            safe_error = redact_sensitive_text(f"{type(exc).__name__}: {exc}")[:1200]
+            try:
+                continuity.fail_stage(
+                    job_id=str(job["id"]), project=project, agent_id=agent_id,
+                    stage=stage, claim_token=claim_token, error=safe_error,
+                    job_lease_owner=job_lease_owner,
+                )
+            except RuntimeError as stage_write_error:
+                logging.warning(
+                    "Could not persist stage failure for %s/%s after ownership changed: %s",
+                    agent_id, stage, stage_write_error,
+                )
+                continuity.abandon_stage_claim(
+                    job_id=str(job["id"]), project=project, agent_id=agent_id,
+                    stage=stage, claim_token=claim_token,
+                    reason="Parent job lease lost; stale worker abandoned its stage claim",
+                )
+            continuity.transition_agent_instance(
+                instance_id, "failed", error=safe_error,
+                model_profile=profile, provider_id=provider_id, model_name=model_name,
+            )
+            raise
+        continuity.transition_agent_instance(
+            instance_id, "succeeded", model_profile=profile,
+            provider_id=provider_id, model_name=model_name,
+        )
+        return output
 
     return execute_swarm(
         {"task_type": job["task_type"], "title": job["title"], "prompt": job["prompt"]},
@@ -1443,13 +2027,29 @@ def status_snapshot() -> dict[str, Any]:
         latest = db.execute(
             "SELECT id,title,status,updated_at,error,result_path FROM jobs ORDER BY updated_at DESC LIMIT 20"
         ).fetchall()
+    continuity = ContinuityStore(DB_PATH).snapshot()
+    registry_tasks: dict[str, int] = {}
+    registry_path = APP_DIR / "project_task_registry.json"
+    if registry_path.is_file():
+        try:
+            registry_data = json.loads(registry_path.read_text(encoding="utf-8"))
+            for item in registry_data.get("tasks", []):
+                status = str(item.get("status", "unknown"))
+                registry_tasks[status] = registry_tasks.get(status, 0) + 1
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+            registry_tasks = {"registry_read_error": 1}
     return {
         "service": "qudron-runtime", "instance": INSTANCE_ID, "time_utc": iso_now(),
         "counts": counts, "queue_capacity": queue_capacity_snapshot(), "latest_jobs": [{**{k: r[k] for k in ("id", "title", "status", "updated_at", "error")}, "result_available": bool(r["status"] == "completed" and r["result_path"])} for r in latest],
+        "continuity": continuity,
+        "project_task_registry": {"counts_by_status": registry_tasks, "task_count": sum(registry_tasks.values())},
         "llm_configured": any_model_profile_configured(),
         "swarm_enabled": SWARM_ENABLED,
-        "max_agents_per_task": MAX_SWARM_AGENTS if SWARM_ENABLED else 1,
-        "max_agents_per_cvpen_job": MAX_CVPEN_AGENTS if SWARM_ENABLED else 1,
+        "max_role_assignments_per_task": MAX_ROLE_ASSIGNMENTS_PER_TASK if SWARM_ENABLED else 1,
+        # Legacy compatibility aliases; these report planned role assignments,
+        # not running agent instances or independent model sessions.
+        "max_agents_per_task": MAX_ROLE_ASSIGNMENTS_PER_TASK if SWARM_ENABLED else 1,
+        "max_agents_per_cvpen_job": MAX_ROLE_ASSIGNMENTS_PER_TASK if SWARM_ENABLED else 1,
         "max_parallel_reviews": MAX_PARALLEL_REVIEWS if SWARM_ENABLED else 1,
         "max_concurrent_model_calls": MAX_CONCURRENT_MODEL_CALLS,
         "registered_agents": len(AGENT_REGISTRY.get("agents", [])),
@@ -1594,6 +2194,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 get_models=mcp_get_models,
                 search_capabilities=mcp_search_capabilities,
                 enqueue_batch=enqueue_api_batch,
+                get_continuity=lambda: ContinuityStore(DB_PATH).snapshot(),
+                get_agent_memory=lambda agent_id, project, limit: ContinuityStore(DB_PATH).agent_memory_context(
+                    agent_id=agent_id, project=project, limit=limit
+                ),
             )
         except (UnicodeDecodeError, json.JSONDecodeError, MCPGatewayError):
             self._send_json(400, {"error": "invalid_mcp_request"})
@@ -1649,6 +2253,69 @@ class HealthHandler(BaseHTTPRequestHandler):
         return
 
 
+def cloud_memory_sync_loop() -> None:
+    """Replicate sanitized continuity events when the owner provisions cloud memory."""
+    store = ContinuityStore(DB_PATH)
+    interval = max(10, min(300, int(os.getenv("QUDRON_MEMORY_SYNC_INTERVAL_SECONDS", "30"))))
+    while not STOP.is_set():
+        try:
+            result = flush_from_environment(store)
+            if result.get("enabled") and (result.get("sent", 0) or result.get("failed", 0)):
+                logging.info(
+                    "Cloud memory outbox: sent=%s failed=%s pending=%s",
+                    result.get("sent", 0), result.get("failed", 0), result.get("pending", 0),
+                )
+        except Exception as exc:
+            # Never log request headers, tokens, or payloads.
+            logging.warning("Cloud memory sync deferred: %s", type(exc).__name__)
+        STOP.wait(interval)
+
+
+def provider_health_loop() -> None:
+    """Continuously re-check explicitly configured provider routes without inference calls."""
+    interval = max(60, min(3600, int(os.getenv("QUDRON_PROVIDER_HEALTH_INTERVAL_SECONDS", "300"))))
+    timeout = max(2, min(15, int(os.getenv("QUDRON_PROVIDER_PROBE_TIMEOUT_SECONDS", "5"))))
+    store = ProviderHealthStore(DB_PATH)
+    while not STOP.is_set():
+        try:
+            routes = []
+            for profile in ("fast", "balanced", "reasoning"):
+                routes.extend(load_provider_routes(
+                    profile, environ=os.environ, secret_reader=_read_secret_file,
+                    anonymous_detector=is_anonymous_freellm_route,
+                ))
+            deduped = {route.route_id: route for route in routes}
+            reports = probe_due_routes(
+                list(deduped.values()), store, interval_seconds=interval,
+                timeout_seconds=timeout,
+            )
+            for report in reports:
+                logging.info(
+                    "Provider route probe: provider=%s profile=%s model=%s status=%s latency_ms=%s",
+                    report["provider_id"], report["profile"], report["model"],
+                    report["status"], report["latency_ms"],
+                )
+            catalogue_interval = max(
+                900, min(86_400, int(os.getenv("QUDRON_PROVIDER_DISCOVERY_INTERVAL_SECONDS", "21600")))
+            )
+            catalogue_reports = probe_due_catalogue_providers(
+                Path(os.getenv("QUDRON_MODEL_CATALOG_PATH", str(APP_DIR / "model_provider_catalog.json"))),
+                ProviderCatalogueStore(DB_PATH),
+                environ=os.environ, secret_reader=_read_secret_file,
+                interval_seconds=catalogue_interval, timeout_seconds=timeout,
+            )
+            for report in catalogue_reports:
+                logging.info(
+                    "Provider catalogue discovery: provider=%s status=%s models=%s",
+                    report["provider_id"], report["status"], report["model_count"],
+                )
+        except Exception as exc:
+            # Probe logs must never include authorization headers, URLs with secrets,
+            # raw response bodies, or provider prompts.
+            logging.warning("Provider health cycle deferred: %s", type(exc).__name__)
+        STOP.wait(interval)
+
+
 def run() -> None:
     global AGENT_REGISTRY, API_TOKEN
     setup_logging()
@@ -1671,6 +2338,8 @@ def run() -> None:
     signal.signal(signal.SIGTERM, handle_signal)
     health = ThreadingHTTPServer(("0.0.0.0", HEALTH_PORT), HealthHandler)
     threading.Thread(target=health.serve_forever, name="health", daemon=True).start()
+    threading.Thread(target=cloud_memory_sync_loop, name="cloud-memory-sync", daemon=True).start()
+    threading.Thread(target=provider_health_loop, name="provider-health", daemon=True).start()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="agent") as pool:
         futures = [pool.submit(worker_loop) for _ in range(WORKERS)]

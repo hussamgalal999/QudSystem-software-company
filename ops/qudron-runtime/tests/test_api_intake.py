@@ -91,6 +91,24 @@ class AuthenticatedIntakeApiTests(unittest.TestCase):
             count = db.execute("SELECT COUNT(*) FROM jobs WHERE job_key='api:request-2026-001'").fetchone()[0]
         self.assertEqual(count, 1)
 
+    def test_data_class_defaults_to_internal_and_explicit_public_is_persisted(self):
+        first, created_first = worker.enqueue_api_job(self.payload(idempotency_key="class-default-001"))
+        second, created_second = worker.enqueue_api_job(
+            self.payload(idempotency_key="class-public-001", data_class="public")
+        )
+        self.assertTrue(created_first)
+        self.assertTrue(created_second)
+        with worker.connect_db() as db:
+            default_row = db.execute("SELECT data_class FROM jobs WHERE id=?", (first["id"],)).fetchone()
+            public_row = db.execute("SELECT data_class FROM jobs WHERE id=?", (second["id"],)).fetchone()
+        self.assertEqual(default_row["data_class"], "internal")
+        self.assertEqual(public_row["data_class"], "public")
+
+    def test_invalid_data_class_is_rejected(self):
+        status, body = self.post(self.payload(data_class="unknown"), "unit-test-token")
+        self.assertEqual(status, 422)
+        self.assertIn("data_class", body["error"])
+
     def test_customer_cv_and_payment_tasks_are_not_opened_through_generic_api(self):
         for task_type in ("cvpen_cv_creation", "payment_reconciliation", "customer_support_reply"):
             status, body = self.post(self.payload(task_type=task_type), "unit-test-token")

@@ -42,12 +42,20 @@ class MCPGatewayTests(unittest.TestCase):
         self.assertFalse(tools["qudron_submit_job"]["annotations"]["readOnlyHint"])
         self.assertTrue(tools["qudron_get_status"]["annotations"]["readOnlyHint"])
         self.assertIn("idempotency_key", tools["qudron_submit_job"]["inputSchema"]["required"])
+        self.assertEqual(
+            tools["qudron_submit_job"]["inputSchema"]["properties"]["data_class"]["default"],
+            "internal",
+        )
+        self.assertIn(
+            "restricted",
+            tools["qudron_submit_batch"]["inputSchema"]["properties"]["jobs"]["items"]["properties"]["data_class"]["enum"],
+        )
         self.assertFalse(tools["qudron_submit_batch"]["annotations"]["readOnlyHint"])
         self.assertEqual(tools["qudron_submit_batch"]["inputSchema"]["properties"]["jobs"]["maxItems"], 100)
 
     def test_submit_job_passes_arguments_to_existing_fail_closed_queue(self):
         args = {"title": "Test research", "prompt": "Research only", "task_type": "research",
-                "idempotency_key": "dots-job-0001"}
+                "idempotency_key": "dots-job-0001", "data_class": "public"}
         result = self.handle({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
                               "params": {"name": "qudron_submit_job", "arguments": args}})
         self.assertIn("job-12345678", result["result"]["content"][0]["text"])

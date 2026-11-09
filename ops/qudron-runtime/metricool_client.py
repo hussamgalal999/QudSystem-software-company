@@ -1,7 +1,9 @@
 """Official Metricool API adapter. Reads analytics and schedules drafts only by default."""
 from __future__ import annotations
-import csv, io, json, os, urllib.parse, urllib.request, urllib.error
+import csv, io, json, os, urllib.parse, urllib.error
+from urllib.request import Request
 from typing import Any
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 
 BASE="https://app.metricool.com/api"
 NETWORKS={"facebook","instagram","linkedin","youtube","tiktok","pinterest","twitter","threads","bluesky"}
@@ -14,6 +16,7 @@ class MetricoolClient:
   self.user_id=str(user_id if user_id is not None else os.getenv("METRICOOL_USER_ID","")).strip()
   self.blog_id=str(blog_id if blog_id is not None else os.getenv("METRICOOL_BLOG_ID","")).strip()
   self.base_url=base_url.rstrip("/")
+  if not is_allowed_credential_endpoint(self.base_url):raise MetricoolError("Metricool API endpoint must use HTTPS or exact loopback HTTP")
   if not self.token or not self.user_id or not self.blog_id:
    raise MetricoolError("METRICOOL_API_TOKEN, METRICOOL_USER_ID and METRICOOL_BLOG_ID are required")
  def request(self,method:str,path:str,params:dict[str,Any]|None=None,payload:dict[str,Any]|None=None)->Any:
@@ -23,9 +26,9 @@ class MetricoolClient:
   body=json.dumps(payload).encode() if payload is not None else None
   headers={"X-Mc-Auth":self.token,"Accept":"application/json"}
   if body is not None:headers["Content-Type"]="application/json"
-  req=urllib.request.Request(url,data=body,headers=headers,method=method.upper())
+  req=Request(url,data=body,headers=headers,method=method.upper())
   try:
-   with urllib.request.urlopen(req,timeout=30) as response:
+   with open_credential_request(req,timeout=30,endpoint_validated=True) as response:
     raw=response.read()
     if not raw:return {}
     content_type=response.headers.get("Content-Type","")
@@ -48,10 +51,27 @@ class MetricoolClient:
   if network not in {"facebook","instagram","youtube"}:raise ValueError("Published-post analytics supports facebook, instagram and youtube")
   if not start or not end or start>=end:raise ValueError("A valid start/end date range is required")
   return self.request("GET",f"/v2/analytics/posts/{network}",{"from":start,"to":end,"timezone":timezone})
- def create_review_draft(self,text:str,publication_date:str,network:str="facebook",timezone:str="Africa/Cairo")->Any:
+ def create_review_draft(
+  self,
+  text:str,
+  publication_date:str,
+  network:str="facebook",
+  timezone:str="Africa/Cairo",
+  *,
+  content_brand:str|None=None,
+  destination_id:str|None=None,
+  approved_brand_destinations:dict[str,dict[str,str]]|None=None,
+ )->Any:
   if network not in NETWORKS:raise ValueError("Unsupported Metricool network")
   if not text.strip():raise ValueError("Post text is required")
   if not publication_date:raise ValueError("Publication date is required")
+  validate_brand_destination(
+   text=text,
+   content_brand=content_brand,
+   brand_id=self.blog_id,
+   destination_id=destination_id,
+   approved_brand_destinations=approved_brand_destinations,
+  )
   payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network}],"draft":True,"autoPublish":False}
   return self.request("POST","/v2/scheduler/posts",payload=payload)
 
@@ -73,3 +93,53 @@ def summarize_posts(posts:Any)->dict[str,Any]:
    if value is not None:totals[key]+=value
   normalized.append({"text":str(item.get("text") or item.get("content") or "")[:240],"url":item.get("url") or item.get("link"),"publicationDate":item.get("publicationDate") or item.get("created"),"metrics":row})
  return {"totals":totals,"posts":normalized}
+
+
+# Brand isolation is deliberately fail-closed. A brand label alone is not proof
+# that Metricool's blog and destination IDs belong together.
+_VISION_GUARD_MARKERS = (
+ "vision guard",
+ "your security our priority",
+ "أمانك مسؤوليتنا",
+ "كاميرات مراقبة",
+ "تركيب كاميرات",
+ "أنظمة كاميرات",
+ "أنظمة المراقبة",
+ "camera installation",
+ "security camera",
+ "cctv",
+)
+
+def validate_brand_destination(
+ *,
+ text:str,
+ content_brand:str|None,
+ brand_id:str|None,
+ destination_id:str|None,
+ approved_brand_destinations:dict[str,dict[str,str]]|None,
+)->None:
+ """Require an explicit brand -> Metricool blog -> destination allowlist.
+
+ Vision Guard signals in copy cannot be overridden by misclassifying that
+ content as QudSystem. Unknown or missing mappings block even draft creation.
+ """
+ label=" ".join(str(content_brand or "").casefold().replace("_"," ").split())
+ if not label:
+  raise MetricoolError("Content brand is required before creating a Metricool draft")
+ normalized_text=" ".join(str(text or "").casefold().split())
+ if label not in {"vision guard","vision guard systems"} and any(
+  marker in normalized_text for marker in _VISION_GUARD_MARKERS
+ ):
+  raise MetricoolError("Vision Guard content cannot be classified or routed as another brand")
+ bindings=approved_brand_destinations if isinstance(approved_brand_destinations,dict) else {}
+ binding=bindings.get(label)
+ if not isinstance(binding,dict):
+  raise MetricoolError("No owner-approved Metricool brand/destination mapping exists")
+ expected_blog=str(binding.get("brand_id") or "").strip()
+ expected_destination=str(binding.get("destination_id") or "").strip()
+ if not expected_blog or not expected_destination:
+  raise MetricoolError("Approved Metricool mapping must include both brand_id and destination_id")
+ if not str(brand_id or "").strip() or not str(destination_id or "").strip():
+  raise MetricoolError("Metricool brand and destination IDs are required")
+ if str(brand_id).strip()!=expected_blog or str(destination_id).strip()!=expected_destination:
+  raise MetricoolError("Metricool brand/destination does not match the approved content-brand mapping")

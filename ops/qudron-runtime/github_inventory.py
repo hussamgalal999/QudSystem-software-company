@@ -5,25 +5,48 @@ repository in scope. It indexes metadata and paths only; it never clones,
 executes, or downloads repository contents.
 """
 from __future__ import annotations
-import json, os, re, tempfile, urllib.error, urllib.parse, urllib.request
+import json, os, re, tempfile, urllib.error, urllib.parse
 from pathlib import Path
 from typing import Any
+from urllib.request import Request
+from endpoint_security import is_allowed_credential_endpoint, open_credential_request
 
 API="https://api.github.com"
+if not is_allowed_credential_endpoint(API):raise RuntimeError("GitHub API endpoint is not allowed")
 OWNER_RE=re.compile(r"^[A-Za-z0-9-]{1,39}$")
 
 class GitHubInventoryError(RuntimeError): pass
 
+def _is_github_api_url(url: str) -> bool:
+    """Accept only the canonical GitHub API origin before attaching a token."""
+    if not isinstance(url, str) or not url or url != url.strip():
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        return (
+            parsed.scheme.lower() == "https"
+            and parsed.hostname is not None
+            and parsed.hostname.lower() == "api.github.com"
+            and parsed.port in (None, 443)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+        )
+    except ValueError:
+        return False
+
+
 def _request_json(url:str, token:str, timeout:int=30)->dict[str,Any]:
     if not token: raise GitHubInventoryError("GITHUB_TOKEN is required")
-    req=urllib.request.Request(url,headers={
+    if not _is_github_api_url(url): raise GitHubInventoryError("GitHub API URL is not allowed")
+    req=Request(url,headers={
         "Accept":"application/vnd.github+json",
         "Authorization":"Bearer "+token,
         "X-GitHub-Api-Version":"2022-11-28",
         "User-Agent":"Qudron-ReadOnly-Inventory"
     })
     try:
-        with urllib.request.urlopen(req,timeout=timeout) as response:
+        with open_credential_request(req,timeout=timeout,endpoint_validated=True) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         if exc.code in (401,403): raise GitHubInventoryError("GitHub authentication or repository permission failed") from None

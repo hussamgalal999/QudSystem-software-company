@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import memoryWorker from "../src/index.ts";
 
 const env = (overrides = {}) => ({
-  QUDRON_MEMORY_TOKEN: "test-memory-token",
+  QUDRON_MEMORY_TOKEN: "qudron-memory-test-secret-32-bytes-minimum",
   MAX_BODY_BYTES: "1024",
   ...overrides,
 });
@@ -34,7 +34,7 @@ test("POST endpoints reject non-JSON content before touching storage", async () 
   const response = await memoryWorker.fetch(
     new Request("https://memory.example/v1/projects", {
       method: "POST",
-      headers: { Authorization: "Bearer test-memory-token", "Content-Type": "text/plain" },
+      headers: { Authorization: "Bearer qudron-memory-test-secret-32-bytes-minimum", "Content-Type": "text/plain" },
       body: "not-json",
     }),
     env(),
@@ -48,7 +48,7 @@ test("streaming body limit rejects oversized chunked requests", async () => {
     new Request("https://memory.example/v1/projects", {
       method: "POST",
       headers: {
-        Authorization: "Bearer test-memory-token",
+        Authorization: "Bearer qudron-memory-test-secret-32-bytes-minimum",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ project_id: "x", padding: "x".repeat(2048) }),
@@ -59,12 +59,23 @@ test("streaming body limit rejects oversized chunked requests", async () => {
   assert.deepEqual(await response.json(), { error: "payload_too_large" });
 });
 
+
+test("weak configured memory secrets fail closed", async () => {
+  const response = await memoryWorker.fetch(
+    new Request("https://memory.example/v1/context?project_id=qudron", {
+      headers: { Authorization: "Bearer weak-secret" },
+    }),
+    env({ QUDRON_MEMORY_TOKEN: "weak-secret" }),
+  );
+  assert.equal(response.status, 401);
+});
+
 test("malformed JSON is rejected without a database dependency", async () => {
   const response = await memoryWorker.fetch(
     new Request("https://memory.example/v1/projects", {
       method: "POST",
       headers: {
-        Authorization: "Bearer test-memory-token",
+        Authorization: "Bearer qudron-memory-test-secret-32-bytes-minimum",
         "Content-Type": "application/json",
       },
       body: "{",

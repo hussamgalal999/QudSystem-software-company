@@ -3,15 +3,19 @@ on:
   pull_request:
     paths:
       - 'ops/qudron-runtime/**'
+      - 'ops/qudron-memory/**'
       - 'integrations/OpenDots'
       - '.gitmodules'
       - '.github/workflows/qudron-ci.yml'
+      - '.github/workflows/qudron-memory-deploy.yml'
   push:
     branches: [main]
     paths:
       - 'ops/qudron-runtime/**'
+      - 'ops/qudron-memory/**'
       - 'integrations/OpenDots'
       - '.gitmodules'
+      - '.github/workflows/qudron-memory-deploy.yml'
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -92,3 +96,34 @@ jobs:
       - name: Verify timezone database inside runtime image
         run: |
           docker run --rm --entrypoint python qudron-runtime:ci -c "from zoneinfo import ZoneInfo; import datetime; z=ZoneInfo('Africa/Cairo'); print(datetime.datetime.now(z).isoformat())"
+
+  cloud-memory:
+    if: ${{ hashFiles('ops/qudron-memory/package.json') != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ops/qudron-memory
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ops/qudron-memory/package-lock.json
+      - name: Install memory dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type-check the memory Worker
+        run: npm run typecheck
+      - name: Test memory request boundaries
+        run: npm test
+      - name: Build Worker bundle
+        run: npm run build
+      - name: Validate D1 deployment wiring
+        run: |
+          grep -Fq 'database_id = "00000000-0000-0000-0000-000000000000"' wrangler.toml
+          grep -Fq 'placeholder="00000000-0000-0000-0000-000000000000"' ../../.github/workflows/qudron-memory-deploy.yml
+          grep -Fq 'sed -i "s/$placeholder/$QUDRON_MEMORY_D1_DATABASE_ID/"' ../../.github/workflows/qudron-memory-deploy.yml

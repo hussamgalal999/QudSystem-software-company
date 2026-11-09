@@ -2,9 +2,8 @@
   "schema_version": 1,
   "project": "Qudron — QudSystem Executive Orchestration Platform",
   "snapshot_date": "2026-11-07",
-  "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
+  "source_branch": "feat/qudron-cli-worker-fleet-2026-11-07",
   "base_branch": "main",
-  "source_commit": "8146ab1eccc3909e56768abbee808e6819b2ee1a",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -2711,13 +2710,141 @@
         "fail_closed_on_missing_evidence": 25
       },
       "required_maturity": "M5"
+    },
+    {
+      "id": "cli-worker-fleet",
+      "area": "Runtime",
+      "title": "Run bounded Codex, Gemini and Claude CLI workers with isolated task worktrees and verified handoff",
+      "status": "ci_verified",
+      "priority": "P0",
+      "evidence": "PR #30 commit a4af838578964ba645ea76f0be8b914b94d25ef0; GitHub Actions Qudron Runtime Checks run #668 (389 unit/safety tests; all workflow steps passed); ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet.py; ops/qudron-runtime/tests/test_agent_fleet_binding.py; ops/qudron-runtime/agent-workers/manifest.schema.json; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "One standalone CLI launcher supports Codex, Gemini and Claude adapters, one worktree/branch per task, up to eight bounded tasks, disjoint path allowlists, sensitive-path denial, provider-specific environment allowlists, required QUDRON_FLEET_HOME_ROOT outside the checkout, separate private codex/gemini/claude HOME directories, HOME-derived XDG/Windows config paths, process-tree timeout cleanup, immutable worktree/branch/base-HEAD validation, structured acceptance criteria/expected checks/known risks, patch SHA-256 and mandatory human review. Exact-head CI run #668 passed all 389 unit/safety tests and every workflow step, including runtime/FreeLLM images, Compose, FreeLLM health/authentication and timezone checks. CI uses fake CLI executables; no live provider logins or real CLI sessions have been demonstrated. The launcher remains standalone, not yet dispatched from Qudron queue/MCP/Agent Fabric.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Exact-head CI must cover CLI adapter command contracts, task worktrees, concurrency and non-overlapping scopes, default secret deny rules, provider environment allowlists, required external QUDRON_FLEET_HOME_ROOT, separate private per-provider homes, timeout/process cleanup, structured task metadata, safe artifact export, immutable worktree/branch/base binding, patch integrity and mandatory human review. CI proves code contracts only; it does not prove live provider authentication, a secure remote host or production execution.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
+    },
+    {
+      "id": "real-cli-worker-e2e",
+      "area": "External Swarm",
+      "title": "Execute and independently verify three authorized real CLI workers in separate remote environments",
+      "status": "blocked_owner",
+      "priority": "P0",
+      "evidence": "PR #30 worker-fleet contract; Vercel connected-team project inventory; Railway workspace inventory; Replit Qudron/QudSystem app search",
+      "current_state": "No Qudron project or named sandbox is present in the connected Vercel project search; the connected Railway workspace has zero projects; the connected Replit account has no Qudron/QudSystem app. No owner-approved isolated compute environment or CLI login has been configured. Daytona/E2B trial credits and GitHub Codespaces monthly quotas are possible short pilot resources, not permanent free compute. No three-worker real-provider E2E, independent live Security/QA review, or provider artifact handoff has occurred.",
+      "acceptance_criteria": "Use three separately isolated, owner-approved remote environments with dedicated non-shared HOME roots and no host-home, Docker-socket, SSH-agent or production-secret mounts; configure each provider CLI through its official login path in its own HOME; verify provider/model identity, entitlements, quotas and budget limits; run non-overlapping Architecture, Development and Security/QA tasks; collect task IDs, timestamps, changed-file manifests, immutable base/head SHAs, patch hashes, sanitized logs and costs; require independent security review and human approval; run exact-head CI before applying patches or merging. Never treat Git worktrees alone as OS isolation.",
+      "verification_profile": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [
+        "artifact_integrity_and_provenance",
+        "quota_and_cost_limits"
+      ],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
+    },
+    {
+      "id": "cli-worker-fleet-runtime-integration",
+      "area": "Runtime",
+      "title": "Integrate the CLI worker fleet through an authenticated remote-executor service and Qudron's queue/MCP control plane",
+      "status": "planned",
+      "priority": "P0",
+      "evidence": "ops/qudron-runtime/scripts/agent_fleet.py; ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/mcp_gateway.py; ops/qudron-runtime/continuity_store.py; ops/qudron-runtime/agent-workers/run.schema.json",
+      "current_state": "The CLI launcher is a standalone developer tool and has no call site from qudron_worker.py, mcp_gateway.py or Agent Fabric. Do not run provider CLIs inside the core Qudron worker as a shortcut; integration must dispatch to a disposable restricted remote executor with a dedicated per-provider HOME and least-privilege network/filesystem/credentials.",
+      "verification_profile": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "acceptance_criteria": "Implement an owner-authenticated, schema-validated remote-executor contract; persist fleet/run/task/agent/branch/worktree lifecycle in continuity storage; use disposable restricted VMs/containers with per-provider HOME roots, no host mounts, Docker socket, SSH agent or production secrets; enforce provider/data-class allowlists, task path scopes, deny patterns, timeout, concurrency and budget caps; reconcile restart/cancel/timeout without orphaning processes/worktrees; expose run status and artifacts through MCP; attach immutable base/head SHAs, changed-file manifests and patch hashes; require independent reviewer evidence and human approval before patches are applied or PRs are merged; pass unit, integration, restart, cancellation, isolation, security and exact-head CI.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "restart_and_failure_recovery",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
     }
   ],
   "computed_status_counts": {
-    "ci_verified": 4,
+    "ci_verified": 5,
     "implemented_pending_ci": 8,
-    "planned": 11,
-    "blocked_owner": 10,
+    "planned": 12,
+    "blocked_owner": 11,
     "target_unmeasured": 2,
     "not_started": 15,
     "candidate_not_enabled": 3,
@@ -2725,6 +2852,16 @@
     "open_pr": 1,
     "needs_owner_review": 1
   },
-  "total_tasks": 64,
-  "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria."
+  "total_tasks": 67,
+  "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria.",
+  "evidence_source_commit": "a4af838578964ba645ea76f0be8b914b94d25ef0",
+  "evidence_source_commit_semantics": "Exact executable CLI fleet implementation commit validated by the most recent exact-head CI run.",
+  "snapshot_validation": {
+    "snapshot_commit": "a4af838578964ba645ea76f0be8b914b94d25ef0",
+    "workflow": "Qudron Runtime Checks",
+    "workflow_run_number": 668,
+    "workflow_run_id": "42392998310",
+    "conclusion": "success",
+    "unit_and_safety_test_count": 389
+  }
 }

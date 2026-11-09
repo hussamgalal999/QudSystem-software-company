@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qudsystem.ltd/schemas/qudron-cli-agent-run-v1.schema.json",
+  "title": "Qudron CLI Agent Fleet Run Report",
+  "description": "Evidence-oriented report emitted by agent_fleet.py. This report never authorizes an automatic commit, pull request, merge, or deployment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "run_id",
+    "status",
+    "tasks",
+    "requires_human_review"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "setup_failed",
+        "completed",
+        "partial_or_failed"
+      ]
+    },
+    "setup_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repository": {
+      "type": "string"
+    },
+    "max_parallel": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "worktree_root": {
+      "type": "string"
+    },
+    "artifact_dir": {
+      "type": "string"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/taskResult"
+          },
+          {
+            "$ref": "#/$defs/runnerError"
+          }
+        ]
+      }
+    },
+    "requires_human_review": {
+      "const": true
+    },
+    "merge_policy": {
+      "const": "manual_only — no push, PR creation, or merge performed"
+    }
+  },
+  "$defs": {
+    "taskResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "title",
+        "agent",
+        "mode",
+        "branch",
+        "base_sha",
+        "worktree",
+        "status",
+        "changed_files",
+        "scope_violations",
+        "exit_code",
+        "allowed_paths",
+        "deny_paths",
+        "head_sha",
+        "binding_violations",
+        "acceptance_criteria",
+        "expected_checks",
+        "known_risks"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,39}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "agent": {
+          "enum": [
+            "codex",
+            "gemini",
+            "claude"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "implement",
+            "review"
+          ]
+        },
+        "branch": {
+          "type": "string"
+        },
+        "base_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "unavailable",
+            "unsupported_mode",
+            "timed_out",
+            "failed",
+            "scope_violation",
+            "review_mutated_files",
+            "review_completed",
+            "no_changes",
+            "completed",
+            "diff_check_failed"
+          ]
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope_violations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "timed_out": {
+          "type": "boolean"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "patch_exported": {
+          "type": "boolean"
+        },
+        "patch_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "patch_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "patch_block_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "scope_validation_failed",
+            "worker_execution_failed",
+            null,
+            "diff_check_failed"
+          ]
+        },
+        "logs_exported": {
+          "type": "boolean"
+        },
+        "log_block_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "scope_validation_failed",
+            "worker_execution_failed",
+            null
+          ]
+        },
+        "stdout_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stderr_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diff_check_passed": {
+          "type": "boolean"
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "binding_violations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "expected_checks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "known_risks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "patch_exported": {
+                "const": true
+              }
+            },
+            "required": [
+              "patch_exported"
+            ]
+          },
+          "then": {
+            "properties": {
+              "patch_path": {
+                "type": "string"
+              },
+              "patch_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "patch_path": {
+                "type": "null"
+              },
+              "patch_sha256": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "runnerError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "error"
+      ],
+      "properties": {
+        "status": {
+          "const": "runner_error"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

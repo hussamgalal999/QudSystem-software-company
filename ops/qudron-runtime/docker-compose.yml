@@ -16,7 +16,12 @@ services:
       LLM_API_KEY_FILE: /run/freellm/server.key
       LLM_FAST_API_KEY_FILE: /run/freellm/server.key
       QUDRON_API_TOKEN_FILE: /run/qudron-auth/api_token
+      ARTEMIS_BRIDGE_URL: ${ARTEMIS_BRIDGE_URL:-http://host.docker.internal:8766}
+      ARTEMIS_BRIDGE_TOKEN: ${ARTEMIS_BRIDGE_TOKEN:-}
+      ARTEMIS_BRIDGE_TIMEOUT_SECONDS: ${ARTEMIS_BRIDGE_TIMEOUT_SECONDS:-120}
     ports: ["127.0.0.1:8765:8765"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports

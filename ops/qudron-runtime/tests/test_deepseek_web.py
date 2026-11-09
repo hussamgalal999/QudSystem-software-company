@@ -87,12 +87,14 @@ class WebTests(unittest.TestCase):
             "DEEPSEEK_API_KEY": "test",
             "QUDRON_WEB_SEARCH_MAX_DAILY_CALLS": "1",
         }, clear=True):
-            with patch.object(dw, "_read_search_cache", return_value=None):
-                with patch.object(dw, "_request", return_value=({
-                    "results": [{"title": "Live result", "content": "kept"}]
-                }, {"daily_calls": 1})):
-                    with patch.object(dw, "_write_search_cache", side_effect=sqlite3.OperationalError("disk full")):
-                        result = dw.search_web("cache write should be best effort")
+            with patch.object(dw, "_request", return_value=({
+                "results": [{"title": "Live result", "content": "kept"}]
+            }, {"daily_calls": 1})):
+                # Fail at the database boundary so both cache helpers execute
+                # their real best-effort exception handling.
+                with patch.object(dw, "_connect", side_effect=sqlite3.OperationalError("disk full")) as connect:
+                    result = dw.search_web("cache write should be best effort")
+            self.assertEqual(connect.call_count, 2)  # cache read and cache write
             self.assertEqual(result["results"][0]["title"], "Live result")
 
     def test_empty_search_result_is_not_cached(self):

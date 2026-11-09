@@ -40,12 +40,49 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 }
 
 async function readBody(request: Request, env: Env): Promise<Record<string, unknown> | Response> {
-  const limit = Math.min(262144, Math.max(1024, Number(env.MAX_BODY_BYTES || 65536)));
+  const configuredLimit = Number(env.MAX_BODY_BYTES || 65536);
+  const limit = Number.isFinite(configuredLimit)
+    ? Math.min(262144, Math.max(1024, configuredLimit))
+    : 65536;
+  const contentType = (request.headers.get("content-type") || "")
+    .split(";")[0].trim().toLowerCase();
+  if (contentType !== "application/json") return json({ error: "application_json_required" }, 415);
+
   const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > limit) return json({ error: "payload_too_large" }, 413);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > limit) return json({ error: "payload_too_large" }, 413);
-  try { return asObject(JSON.parse(raw)); }
+  if (Number.isFinite(declared) && declared > limit) {
+    return json({ error: "payload_too_large" }, 413);
+  }
+  if (!request.body) return json({ error: "invalid_json" }, 400);
+
+  // Enforce the limit while reading, not after request.text() has buffered an
+  // unbounded body in memory. This also covers chunked requests without a
+  // trustworthy Content-Length header.
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel("payload too large").catch(() => undefined);
+        return json({ error: "payload_too_large" }, 413);
+      }
+      chunks.push(value);
+    }
+  } catch {
+    await reader.cancel().catch(() => undefined);
+    return json({ error: "request_body_read_failed" }, 400);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try { return asObject(JSON.parse(new TextDecoder().decode(bytes))); }
   catch { return json({ error: "invalid_json" }, 400); }
 }
 

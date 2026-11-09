@@ -18,25 +18,27 @@ OWNER_RE=re.compile(r"^[A-Za-z0-9-]{1,39}$")
 class GitHubInventoryError(RuntimeError): pass
 
 def _is_github_api_url(url: str) -> bool:
-    """Validate the actual credential destination, not a caller assertion."""
+    """Accept only the canonical GitHub API origin before attaching a token."""
+    if not isinstance(url, str) or not url or url != url.strip():
+        return False
     try:
         parsed = urllib.parse.urlsplit(url)
-        port = parsed.port
-    except (TypeError, ValueError):
+        return (
+            parsed.scheme.lower() == "https"
+            and parsed.hostname is not None
+            and parsed.hostname.lower() == "api.github.com"
+            and parsed.port in (None, 443)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+        )
+    except ValueError:
         return False
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname == "api.github.com"
-        and port in (None, 443)
-        and parsed.username is None
-        and parsed.password is None
-        and not parsed.fragment
-    )
+
 
 def _request_json(url:str, token:str, timeout:int=30)->dict[str,Any]:
     if not token: raise GitHubInventoryError("GITHUB_TOKEN is required")
-    if not _is_github_api_url(url):
-        raise GitHubInventoryError("GitHub credentials may only be sent to https://api.github.com")
+    if not _is_github_api_url(url): raise GitHubInventoryError("GitHub API URL is not allowed")
     req=Request(url,headers={
         "Accept":"application/vnd.github+json",
         "Authorization":"Bearer "+token,

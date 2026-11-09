@@ -40,7 +40,20 @@ jobs:
           QUDRON_MEMORY_D1_DATABASE_ID: ${{ vars.QUDRON_MEMORY_D1_DATABASE_ID }}
         run: |
           npm install --no-audit --no-fund
-          sed -i "s/REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID/$QUDRON_MEMORY_D1_DATABASE_ID/" wrangler.toml
+          if [[ ! "$QUDRON_MEMORY_D1_DATABASE_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "::error title=Invalid D1 database ID::QUDRON_MEMORY_D1_DATABASE_ID must be a UUID."
+            exit 1
+          fi
+          placeholder="00000000-0000-0000-0000-000000000000"
+          grep -Fq "database_id = \"$placeholder\"" wrangler.toml || {
+            echo "::error title=Missing D1 placeholder::wrangler.toml does not contain the expected database ID placeholder."
+            exit 1
+          }
+          sed -i "s/$placeholder/$QUDRON_MEMORY_D1_DATABASE_ID/" wrangler.toml
+          grep -Fq "database_id = \"$QUDRON_MEMORY_D1_DATABASE_ID\"" wrangler.toml || {
+            echo "::error title=D1 database ID injection failed::wrangler.toml was not updated with the configured database ID."
+            exit 1
+          }
           npm run typecheck
           npm run build
           npx wrangler d1 migrations apply qudron-memory --remote

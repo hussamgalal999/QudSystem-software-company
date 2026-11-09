@@ -2,7 +2,7 @@ name: Qudron Cloud Memory CI
 on:
   push:
     branches: [main]
-    paths: ["ops/qudron-memory/**", ".github/workflows/qudron-memory-ci.yml"]
+    paths: ["ops/qudron-memory/**", ".github/workflows/qudron-memory-ci.yml", ".github/workflows/qudron-memory-deploy.yml"]
   pull_request:
     paths: ["ops/qudron-memory/**", ".github/workflows/qudron-memory-ci.yml"]
   workflow_dispatch:
@@ -28,3 +28,8 @@ jobs:
         run: npm run typecheck
       - name: Validate Worker bundle
         run: npm run build
+      - name: Validate D1 deployment ID wiring
+        run: |
+          grep -Fq 'database_id = "00000000-0000-0000-0000-000000000000"' wrangler.toml
+          grep -Fq 'placeholder="00000000-0000-0000-0000-000000000000"' ../../.github/workflows/qudron-memory-deploy.yml
+          grep -Fq 'sed -i "s/$placeholder/$QUDRON_MEMORY_D1_DATABASE_ID/"' ../../.github/workflows/qudron-memory-deploy.yml

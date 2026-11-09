@@ -87,9 +87,13 @@ async function readBody(request: Request, env: Env): Promise<Record<string, unkn
 }
 
 async function authorized(request: Request, env: Env): Promise<boolean> {
+  const expected = env.QUDRON_MEMORY_TOKEN || "";
+  // The documented owner secret is at least 32 random bytes. Fail closed when
+  // deployment configuration is missing or weaker than that minimum.
+  if (new TextEncoder().encode(expected).byteLength < 32) return false;
   const header = request.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return Boolean(env.QUDRON_MEMORY_TOKEN && token && await safeEqual(token, env.QUDRON_MEMORY_TOKEN));
+  return Boolean(token && await safeEqual(token, expected));
 }
 
 async function upsertProject(body: Record<string, unknown>, env: Env): Promise<Response> {

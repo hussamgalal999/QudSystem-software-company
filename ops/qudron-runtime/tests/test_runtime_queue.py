@@ -33,6 +33,18 @@ class RuntimeQueueTests(unittest.TestCase):
                  worker.INSTANCE_ID if status == "running" else None, lock_until, now, now)
             )
 
+    def test_mcp_job_status_redacts_persisted_provider_error(self):
+        self.insert_job("mcp-error", status="failed")
+        with worker.connect_db() as db:
+            db.execute(
+                "UPDATE jobs SET error=? WHERE id=?",
+                ("HTTP 500: provider response contained secret material", "mcp-error")
+            )
+        snapshot = worker.mcp_get_job("mcp-error")
+        self.assertEqual(snapshot["error"], "job_failed")
+        self.assertNotIn("provider response", snapshot["error"])
+        self.assertNotIn("secret material", snapshot["error"])
+
     def test_concurrent_claims_are_unique(self):
         for i in range(12):
             self.insert_job(f"job-{i}")

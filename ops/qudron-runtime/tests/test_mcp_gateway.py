@@ -26,6 +26,12 @@ class MCPGatewayTests(unittest.TestCase):
         self.assertEqual(result["result"]["protocolVersion"], PROTOCOL_VERSION)
         self.assertIn("tools", result["result"]["capabilities"])
 
+    def test_initialize_rejects_non_string_protocol_versions(self):
+        for invalid in ([], {}, 123, True):
+            result = self.handle({"jsonrpc": "2.0", "id": 101, "method": "initialize",
+                                  "params": {"protocolVersion": invalid}})
+            self.assertEqual(result["error"]["code"], -32602)
+
     def test_notifications_return_no_json_response(self):
         self.assertIsNone(self.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
 
@@ -89,6 +95,28 @@ class MCPGatewayTests(unittest.TestCase):
         )
         self.assertEqual(captured, [("browser", "tool", 5)])
         self.assertIn("Browser", result["result"]["content"][0]["text"])
+
+        invalid_arguments = (
+            {"query": ""},
+            {"query": "   "},
+            {"query": "browser", "kind": "unknown"},
+            {"query": "browser", "limit": 0},
+            {"query": "browser", "limit": True},
+            {"query": "browser", "limit": 51},
+        )
+        for arguments in invalid_arguments:
+            invalid = handle_mcp_request(
+                {"jsonrpc": "2.0", "id": 13, "method": "tools/call",
+                 "params": {"name": "qudron_search_capabilities", "arguments": arguments}},
+                is_authorized=lambda: True,
+                enqueue_job=lambda _: {},
+                get_job=lambda _: {},
+                get_job_result=lambda _: "",
+                get_status=lambda: {},
+                get_usage=lambda: {},
+                search_capabilities=lambda query, kind, limit: self.fail("invalid search reached registry"),
+            )
+            self.assertTrue(invalid["result"]["isError"])
 
     def test_submit_batch_uses_atomic_batch_callback(self):
         args = {"jobs": [

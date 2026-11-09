@@ -422,7 +422,7 @@ def mcp_get_job(job_id: str) -> dict[str, Any] | None:
     return {
         "id": row["id"], "title": row["title"], "status": row["status"],
         "attempts": row["attempts"], "run_after": row["run_after"],
-        "error": row["error"], "updated_at": row["updated_at"],
+        "error": "job_failed" if row["error"] else None, "updated_at": row["updated_at"],
         "result_available": bool(row["status"] == "completed" and row["result_path"]),
     }
 

@@ -12,6 +12,8 @@ RUN apt-get update \
 # inventory store, not in a general runtime image.
 COPY *.py ./
 COPY schedule.json agent_registry.json service_workflows.json model_provider_catalog.json compute_provider_catalog.json ./
-RUN mkdir -p /app/data /app/reports /app/logs
+COPY requirements.txt ./requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    && mkdir -p /app/data /app/reports /app/logs
 EXPOSE 8765
 CMD ["python", "-u", "qudron_worker.py"]

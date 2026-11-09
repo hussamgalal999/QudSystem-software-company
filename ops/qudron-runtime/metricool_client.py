@@ -1,6 +1,6 @@
 """Official Metricool API adapter. Reads analytics and schedules drafts only by default."""
 from __future__ import annotations
-import csv, io, json, os, urllib.parse, urllib.error
+import csv, io, json, os, re, urllib.parse, urllib.error
 from urllib.request import Request
 from typing import Any
 from endpoint_security import is_allowed_credential_endpoint, open_credential_request
@@ -60,7 +60,6 @@ class MetricoolClient:
   *,
   content_brand:str|None=None,
   destination_id:str|None=None,
-  approved_brand_destinations:dict[str,dict[str,str]]|None=None,
  )->Any:
   if network not in NETWORKS:raise ValueError("Unsupported Metricool network")
   if not text.strip():raise ValueError("Post text is required")
@@ -70,9 +69,10 @@ class MetricoolClient:
    content_brand=content_brand,
    brand_id=self.blog_id,
    destination_id=destination_id,
-   approved_brand_destinations=approved_brand_destinations,
+   network=network,
+   approved_brand_destinations=_load_owner_approved_brand_destinations(),
   )
-  payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network}],"draft":True,"autoPublish":False}
+  payload={"publicationDate":{"dateTime":publication_date,"timezone":timezone},"text":text,"providers":[{"network":network,"id":destination_id}],"draft":True,"autoPublish":False}
   return self.request("POST","/v2/scheduler/posts",payload=payload)
 
 def summarize_posts(posts:Any)->dict[str,Any]:
@@ -110,12 +110,24 @@ _VISION_GUARD_MARKERS = (
  "cctv",
 )
 
+def _load_owner_approved_brand_destinations()->dict[str,dict[str,str]]:
+ raw=os.getenv("QUDRON_METRICOOL_APPROVED_BRAND_DESTINATIONS","").strip()
+ if not raw:return {}
+ try:
+  value=json.loads(raw)
+ except json.JSONDecodeError as exc:
+  raise MetricoolError("Owner Metricool brand/destination mapping is invalid JSON") from exc
+ if not isinstance(value,dict):
+  raise MetricoolError("Owner Metricool brand/destination mapping must be a JSON object")
+ return value
+
 def validate_brand_destination(
  *,
  text:str,
  content_brand:str|None,
  brand_id:str|None,
  destination_id:str|None,
+ network:str,
  approved_brand_destinations:dict[str,dict[str,str]]|None,
 )->None:
  """Require an explicit brand -> Metricool blog -> destination allowlist.
@@ -126,7 +138,7 @@ def validate_brand_destination(
  label=" ".join(str(content_brand or "").casefold().replace("_"," ").split())
  if not label:
   raise MetricoolError("Content brand is required before creating a Metricool draft")
- normalized_text=" ".join(str(text or "").casefold().split())
+ normalized_text=" ".join(re.sub(r"[^\w\s]", " ", str(text or "").casefold()).split())
  if label not in {"vision guard","vision guard systems"} and any(
   marker in normalized_text for marker in _VISION_GUARD_MARKERS
  ):
@@ -137,9 +149,14 @@ def validate_brand_destination(
   raise MetricoolError("No owner-approved Metricool brand/destination mapping exists")
  expected_blog=str(binding.get("brand_id") or "").strip()
  expected_destination=str(binding.get("destination_id") or "").strip()
- if not expected_blog or not expected_destination:
-  raise MetricoolError("Approved Metricool mapping must include both brand_id and destination_id")
+ expected_network=str(binding.get("network") or "").strip().lower()
+ if not expected_blog or not expected_destination or not expected_network:
+  raise MetricoolError("Approved Metricool mapping must include brand_id, destination_id and network")
  if not str(brand_id or "").strip() or not str(destination_id or "").strip():
   raise MetricoolError("Metricool brand and destination IDs are required")
- if str(brand_id).strip()!=expected_blog or str(destination_id).strip()!=expected_destination:
-  raise MetricoolError("Metricool brand/destination does not match the approved content-brand mapping")
+ if (
+  str(brand_id).strip()!=expected_blog
+  or str(destination_id).strip()!=expected_destination
+  or str(network or "").strip().lower()!=expected_network
+ ):
+  raise MetricoolError("Metricool brand/destination/network does not match the approved content-brand mapping")

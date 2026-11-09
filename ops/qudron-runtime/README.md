@@ -32,7 +32,7 @@ If a profile is blank it falls back to the default endpoint. Configure price lim
 - Model usage is recorded by job, specialist, profile and model. The authenticated `GET /usage` endpoint reports daily/monthly prompt tokens, completion tokens, total tokens, calls and known USD cost.
 - Configure exact input/output rates per million tokens for each keyed/custom profile. Anonymous FreeLLM routes default to zero provider-price estimates while the daily cap and provider quotas remain active; cost is reported as an estimate, not an invoice guarantee.
 - Optional daily/monthly USD budgets reserve a conservative estimated amount before concurrent API requests. CVPen creation additionally requires a per-order USD cap; the sum of provider usage and outstanding reservations for that order cannot exceed it.  Budgets fail closed if profile prices are not configured or the next reservation would exceed a cap. Abandoned reservations are reclaimed after a crash/timeout using a bounded TTL. Provider dashboards should still have their own spend limits; this local estimate is not a billing guarantee.
-- Fast/Balanced/Reasoning routing keeps routine work bounded to five specialists. CVPen uses ten specialists only for the CV-creation task and requires a per-order spend cap plus configured price rates before the first model request.
+- Fast/Balanced/Reasoning routing serves the selected specialist team when swarm mode is enabled. By default, the planner retains every role in that team and targets at least ten task-scoped role assignments only when no explicit `max_agents` or legacy per-task cap is configured and the effective global assignment cap is at least ten. `QUDRON_MAX_ROLE_ASSIGNMENTS_PER_TASK` (default 10,000) is a planning ceiling, not a count of live agents or concurrent model calls; a lower configured value can produce fewer assignments. `QUDRON_MAX_CONCURRENT_MODEL_CALLS` (default 16, hard maximum 32), the shared model-call gate, provider quotas, host capacity, and spend controls bound actual upstream calls. The eight local queue workers limit active queue jobs; they are not an upstream model-call cap because each job may fan out into multiple model and review calls. `QUDRON_MAX_PARALLEL_REVIEWS` defaults to 16 (hard maximum 32). For backward compatibility, `QUDRON_MAX_SWARM_AGENTS` and `QUDRON_MAX_CVPEN_AGENTS` may impose a smaller per-task cap. CVPen's dedicated CV-creation team has ten specialist assignments when its caps allow them and still requires a per-order spend cap plus configured price rates before the first model request.
 
 ## Start with Docker
 
@@ -262,3 +262,40 @@ Keep the submission tool approval enabled. OpenDots conversations require a Copi
 ## Social distribution
 
 The current Metricool adapter deliberately creates drafts only. Use it as the distribution layer for Facebook, Instagram, YouTube and other supported destinations after connecting the official Metricool API. The publication workflow should produce platform-specific variants, campaign IDs, media metadata, UTM tags, an approval record and post-publication evidence. No public post is considered complete until its provider returns a published ID and permalink. Never bypass Meta login or use personal cookies scraped from a browser to publish.
+
+
+## Owner approval signing keys
+
+Approval tokens use Ed25519. The trusted owner-facing process is the only component
+that receives the private signing key; Qudron workers receive only the public key.
+A worker compromise therefore does not provide the ability to mint owner approvals.
+
+Generate the key pair on a trusted owner machine:
+
+```sh
+openssl genpkey -algorithm Ed25519 -out qudron-approval-private.pem
+openssl pkey -in qudron-approval-private.pem -pubout -out qudron-approval-public.pem
+chmod 600 qudron-approval-private.pem
+```
+
+- Keep `qudron-approval-private.pem` outside the repository and outside all runtime,
+  OpenDots, model-router and agent containers.
+- Configure `QUDRON_APPROVAL_PRIVATE_KEY_FILE` only in the trusted owner issuer
+  process, which uses `ApprovalTokenIssuer.from_environment()`.
+- Place the public key in the runtime's private data mount and configure
+  `QUDRON_APPROVAL_PUBLIC_KEY_FILE` to that in-container path. Runtime code uses
+  `ApprovalService.from_environment()` and exposes verification/consumption only.
+- Never copy the private key into `.env`, GitHub Actions artifacts, Docker build
+  contexts, or agent-readable storage. Rotate by issuing a new key pair and
+  updating the owner issuer and runtime public-key file together.
+- Old HMAC tokens are intentionally invalid under version 2; issue fresh approvals
+  after deploying the matching public key.
+
+
+## Latest runtime hardening notes
+
+- MCP Streamable HTTP accepts JSON and bounded Server-Sent Events responses. MCP session IDs are captured per submitted task handle; the endpoint-level cache is only a bootstrap aid.
+- A2A discovery uses the origin-root well-known path while task operations remain relative to the configured agent endpoint path. Malformed status messages with non-list `parts` are treated as empty text.
+- Compute capacity ignores expired in-memory leases; durable admission continues to count only non-expired leases and reservations.
+- Metricool owner allowlists bind content brand, Metricool blog ID, destination ID, and social network together. A mapping approved for Facebook cannot authorize a YouTube draft.
+- Vision Guard brand markers are normalized across punctuation before brand isolation checks.

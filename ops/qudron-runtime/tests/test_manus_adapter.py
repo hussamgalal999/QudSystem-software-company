@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from approval_service import ApprovalService
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from approval_service import ApprovalService, ApprovalTokenIssuer
 
 from continuity_store import ContinuityStore
 from manus_adapter import ManusAdapter, ManusAPIError
@@ -77,6 +78,8 @@ class ManusAdapterTests(unittest.TestCase):
         self.assertEqual(result["last_event_id"], "evt-1")
         self.assertIn("Private contact jane@example.com", json.dumps(result))
         stored = self.store.external_task(provider="manus", external_task_id="task-abc")
+        self.assertEqual(stored["status"], "running")
+        self.assertEqual(stored["last_event_id"], "evt-1")
         persisted = json.loads(stored["result_json"])
         self.assertEqual(persisted["events"][0]["id"], "evt-1")
         self.assertNotIn("message", persisted["events"][0])
@@ -92,13 +95,15 @@ class ManusAdapterTests(unittest.TestCase):
                 self.adapter.send_message("task-1", "Continue the task.")
         denied_request.assert_not_called()
 
+        private_key = Ed25519PrivateKey.generate()
+        issuer = ApprovalTokenIssuer(private_key)
         approvals = ApprovalService(
-            "b" * 40, Path(self.temp.name) / "manus-approvals.sqlite3"
+            private_key.public_key(), Path(self.temp.name) / "manus-approvals.sqlite3"
         )
         adapter = ManusAdapter(
             "test-token", store=self.store, approval_service=approvals,
         )
-        token = approvals.issue(
+        token = issuer.issue(
             action="manus.task.send_message",
             resource_id="task-1",
             approved_by="owner",
@@ -136,7 +141,7 @@ class ManusAdapterTests(unittest.TestCase):
         with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "false"}, clear=False):
             with self.assertRaises(ManusAPIError):
                 ManusAdapter.from_environment(self.store)
-        with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "true", "MANUS_API_KEY": ""}, clear=False):
+        with patch.dict(os.environ, {"QUDRON_MANUS_ENABLED": "true", "QUDRON_MANUS_CREDENTIAL_TYPE": "api_key", "MANUS_API_KEY": "", "MANUS_OAUTH_TOKEN": ""}, clear=False):
             with self.assertRaises(ManusAPIError):
                 ManusAdapter.from_environment(self.store)
 

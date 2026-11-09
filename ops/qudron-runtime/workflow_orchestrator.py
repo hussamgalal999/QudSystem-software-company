@@ -51,6 +51,10 @@ class WorkflowNode:
             raise ValueError("max_attempts must be between 1 and 5")
         if self.requires_approval and self.approved_by and len(self.approved_by) > 160:
             raise ValueError("approved_by is too long")
+        quorum = self.metadata.get("quorum_required")
+        if quorum is not None:
+            if type(quorum) is not int or not 1 <= quorum <= len(self.dependencies):
+                raise ValueError(f"quorum_required must be an integer within 1..{len(self.dependencies)}")
 
 
 @dataclass(frozen=True)
@@ -220,11 +224,15 @@ class WorkflowStore:
             CREATE INDEX IF NOT EXISTS idx_workflow_resource_lease
               ON workflow_resource_locks(resource_key,lease_until);
             """)
+            # Serialize schema inspection and ALTER so concurrent worker startup
+            # cannot race on the same legacy column migration.
+            db.execute("BEGIN IMMEDIATE")
             columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(workflow_nodes)").fetchall()
             }
             if "execution_owner" not in columns:
                 db.execute("ALTER TABLE workflow_nodes ADD COLUMN execution_owner TEXT")
+            db.execute("COMMIT")
 
 
     def create(self, definition: WorkflowDefinition) -> str:
@@ -337,21 +345,40 @@ class WorkflowStore:
     def approve_node(self, workflow_id: str, node_id: str, approval_token: str) -> None:
         if self.approval_service is None:
             raise WorkflowError("Authenticated approval service is not configured")
-        approval = self.approval_service.verify_and_consume(
-            approval_token,
-            action="workflow.node.approve",
-            resource_id=f"{workflow_id}/{node_id}",
-        )
-        if not approval:
-            raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
-        with self.connect() as db:
+        db = self.connect()
+        try:
+            # Lock and validate the target before consuming the one-time token.
+            # This prevents a typo/stale target from burning an otherwise valid approval.
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT requires_approval,status,approved_by
+                   FROM workflow_nodes WHERE workflow_id=? AND node_id=?""",
+                (workflow_id, node_id),
+            ).fetchone()
+            if not row or not row["requires_approval"]:
+                raise WorkflowError("Approval target was not found or does not require approval")
+            if row["status"] not in {"queued", "waiting_for_approval"}:
+                raise WorkflowError("Approval target is not awaiting approval")
+            approval = self.approval_service.verify_and_consume(
+                approval_token,
+                action="workflow.node.approve",
+                resource_id=f"{workflow_id}/{node_id}",
+            )
+            if not approval:
+                raise WorkflowError("Approval token is invalid, expired, out of scope, or already used")
             changed = db.execute(
                 """UPDATE workflow_nodes SET approved_by=?,status='queued',updated_at=?
                    WHERE workflow_id=? AND node_id=? AND requires_approval=1""",
                 (str(approval["approved_by"])[:160], time.time(), workflow_id, node_id),
             ).rowcount
-        if changed != 1:
-            raise WorkflowError("Approval target was not found or does not require approval")
+            if changed != 1:
+                raise WorkflowError("Approval target changed while approval was being applied")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def start_node(self, workflow_id: str, node_id: str, owner_key: str) -> int:
         """Atomically claim a queued node for one specific execution attempt."""

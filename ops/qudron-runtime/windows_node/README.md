@@ -10,17 +10,17 @@ Microsoft UI Automation exposes a tree of windows and controls that can be inspe
 
 ## Supported operations
 
-- windows.list_windows — read visible window titles and process identifiers.
-- windows.inspect_window — inspect a bounded UI Automation tree for one process.
+- windows.list_windows — read visible window titles, process identifiers and exact window handles.
+- windows.inspect_window — inspect a bounded UI Automation tree for one process/window handle pair.
 - windows.launch_app — launch one alias from the explicit owner allowlist.
-- windows.invoke_control — invoke one identified control inside an exact window title and process ID.
-- windows.type_text — type one bounded text value into one identified Edit control inside an exact window title and process ID.
+- windows.invoke_control — invoke one identified control inside an exact process ID, window handle and exact window title.
+- windows.type_text — type one bounded text value into one identified Edit control inside an exact process ID, window handle and exact window title.
 
 There is no arbitrary shell, PowerShell, file-system traversal, process injection, credential dumping or remote desktop takeover endpoint.
 
 ## Approval and conflict prevention
 
-Read-only inspection requires the owner node token. Launch/click/type operations also require a short-lived HMAC-signed approval envelope that binds the approver, action, process ID, exact window title, automation ID, control type, expiry and one-time nonce. Changing the target window invalidates the approval. The node rejects altered payloads, expired approvals and replayed nonces. The task idempotency key prevents a retried network request from repeating an already completed UI action.
+Read-only inspection requires the owner node token. Launch/click/type operations also require a short-lived HMAC-signed approval envelope. A launch approval binds the approver, action and allowlisted application alias. A click/type approval additionally binds the process ID, exact window handle, exact window title, automation ID and control type; text entry also binds a digest of the exact text. Every approval includes an expiry and one-time nonce. Changing the target window invalidates a click/type approval. The node rejects altered payloads, expired approvals and replayed nonces. The task idempotency key prevents a retried network request from repeating an already completed UI action.
 
 Keep each desktop workflow scoped to a named application and target control. UIA identifiers can change across app versions; verify the target immediately before acting. Do not run two writers against the same application/document concurrently. Use Qudron resource claims to serialize those tasks.
 

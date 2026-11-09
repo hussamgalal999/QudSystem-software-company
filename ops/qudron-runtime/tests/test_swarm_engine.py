@@ -28,6 +28,7 @@ class SwarmEngineTests(unittest.TestCase):
         registry = load_agent_registry("agent_registry.json")
         plan = build_swarm_plan("cvpen_cv_creation", registry=registry)
         self.assertEqual(len(plan), len(registry["teams"]["cvpen_cv_creation"]))
+        self.assertEqual([agent["id"] for agent in plan], registry["teams"]["cvpen_cv_creation"])
         self.assertEqual(len(plan), 10)
         self.assertEqual(plan[0]["execution_stage"], "produce")
         self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
@@ -192,6 +193,13 @@ class SwarmEngineTests(unittest.TestCase):
         self.assertNotIn("01012345678", redacted)
         self.assertNotIn("12345678901234", redacted)
         self.assertNotIn("sk-abcdefghijklmnop", redacted)
+
+    def test_parenthesized_international_phone_formats_are_redacted(self):
+        for phone in ("(415) 555-2671", "+1 (555) 123-4567", "+44 20 7946 0958"):
+            with self.subTest(phone=phone):
+                self.assertNotIn(phone, redact_sensitive_text("Call " + phone))
+        release_id = "release 1.2.3-4567890"
+        self.assertEqual(redact_sensitive_text(release_id), release_id)
 
 if __name__ == "__main__":
     unittest.main()

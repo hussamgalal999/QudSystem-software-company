@@ -32,11 +32,13 @@ class MCPToolAgentAdapter:
         self.timeout_seconds = max(5, min(180, timeout_seconds))
         self._sessions: dict[str, str] = {}
         self._session_lock = threading.Lock()
+        self._initialization_locks: dict[str, threading.Lock] = {}
 
     def _request_sync(
         self, agent: AgentDescriptor, method: str, params: dict[str, Any] | None = None,
-        *, notification: bool = False,
-    ) -> dict[str, Any]:
+        *, notification: bool = False, session_id: str | None = None,
+        return_session_id: bool = False,
+    ) -> dict[str, Any] | tuple[dict[str, Any], str | None]:
         endpoint = (agent.endpoint_ref or "").strip()
         if not is_allowed_credential_endpoint(endpoint):
             raise MCPAdapterError("MCP endpoint must use HTTPS or an exact loopback HTTP endpoint")
@@ -44,8 +46,9 @@ class MCPToolAgentAdapter:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
-        with self._session_lock:
-            session_id = self._sessions.get(endpoint)
+        if session_id is None:
+            with self._session_lock:
+                session_id = self._sessions.get(endpoint)
         if session_id:
             headers["Mcp-Session-Id"] = session_id
         token_env = str(agent.metadata.get("token_env", "")).strip()
@@ -65,6 +68,7 @@ class MCPToolAgentAdapter:
             endpoint, data=json.dumps(payload).encode("utf-8"),
             headers=headers, method="POST",
         )
+        response_session: str | None = None
         try:
             with open_credential_request(request, timeout=self.timeout_seconds) as response:
                 response_session = response.headers.get("Mcp-Session-Id")
@@ -76,7 +80,26 @@ class MCPToolAgentAdapter:
                     raise MCPAdapterError("MCP response exceeded 1 MB safety limit")
                 if not raw and notification:
                     return {}
-                result = json.loads(raw.decode("utf-8"))
+                content_type = str(response.headers.get("Content-Type", "")).lower()
+                if "text/event-stream" in content_type:
+                    events = []
+                    for line in raw.decode("utf-8").splitlines():
+                        if not line.startswith("data:"):
+                            continue
+                        data_line = line[5:].strip()
+                        if not data_line or data_line == "[DONE]":
+                            continue
+                        try:
+                            event = json.loads(data_line)
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(event, dict):
+                            events.append(event)
+                    if not events:
+                        raise MCPAdapterError("MCP event stream contained no JSON-RPC message")
+                    result = events[-1]
+                else:
+                    result = json.loads(raw.decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise MCPAdapterError(f"MCP request failed: {type(exc).__name__}") from exc
         if not isinstance(result, dict):
@@ -84,7 +107,10 @@ class MCPToolAgentAdapter:
         if "error" in result:
             error = result["error"]
             raise MCPAdapterError(str(error.get("message", "MCP JSON-RPC error"))[:500])
-        return result.get("result", {})
+        result_value = result.get("result", {})
+        if return_session_id:
+            return result_value, str(response_session) if response_session else None
+        return result_value
 
     @staticmethod
     def _text_content(result: dict[str, Any]) -> str:
@@ -96,9 +122,38 @@ class MCPToolAgentAdapter:
             if isinstance(item, dict) and item.get("type") == "text"
         )[:80_000]
 
-    def _call_tool(self, agent: AgentDescriptor, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def _initialize_session(self, agent: AgentDescriptor) -> str | None:
+        endpoint = (agent.endpoint_ref or "").strip()
+        with self._session_lock:
+            lock = self._initialization_locks.setdefault(endpoint, threading.Lock())
+        # Keep initialize + initialized notification atomic for this endpoint.
+        with lock:
+            initialized, session_id = self._request_sync(
+                agent, "initialize",
+                {
+                    "protocolVersion": self.protocol_version,
+                    "capabilities": {},
+                    "clientInfo": {"name": "qudron-agent-fabric", "version": "0.1.0"},
+                },
+                # A new initialize request must not inherit another task's
+                # endpoint-wide cached session. Capture this response's header.
+                session_id="", return_session_id=True,
+            )
+            if not isinstance(initialized, dict) or not initialized.get("protocolVersion"):
+                raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
+            self._request_sync(
+                agent, "notifications/initialized", {}, notification=True,
+                session_id=session_id if session_id is not None else "",
+            )
+            return session_id
+
+    def _call_tool(
+        self, agent: AgentDescriptor, name: str, arguments: dict[str, Any],
+        *, session_id: str | None = None,
+    ) -> dict[str, Any]:
         result = self._request_sync(
-            agent, "tools/call", {"name": name, "arguments": arguments}
+            agent, "tools/call", {"name": name, "arguments": arguments},
+            session_id=session_id,
         )
         if not isinstance(result, dict) or result.get("isError"):
             raise MCPAdapterError(self._text_content(result if isinstance(result, dict) else {})[:500])
@@ -108,19 +163,7 @@ class MCPToolAgentAdapter:
         tool_name = str(agent.metadata.get("submit_tool", "")).strip()
         if not tool_name:
             raise MCPAdapterError("MCP agent descriptor is missing its explicit submit_tool")
-        initialized = await asyncio.to_thread(
-            self._request_sync, agent, "initialize",
-            {
-                "protocolVersion": self.protocol_version,
-                "capabilities": {},
-                "clientInfo": {"name": "qudron-agent-fabric", "version": "0.1.0"},
-            },
-        )
-        if not isinstance(initialized, dict) or not initialized.get("protocolVersion"):
-            raise MCPAdapterError("MCP initialize response did not negotiate a protocol version")
-        await asyncio.to_thread(
-            self._request_sync, agent, "notifications/initialized", {}, notification=True
-        )
+        session_id = await asyncio.to_thread(self._initialize_session, agent)
         args = {
             "title": task.title,
             "prompt": task.instruction,
@@ -129,15 +172,22 @@ class MCPToolAgentAdapter:
             "role": agent.display_name,
         }
         args.update(agent.metadata.get("fixed_arguments", {}))
-        result = await asyncio.to_thread(self._call_tool, agent, tool_name, args)
+        result = await asyncio.to_thread(
+            self._call_tool, agent, tool_name, args,
+            session_id=session_id if session_id is not None else "",
+        )
         text = self._text_content(result)
         parsed: dict[str, Any] = {}
         try:
             parsed = json.loads(text) if text else {}
         except json.JSONDecodeError:
             parsed = {}
-        remote_id_value = parsed.get("job_id") or parsed.get("id")
-        remote_id = str(remote_id_value) if remote_id_value is not None else task.task_id
+        remote_id_value = next(
+            (value for value in (parsed.get("job_id"), parsed.get("id"))
+             if value is not None and str(value).strip()),
+            None,
+        )
+        remote_id = str(remote_id_value).strip() if remote_id_value is not None else task.task_id
         status_tool = agent.metadata.get("status_tool")
         # An MCP submit response may use either job_id or id for an asynchronous
         # task. If a status tool is configured, never report the submit receipt
@@ -151,6 +201,7 @@ class MCPToolAgentAdapter:
             task_url=parsed.get("task_url"),
             metadata={
                 "protocol": "mcp",
+                "mcp_session_id": session_id,
                 "submit_tool": tool_name,
                 "status_tool": status_tool,
                 "result_tool": agent.metadata.get("result_tool"),
@@ -171,7 +222,8 @@ class MCPToolAgentAdapter:
                 summary="MCP task submitted; no status_tool was configured.",
             )
         result = await asyncio.to_thread(
-            self._call_tool, agent, str(status_tool), {"job_id": handle.remote_task_id}
+            self._call_tool, agent, str(status_tool), {"job_id": handle.remote_task_id},
+            session_id=handle.metadata.get("mcp_session_id") or "",
         )
         raw = self._text_content(result)
         data: dict[str, Any] = {}
@@ -193,6 +245,7 @@ class MCPToolAgentAdapter:
             final = await asyncio.to_thread(
                 self._call_tool, agent, str(handle.metadata["result_tool"]),
                 {"job_id": handle.remote_task_id},
+                session_id=handle.metadata.get("mcp_session_id") or "",
             )
             summary = self._text_content(final)[:80_000]
         return AgentTaskResult(
@@ -208,6 +261,7 @@ class MCPToolAgentAdapter:
         result = await asyncio.to_thread(
             self._call_tool, agent, str(follow_tool),
             {"job_id": handle.remote_task_id, "message": message},
+            session_id=handle.metadata.get("mcp_session_id") or "",
         )
         return AgentTaskHandle(
             agent.provider_id, handle.remote_task_id, TaskStatus.RUNNING,
@@ -219,7 +273,8 @@ class MCPToolAgentAdapter:
         if not cancel_tool:
             raise MCPAdapterError("This MCP agent does not expose an explicit cancel_tool")
         await asyncio.to_thread(
-            self._call_tool, agent, str(cancel_tool), {"job_id": handle.remote_task_id}
+            self._call_tool, agent, str(cancel_tool), {"job_id": handle.remote_task_id},
+            session_id=handle.metadata.get("mcp_session_id") or "",
         )
         return AgentTaskHandle(
             agent.provider_id, handle.remote_task_id, TaskStatus.CANCELLED,

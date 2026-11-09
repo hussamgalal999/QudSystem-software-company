@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -16,6 +17,53 @@ class ContinuityStoreTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+
+    def test_connection_context_rolls_back_all_statements_after_failure(self):
+        with self.store.connect() as db:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS transaction_probe (value TEXT NOT NULL)"
+            )
+        with self.assertRaisesRegex(RuntimeError, "forced transaction failure"):
+            with self.store.connect() as db:
+                db.execute("INSERT INTO transaction_probe(value) VALUES(?)", ("first",))
+                db.execute("INSERT INTO transaction_probe(value) VALUES(?)", ("second",))
+                raise RuntimeError("forced transaction failure")
+        with self.store.connect() as db:
+            count = db.execute("SELECT COUNT(*) FROM transaction_probe").fetchone()[0]
+        self.assertEqual(count, 0)
+
+
+    def test_legacy_running_stage_without_claim_token_is_immediately_reclaimable(self):
+        legacy_path = self.db_path.with_name("legacy-tokenless.sqlite3")
+        with sqlite3.connect(legacy_path) as db:
+            db.execute("""
+                CREATE TABLE agent_runs (
+                    job_id TEXT NOT NULL, project TEXT NOT NULL,
+                    agent_id TEXT NOT NULL, stage TEXT NOT NULL,
+                    status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+                    output TEXT, error TEXT, started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(job_id, agent_id, stage)
+                )
+            """)
+            db.execute(
+                """INSERT INTO agent_runs
+                   (job_id,project,agent_id,stage,status,started_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                ("legacy-job", "qudron", "worker", "research", "running", "2026-11-01", "2026-11-01"),
+            )
+        recovered_store = ContinuityStore(legacy_path)
+        with recovered_store.connect() as db:
+            row = db.execute(
+                "SELECT claim_token,lease_until FROM agent_runs WHERE job_id='legacy-job'"
+            ).fetchone()
+        self.assertIsNone(row["claim_token"])
+        self.assertEqual(row["lease_until"], 0)
+        recovered = recovered_store.begin_stage(
+            job_id="legacy-job", project="qudron", agent_id="worker", stage="research"
+        )
+        self.assertTrue(recovered["claimed"])
 
     def test_concurrent_stage_claim_is_exclusive_and_stale_claim_cannot_complete(self):
         first = self.store.begin_stage(

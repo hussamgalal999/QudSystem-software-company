@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "project": "Qudron — QudSystem Executive Orchestration Platform",
-  "snapshot_date": "2026-11-05",
-  "source_branch": "feat/qudron-continuity-memory-registry-2026-11-05",
+  "snapshot_date": "2026-11-07",
+  "source_branch": "fix/qudron-pr24-wave1-2026-11-06",
   "base_branch": "main",
-  "source_commit": "bd15a49f55aa6035b3def5e16c16e415791d0a63",
+  "source_commit": "8146ab1eccc3909e56768abbee808e6819b2ee1a",
   "principle": "No task is forgotten: every request, integration, target or debt item is tracked here until evidence-backed closure or an explicit owner decision.",
   "status_definitions": {
     "ci_verified": "Automated tests/CI passed for the specific source commit; not a live integration or production proof.",
@@ -26,8 +26,8 @@
       "title": "SQLite queue, atomic claims, retries and stale-lease recovery",
       "status": "ci_verified",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/qudron_worker.py; tests/test_runtime_queue.py",
-      "current_state": "Core queue tests pass in CI run #244 on the PR candidate branch.",
+      "evidence": "ops/qudron-runtime/qudron_worker.py; ops/qudron-runtime/tests/test_runtime_queue.py; GitHub Actions run #550 https://github.com/hussamgalal999/QudSystem-software-company/actions/runs/42293692140",
+      "current_state": "Queue, atomic claim, restart recovery, stale-lease and bounded-retry tests passed in exact code snapshot 07348ed7218135059e143d97ba632179ac69c420 (CI run #550).",
       "acceptance_criteria": "Restart recovery, unique claims, stale lease and bounded retries remain green on the release SHA.",
       "verification_profile": [
         "functional_correctness",
@@ -37,7 +37,30 @@
         "security_and_authorization",
         "observability",
         "deployment_smoke_and_rollback"
-      ]
+      ],
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "bounded-swarm",
@@ -56,7 +79,30 @@
         "observability",
         "deployment_smoke_and_rollback"
       ],
-      "acceptance_criteria": "Unit and integration tests prove correct producer/reviewer/finalizer stage order, bounded parallel fan-out, independent reviewer inputs, finalizer receives all required evidence, failed workers are surfaced, retries are bounded, and no output is reported as verified without the required reviewer/finalizer evidence."
+      "acceptance_criteria": "Unit and integration tests prove correct producer/reviewer/finalizer stage order, bounded parallel fan-out, independent reviewer inputs, finalizer receives all required evidence, failed workers are surfaced, retries are bounded, and no output is reported as verified without the required reviewer/finalizer evidence.",
+      "mandatory_gates": [
+        "functional_correctness",
+        "concurrency_and_race_safety",
+        "restart_and_failure_recovery",
+        "idempotency_and_retry_bounds",
+        "security_and_authorization",
+        "observability",
+        "deployment_smoke_and_rollback"
+      ],
+      "critical_gates": [
+        "security_and_authorization",
+        "deployment_smoke_and_rollback"
+      ],
+      "gate_weights": {
+        "functional_correctness": 14.29,
+        "concurrency_and_race_safety": 14.29,
+        "restart_and_failure_recovery": 14.29,
+        "idempotency_and_retry_bounds": 14.29,
+        "security_and_authorization": 14.29,
+        "observability": 14.29,
+        "deployment_smoke_and_rollback": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "workforce-44",
@@ -75,7 +121,27 @@
         "concurrency_and_resource_limits",
         "role_memory_isolation",
         "workload_evaluation"
-      ]
+      ],
+      "mandatory_gates": [
+        "registry_schema_integrity",
+        "unique_role_and_team_coverage",
+        "task_to_role_routing",
+        "independent_review_and_quality_gates",
+        "concurrency_and_resource_limits",
+        "role_memory_isolation",
+        "workload_evaluation"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "registry_schema_integrity": 14.29,
+        "unique_role_and_team_coverage": 14.29,
+        "task_to_role_routing": 14.29,
+        "independent_review_and_quality_gates": 14.29,
+        "concurrency_and_resource_limits": 14.29,
+        "role_memory_isolation": 14.29,
+        "workload_evaluation": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "agent-memory",
@@ -94,7 +160,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "stage-checkpoints",
@@ -113,7 +199,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "external-task-ledger",
@@ -132,7 +238,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "continuity-mcp",
@@ -151,7 +277,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "shared-project-memory",
@@ -170,7 +316,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "cross-chat-resume",
@@ -189,7 +355,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "github-state-sync",
@@ -208,7 +394,27 @@
         "sensitive_data_redaction",
         "external_handoff_reconciliation",
         "provenance_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "durable_persistence",
+        "project_and_agent_scope_isolation",
+        "restart_resume_recovery",
+        "idempotency_and_event_order",
+        "sensitive_data_redaction",
+        "external_handoff_reconciliation",
+        "provenance_and_audit"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "durable_persistence": 14.29,
+        "project_and_agent_scope_isolation": 14.29,
+        "restart_resume_recovery": 14.29,
+        "idempotency_and_event_order": 14.29,
+        "sensitive_data_redaction": 14.29,
+        "external_handoff_reconciliation": 14.29,
+        "provenance_and_audit": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "logical-agent-scale",
@@ -227,7 +433,27 @@
         "resource_and_cost_accounting",
         "failure_and_recovery_under_load",
         "scale_report_reproducibility"
-      ]
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "live-agent-scale",
@@ -246,7 +472,27 @@
         "resource_and_cost_accounting",
         "failure_and_recovery_under_load",
         "scale_report_reproducibility"
-      ]
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "external-agent-scheduler",
@@ -265,7 +511,27 @@
         "artifact_integrity_and_provenance",
         "result_aggregation_and_independent_verification",
         "quota_and_cost_limits"
-      ]
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "browser-agent-runs",
@@ -284,7 +550,27 @@
         "artifact_integrity_and_provenance",
         "result_aggregation_and_independent_verification",
         "quota_and_cost_limits"
-      ]
+      ],
+      "mandatory_gates": [
+        "provider_contract_compatibility",
+        "bounded_parallel_dispatch",
+        "polling_and_timeout_handling",
+        "retry_cancel_and_resume",
+        "artifact_integrity_and_provenance",
+        "result_aggregation_and_independent_verification",
+        "quota_and_cost_limits"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "provider_contract_compatibility": 14.29,
+        "bounded_parallel_dispatch": 14.29,
+        "polling_and_timeout_handling": 14.29,
+        "retry_cancel_and_resume": 14.29,
+        "artifact_integrity_and_provenance": 14.29,
+        "result_aggregation_and_independent_verification": 14.29,
+        "quota_and_cost_limits": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "manus-v2-adapter",
@@ -303,7 +589,30 @@
         "attachment_ingestion_and_hashing",
         "restart_safe_remote_task_recovery",
         "human_approval_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "manus-live-access",
@@ -322,7 +631,30 @@
         "attachment_ingestion_and_hashing",
         "restart_safe_remote_task_recovery",
         "human_approval_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "manus-result-bridge",
@@ -341,7 +673,30 @@
         "attachment_ingestion_and_hashing",
         "restart_safe_remote_task_recovery",
         "human_approval_and_audit"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_api_contracts",
+        "credential_scope_and_secret_handling",
+        "account_entitlement_and_quota",
+        "create_poll_detail_and_followup",
+        "attachment_ingestion_and_hashing",
+        "restart_safe_remote_task_recovery",
+        "human_approval_and_audit"
+      ],
+      "critical_gates": [
+        "credential_scope_and_secret_handling",
+        "human_approval_and_audit"
+      ],
+      "gate_weights": {
+        "official_api_contracts": 14.29,
+        "credential_scope_and_secret_handling": 14.29,
+        "account_entitlement_and_quota": 14.29,
+        "create_poll_detail_and_followup": 14.29,
+        "attachment_ingestion_and_hashing": 14.29,
+        "restart_safe_remote_task_recovery": 14.29,
+        "human_approval_and_audit": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "gemini-free-access",
@@ -361,7 +716,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "deepseek-free-access",
@@ -381,7 +761,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "qwen-free-access",
@@ -401,7 +806,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "glm-free-access",
@@ -421,7 +851,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "provider-quality-router",
@@ -430,8 +885,8 @@
       "status": "implemented_unverified",
       "priority": "P0",
       "evidence": "ops/qudron-runtime/qudron_worker.py; model_provider_catalog.json",
-      "current_state": "Generic endpoint profiles and FreeLLM gateway exist; no full multi-provider policy-aware quality router is live.",
-      "acceptance_criteria": "Eligibility tests prevent paid/weak/incompatible providers from receiving tasks and all fallbacks are auditable.",
+      "current_state": "Generic endpoint profiles and FreeLLM gateway exist; no full multi-provider policy-aware quality router is live. The current worker fails closed with a provider-configuration error when no qualified provider exists; durable NEEDS_PROVIDER queue state is not implemented.",
+      "acceptance_criteria": "Eligibility tests prevent paid/weak/incompatible providers from receiving tasks; all fallbacks are auditable; provider absence preserves a task in a durable NEEDS_PROVIDER state rather than generic retry/failure churn.",
       "verification_profile": [
         "official_model_identity",
         "authorized_access_and_terms",
@@ -441,7 +896,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "freellm-sidecar",
@@ -461,7 +941,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "omniroute",
@@ -481,7 +986,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "openclaw-zero-token",
@@ -501,7 +1031,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "token-capacity-100b",
@@ -521,7 +1076,32 @@
         "quota_and_cost_enforcement",
         "privacy_and_data_classification",
         "fallback_and_circuit_breaker"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_model_identity",
+        "authorized_access_and_terms",
+        "live_inference_smoke",
+        "task_quality_benchmark",
+        "latency_and_availability_measurement",
+        "quota_and_cost_enforcement",
+        "privacy_and_data_classification",
+        "fallback_and_circuit_breaker"
+      ],
+      "critical_gates": [
+        "authorized_access_and_terms",
+        "privacy_and_data_classification"
+      ],
+      "gate_weights": {
+        "official_model_identity": 12.5,
+        "authorized_access_and_terms": 12.5,
+        "live_inference_smoke": 12.5,
+        "task_quality_benchmark": 12.5,
+        "latency_and_availability_measurement": 12.5,
+        "quota_and_cost_enforcement": 12.5,
+        "privacy_and_data_classification": 12.5,
+        "fallback_and_circuit_breaker": 12.5
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "artemis-branch",
@@ -540,7 +1120,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "android-device-authorization",
@@ -559,7 +1162,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "android-physical-e2e",
@@ -578,7 +1204,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "android-app-inventory",
@@ -597,7 +1246,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "android-security-lab",
@@ -616,7 +1288,29 @@
         "reproducible_findings_and_severity",
         "non_destructive_execution",
         "responsible_disclosure_report"
-      ]
+      ],
+      "mandatory_gates": [
+        "written_scope_and_authorization",
+        "static_and_dynamic_test_coverage",
+        "permission_and_exported_component_review",
+        "network_and_storage_assessment",
+        "reproducible_findings_and_severity",
+        "non_destructive_execution",
+        "responsible_disclosure_report"
+      ],
+      "critical_gates": [
+        "written_scope_and_authorization"
+      ],
+      "gate_weights": {
+        "written_scope_and_authorization": 14.29,
+        "static_and_dynamic_test_coverage": 14.29,
+        "permission_and_exported_component_review": 14.29,
+        "network_and_storage_assessment": 14.29,
+        "reproducible_findings_and_severity": 14.29,
+        "non_destructive_execution": 14.29,
+        "responsible_disclosure_report": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "android-app-automation",
@@ -635,7 +1329,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "android-log-evidence",
@@ -654,7 +1371,30 @@
         "read_only_or_approved_mutation_boundary",
         "failure_recovery_and_cancellation",
         "evidence_retention_and_redaction"
-      ]
+      ],
+      "mandatory_gates": [
+        "owner_device_authorization",
+        "authenticated_qudron_to_artemis_path",
+        "device_identity_and_capability_probe",
+        "task_completion_and_trace_verification",
+        "read_only_or_approved_mutation_boundary",
+        "failure_recovery_and_cancellation",
+        "evidence_retention_and_redaction"
+      ],
+      "critical_gates": [
+        "owner_device_authorization",
+        "evidence_retention_and_redaction"
+      ],
+      "gate_weights": {
+        "owner_device_authorization": 14.29,
+        "authenticated_qudron_to_artemis_path": 14.29,
+        "device_identity_and_capability_probe": 14.29,
+        "task_completion_and_trace_verification": 14.29,
+        "read_only_or_approved_mutation_boundary": 14.29,
+        "failure_recovery_and_cancellation": 14.29,
+        "evidence_retention_and_redaction": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "repo-inventory-503",
@@ -673,7 +1413,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "dynamic-github-scan",
@@ -692,7 +1454,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "portfolio-500-projects",
@@ -711,7 +1495,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "productization-pipeline",
@@ -730,7 +1536,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "feedback-loop",
@@ -749,7 +1577,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "project-pm-pages",
@@ -768,7 +1618,29 @@
         "security_license_and_secret_scan",
         "product_value_and_customer_fit",
         "owner_next_action_and_disposition"
-      ]
+      ],
+      "mandatory_gates": [
+        "repository_inventory_coverage",
+        "private_and_inaccessible_repo_accounting",
+        "deduplication_and_provenance",
+        "build_and_test_health",
+        "security_license_and_secret_scan",
+        "product_value_and_customer_fit",
+        "owner_next_action_and_disposition"
+      ],
+      "critical_gates": [
+        "security_license_and_secret_scan"
+      ],
+      "gate_weights": {
+        "repository_inventory_coverage": 14.29,
+        "private_and_inaccessible_repo_accounting": 14.29,
+        "deduplication_and_provenance": 14.29,
+        "build_and_test_health": 14.29,
+        "security_license_and_secret_scan": 14.29,
+        "product_value_and_customer_fit": 14.29,
+        "owner_next_action_and_disposition": 14.26
+      },
+      "required_maturity": "M4"
     },
     {
       "id": "metricool-adapter",
@@ -787,7 +1659,30 @@
         "explicit_publish_approval",
         "content_quality_and_policy_review",
         "audit_and_rollback"
-      ]
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "metricool-runtime-access",
@@ -806,7 +1701,30 @@
         "explicit_publish_approval",
         "content_quality_and_policy_review",
         "audit_and_rollback"
-      ]
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "visionguard-channel-fix",
@@ -825,7 +1743,30 @@
         "explicit_publish_approval",
         "content_quality_and_policy_review",
         "audit_and_rollback"
-      ]
+      ],
+      "mandatory_gates": [
+        "correct_brand_and_destination_binding",
+        "account_permission_verification",
+        "read_sync_and_analytics_freshness",
+        "draft_only_write_contract",
+        "explicit_publish_approval",
+        "content_quality_and_policy_review",
+        "audit_and_rollback"
+      ],
+      "critical_gates": [
+        "explicit_publish_approval",
+        "audit_and_rollback"
+      ],
+      "gate_weights": {
+        "correct_brand_and_destination_binding": 14.29,
+        "account_permission_verification": 14.29,
+        "read_sync_and_analytics_freshness": 14.29,
+        "draft_only_write_contract": 14.29,
+        "explicit_publish_approval": 14.29,
+        "content_quality_and_policy_review": 14.29,
+        "audit_and_rollback": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "telegram-owner-channel",
@@ -844,7 +1785,30 @@
         "privacy_and_retention",
         "human_handoff",
         "owner_allowlist_and_abuse_controls"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "whatsapp-cloud-api",
@@ -863,7 +1827,30 @@
         "privacy_and_retention",
         "human_handoff",
         "owner_allowlist_and_abuse_controls"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "opendots-voice",
@@ -882,7 +1869,30 @@
         "privacy_and_retention",
         "human_handoff",
         "owner_allowlist_and_abuse_controls"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "pstn-voice",
@@ -901,7 +1911,30 @@
         "privacy_and_retention",
         "human_handoff",
         "owner_allowlist_and_abuse_controls"
-      ]
+      ],
+      "mandatory_gates": [
+        "official_channel_and_identity",
+        "recipient_consent_and_opt_out",
+        "webhook_signature_and_replay_protection",
+        "delivery_and_failure_receipts",
+        "privacy_and_retention",
+        "human_handoff",
+        "owner_allowlist_and_abuse_controls"
+      ],
+      "critical_gates": [
+        "recipient_consent_and_opt_out",
+        "privacy_and_retention"
+      ],
+      "gate_weights": {
+        "official_channel_and_identity": 14.29,
+        "recipient_consent_and_opt_out": 14.29,
+        "webhook_signature_and_replay_protection": 14.29,
+        "delivery_and_failure_receipts": 14.29,
+        "privacy_and_retention": 14.29,
+        "human_handoff": 14.29,
+        "owner_allowlist_and_abuse_controls": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "cvpen-workflow-design",
@@ -921,7 +1954,33 @@
         "payment_signature_and_idempotency",
         "retention_deletion_and_audit",
         "backup_restore_and_access_control"
-      ]
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "cvpen-secure-intake",
@@ -941,7 +2000,33 @@
         "payment_signature_and_idempotency",
         "retention_deletion_and_audit",
         "backup_restore_and_access_control"
-      ]
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "cvpen-document-pipeline",
@@ -961,7 +2046,33 @@
         "payment_signature_and_idempotency",
         "retention_deletion_and_audit",
         "backup_restore_and_access_control"
-      ]
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "cvpen-psp",
@@ -981,7 +2092,33 @@
         "payment_signature_and_idempotency",
         "retention_deletion_and_audit",
         "backup_restore_and_access_control"
-      ]
+      ],
+      "mandatory_gates": [
+        "tenant_isolation_and_authentication",
+        "malware_and_file_validation",
+        "pdf_docx_extraction_accuracy",
+        "rendering_and_ats_readability",
+        "human_quality_and_factuality_review",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit",
+        "backup_restore_and_access_control"
+      ],
+      "critical_gates": [
+        "tenant_isolation_and_authentication",
+        "payment_signature_and_idempotency",
+        "retention_deletion_and_audit"
+      ],
+      "gate_weights": {
+        "tenant_isolation_and_authentication": 12.5,
+        "malware_and_file_validation": 12.5,
+        "pdf_docx_extraction_accuracy": 12.5,
+        "rendering_and_ats_readability": 12.5,
+        "human_quality_and_factuality_review": 12.5,
+        "payment_signature_and_idempotency": 12.5,
+        "retention_deletion_and_audit": 12.5,
+        "backup_restore_and_access_control": 12.5
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "commercial-ledger",
@@ -1000,7 +2137,30 @@
         "settlement_and_reconciliation",
         "delivery_acceptance_evidence",
         "margin_and_cost_reporting"
-      ]
+      ],
+      "mandatory_gates": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "critical_gates": [
+        "consent_and_order_state_machine",
+        "payment_provider_signature"
+      ],
+      "gate_weights": {
+        "consent_and_order_state_machine": 14.29,
+        "quote_and_price_integrity": 14.29,
+        "payment_provider_signature": 14.29,
+        "idempotent_fulfillment": 14.29,
+        "settlement_and_reconciliation": 14.29,
+        "delivery_acceptance_evidence": 14.29,
+        "margin_and_cost_reporting": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "cloudflare-adapter",
@@ -1019,7 +2179,31 @@
         "encrypted_backup_and_restore_drill",
         "monitoring_and_alerting",
         "rollback_and_disaster_recovery"
-      ]
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "cloudflare-deploy",
@@ -1038,7 +2222,31 @@
         "encrypted_backup_and_restore_drill",
         "monitoring_and_alerting",
         "rollback_and_disaster_recovery"
-      ]
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "private-runtime-host",
@@ -1057,7 +2265,31 @@
         "encrypted_backup_and_restore_drill",
         "monitoring_and_alerting",
         "rollback_and_disaster_recovery"
-      ]
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "backup-restore",
@@ -1076,7 +2308,31 @@
         "encrypted_backup_and_restore_drill",
         "monitoring_and_alerting",
         "rollback_and_disaster_recovery"
-      ]
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "operations-monitoring",
@@ -1095,7 +2351,31 @@
         "encrypted_backup_and_restore_drill",
         "monitoring_and_alerting",
         "rollback_and_disaster_recovery"
-      ]
+      ],
+      "mandatory_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "persistent_storage_and_migrations",
+        "health_and_dependency_checks",
+        "encrypted_backup_and_restore_drill",
+        "monitoring_and_alerting",
+        "rollback_and_disaster_recovery"
+      ],
+      "critical_gates": [
+        "least_privilege_deployment",
+        "secret_and_network_security",
+        "rollback_and_disaster_recovery"
+      ],
+      "gate_weights": {
+        "least_privilege_deployment": 14.29,
+        "secret_and_network_security": 14.29,
+        "persistent_storage_and_migrations": 14.29,
+        "health_and_dependency_checks": 14.29,
+        "encrypted_backup_and_restore_drill": 14.29,
+        "monitoring_and_alerting": 14.29,
+        "rollback_and_disaster_recovery": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "approval-governance",
@@ -1103,8 +2383,8 @@
       "title": "Enforce approvals for external publishing, messaging, payments, account changes and device mutation",
       "status": "implemented_unverified",
       "priority": "P0",
-      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/tests/test_approval_service.py; docs/CONTINUITY_PROTOCOL.md",
-      "current_state": "Mutating MCP tools carry non-read-only hints; end-to-end approval policy across every connector is incomplete.",
+      "evidence": "ops/qudron-runtime/approval_service.py; ops/qudron-runtime/scripts/generate_approval_keys.py; ops/qudron-runtime/scripts/issue_approval.py; ops/qudron-runtime/APPROVAL_KEY_OPERATIONS.md; ops/qudron-runtime/tests/test_approval_service.py",
+      "current_state": "Ed25519 asymmetric approval signing/verifying, owner-only key generation and token-issuance utilities, and public-key-only runtime verification tests are implemented. The owner private key and runtime public-key secret mount are not provisioned in deployment, so production approval issuance is not enabled.",
       "acceptance_criteria": "Every high-impact tool requires user approval and stores approver, target, diff, timestamp and outcome.",
       "verification_profile": [
         "threat_model_and_risk_register",
@@ -1114,7 +2394,34 @@
         "data_privacy_and_retention",
         "rollback_and_incident_response",
         "owner_risk_acceptance"
-      ]
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "image-to-code",
@@ -1133,7 +2440,30 @@
         "visual_regression_and_accessibility",
         "design_tool_export_integrity",
         "security_and_dependency_review"
-      ]
+      ],
+      "mandatory_gates": [
+        "input_rights_and_source_provenance",
+        "design_fidelity_measurement",
+        "generated_code_quality",
+        "automated_build_and_tests",
+        "visual_regression_and_accessibility",
+        "design_tool_export_integrity",
+        "security_and_dependency_review"
+      ],
+      "critical_gates": [
+        "input_rights_and_source_provenance",
+        "security_and_dependency_review"
+      ],
+      "gate_weights": {
+        "input_rights_and_source_provenance": 14.29,
+        "design_fidelity_measurement": 14.29,
+        "generated_code_quality": 14.29,
+        "automated_build_and_tests": 14.29,
+        "visual_regression_and_accessibility": 14.29,
+        "design_tool_export_integrity": 14.29,
+        "security_and_dependency_review": 14.26
+      },
+      "required_maturity": "M3"
     },
     {
       "id": "service-pilot",
@@ -1152,7 +2482,30 @@
         "settlement_and_reconciliation",
         "delivery_acceptance_evidence",
         "margin_and_cost_reporting"
-      ]
+      ],
+      "mandatory_gates": [
+        "consent_and_order_state_machine",
+        "quote_and_price_integrity",
+        "payment_provider_signature",
+        "idempotent_fulfillment",
+        "settlement_and_reconciliation",
+        "delivery_acceptance_evidence",
+        "margin_and_cost_reporting"
+      ],
+      "critical_gates": [
+        "consent_and_order_state_machine",
+        "payment_provider_signature"
+      ],
+      "gate_weights": {
+        "consent_and_order_state_machine": 14.29,
+        "quote_and_price_integrity": 14.29,
+        "payment_provider_signature": 14.29,
+        "idempotent_fulfillment": 14.29,
+        "settlement_and_reconciliation": 14.29,
+        "delivery_acceptance_evidence": 14.29,
+        "margin_and_cost_reporting": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "security-review",
@@ -1171,16 +2524,43 @@
         "data_privacy_and_retention",
         "rollback_and_incident_response",
         "owner_risk_acceptance"
-      ]
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "ci-release-gate",
       "area": "Release",
       "title": "Pass full CI for this continuity branch and its final merge candidate",
-      "status": "pending_ci",
+      "status": "ci_verified",
       "priority": "P0",
-      "evidence": "GitHub Actions Qudron Runtime Checks",
-      "current_state": "Earlier Artemis PR run #244 passed; this newer continuity branch has not yet passed CI.",
+      "evidence": "GitHub Actions run 42315960184 (run #568), commit 8146ab1eccc3909e56768abbee808e6819b2ee1a, PR #26.",
+      "current_state": "Qudron Runtime Checks run 568 completed successfully on exact repair-branch commit 8146ab1eccc3909e56768abbee808e6819b2ee1a. Unit/safety tests, runtime and FreeLLM builds, OpenDots/Compose validation, FreeLLM health/auth smoke test and timezone database check all passed. Independent review, owner key provisioning and live deployment gates remain open.",
       "acceptance_criteria": "A green run on the exact final commit and a human code review are recorded.",
       "verification_profile": [
         "exact_commit_ci_green",
@@ -1190,7 +2570,30 @@
         "deployment_and_health_evidence",
         "backup_and_rollback_drill",
         "release_manifest_and_signoff"
-      ]
+      ],
+      "mandatory_gates": [
+        "exact_commit_ci_green",
+        "dependency_and_secret_security_scan",
+        "integration_and_smoke_tests",
+        "independent_code_review",
+        "deployment_and_health_evidence",
+        "backup_and_rollback_drill",
+        "release_manifest_and_signoff"
+      ],
+      "critical_gates": [
+        "dependency_and_secret_security_scan",
+        "backup_and_rollback_drill"
+      ],
+      "gate_weights": {
+        "exact_commit_ci_green": 14.29,
+        "dependency_and_secret_security_scan": 14.29,
+        "integration_and_smoke_tests": 14.29,
+        "independent_code_review": 14.29,
+        "deployment_and_health_evidence": 14.29,
+        "backup_and_rollback_drill": 14.29,
+        "release_manifest_and_signoff": 14.26
+      },
+      "required_maturity": "M6"
     },
     {
       "id": "technical-debt-closure",
@@ -1209,7 +2612,34 @@
         "data_privacy_and_retention",
         "rollback_and_incident_response",
         "owner_risk_acceptance"
-      ]
+      ],
+      "mandatory_gates": [
+        "threat_model_and_risk_register",
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "critical_gates": [
+        "approval_enforcement_at_tool_boundary",
+        "audit_trail_and_actor_attribution",
+        "critical_high_vulnerability_closure",
+        "data_privacy_and_retention",
+        "rollback_and_incident_response",
+        "owner_risk_acceptance"
+      ],
+      "gate_weights": {
+        "threat_model_and_risk_register": 14.29,
+        "approval_enforcement_at_tool_boundary": 14.29,
+        "audit_trail_and_actor_attribution": 14.29,
+        "critical_high_vulnerability_closure": 14.29,
+        "data_privacy_and_retention": 14.29,
+        "rollback_and_incident_response": 14.29,
+        "owner_risk_acceptance": 14.26
+      },
+      "required_maturity": "M5"
     },
     {
       "id": "remote-compute-fabric",
@@ -1228,11 +2658,63 @@
         "resource_and_cost_accounting",
         "failure_and_recovery_under_load",
         "scale_report_reproducibility"
-      ]
+      ],
+      "mandatory_gates": [
+        "admission_control",
+        "fairness_and_backpressure",
+        "measured_load_and_latency",
+        "provider_quota_enforcement",
+        "resource_and_cost_accounting",
+        "failure_and_recovery_under_load",
+        "scale_report_reproducibility"
+      ],
+      "critical_gates": [],
+      "gate_weights": {
+        "admission_control": 14.29,
+        "fairness_and_backpressure": 14.29,
+        "measured_load_and_latency": 14.29,
+        "provider_quota_enforcement": 14.29,
+        "resource_and_cost_accounting": 14.29,
+        "failure_and_recovery_under_load": 14.29,
+        "scale_report_reproducibility": 14.26
+      },
+      "required_maturity": "M6"
+    },
+    {
+      "id": "quality-contract-validator",
+      "area": "Governance",
+      "title": "Machine-validate task-specific critical gates, gate weights and required maturity",
+      "status": "ci_verified",
+      "priority": "P1",
+      "evidence": "ops/qudron-runtime/quality_contract_validator.py; ops/qudron-runtime/tests/test_quality_contract_validator.py; docs/QUALITY_VERIFICATION_FRAMEWORK.md",
+      "current_state": "All 64 registry tasks carry mandatory_gates, critical_gates, gate_weights and required_maturity; the canonical-profile validator and negative regression tests passed in CI run 568 on commit 8146ab1eccc3909e56768abbee808e6819b2ee1a.",
+      "acceptance_criteria": "Every task has a valid verification_profile, non-empty mandatory_gates, critical_gates as a subset of mandatory_gates, positive weights for every mandatory gate summing to 100, and required_maturity M0-M7. The validator rejects unknown gate IDs and missing fields; tests cover invalid IDs, missing weights, invalid maturity, critical-gate subsets, weight sums and status-count consistency.",
+      "verification_profile": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ],
+      "mandatory_gates": [
+        "schema_validation",
+        "coverage_reproducibility",
+        "auditability",
+        "fail_closed_on_missing_evidence"
+      ],
+      "critical_gates": [
+        "fail_closed_on_missing_evidence"
+      ],
+      "gate_weights": {
+        "schema_validation": 25,
+        "coverage_reproducibility": 25,
+        "auditability": 25,
+        "fail_closed_on_missing_evidence": 25
+      },
+      "required_maturity": "M5"
     }
   ],
   "computed_status_counts": {
-    "ci_verified": 2,
+    "ci_verified": 4,
     "implemented_pending_ci": 8,
     "planned": 11,
     "blocked_owner": 10,
@@ -1241,9 +2723,8 @@
     "candidate_not_enabled": 3,
     "implemented_unverified": 9,
     "open_pr": 1,
-    "needs_owner_review": 1,
-    "pending_ci": 1
+    "needs_owner_review": 1
   },
-  "total_tasks": 63,
+  "total_tasks": 64,
   "completion_policy": "Do not convert a task to ci_verified or closed merely because code, documentation, a model name, a page or an adapter exists. Require evidence matching its acceptance criteria."
 }

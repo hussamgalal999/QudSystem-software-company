@@ -69,9 +69,10 @@ class A2AHttpAdapter:
 
     def _request_sync(
         self, agent: AgentDescriptor, method: str, path: str,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None, *, root_relative: bool = False,
     ) -> dict[str, Any]:
-        url = urljoin(self._base(agent), path.lstrip("/"))
+        target_path = path if root_relative else path.lstrip("/")
+        url = urljoin(self._base(agent), target_path)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
         req = Request(url, data=body, headers=self._headers(agent), method=method)
         last = "unknown"
@@ -98,7 +99,8 @@ class A2AHttpAdapter:
 
     async def discover(self, agent: AgentDescriptor) -> dict[str, Any]:
         return await asyncio.to_thread(
-            self._request_sync, agent, "GET", "/.well-known/agent-card.json"
+            self._request_sync, agent, "GET", "/.well-known/agent-card.json",
+            root_relative=True,
         )
 
     @staticmethod
@@ -121,9 +123,12 @@ class A2AHttpAdapter:
     def _message_text(message: Any) -> str:
         if not isinstance(message, dict):
             return str(message or "")
+        parts = message.get("parts")
+        if not isinstance(parts, list):
+            return ""
         return " ".join(
             str(part.get("text", ""))
-            for part in message.get("parts", [])
+            for part in parts
             if isinstance(part, dict) and part.get("text") is not None
         ).strip()
 

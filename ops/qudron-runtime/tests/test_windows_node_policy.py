@@ -13,21 +13,21 @@ class FakeAutomation:
         self.invocations = []
 
     def list_windows(self):
-        return [{"title": "Notepad", "process_id": 123}]
+        return [{"title": "Notepad", "process_id": 123, "handle": 456}]
 
-    def inspect_window(self, process_id):
-        return {"title": "Notepad", "process_id": process_id, "controls": [], "control_count": 0}
+    def inspect_window(self, process_id, window_handle):
+        return {"title": "Notepad", "process_id": process_id, "handle": window_handle, "controls": [], "control_count": 0}
 
     def launch_app(self, path):
         self.invocations.append(("launch", path))
         return {"launched": True, "process_id": 99}
 
-    def invoke_control(self, process_id, window_title, automation_id, control_type):
-        self.invocations.append(("invoke", process_id, window_title, automation_id, control_type))
+    def invoke_control(self, process_id, window_handle, window_title, automation_id, control_type):
+        self.invocations.append(("invoke", process_id, window_handle, window_title, automation_id, control_type))
         return {"invoked": True, "automation_id": automation_id}
 
-    def type_text(self, process_id, window_title, automation_id, control_type, text):
-        self.invocations.append(("type", process_id, window_title, automation_id, control_type, text))
+    def type_text(self, process_id, window_handle, window_title, automation_id, control_type, text):
+        self.invocations.append(("type", process_id, window_handle, window_title, automation_id, control_type, text))
         return {"typed": True, "character_count": len(text)}
 
 
@@ -60,6 +60,48 @@ class WindowsNodePolicyTests(unittest.TestCase):
         })
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["result"]["windows"][0]["process_id"], 123)
+
+
+    def test_inspect_window_is_read_only_and_does_not_require_approval(self):
+        result = self.node.execute({
+            "task_id": "task-inspect", "idempotency_key": "idem-inspect",
+            "action": "windows.inspect_window",
+            "parameters": {"process_id": 123, "window_handle": 456},
+        })
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["result"]["title"], "Notepad")
+        self.assertEqual(self.automation.invocations, [])
+
+    def test_invoke_control_requires_and_consumes_exact_approval(self):
+        params = {
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
+            "automation_id": "search-box", "control_type": "Edit",
+        }
+        with self.assertRaises(WindowsNodeError):
+            self.node.execute({
+                "task_id": "task-invoke-denied", "idempotency_key": "idem-invoke-denied",
+                "action": "windows.invoke_control", "parameters": params,
+            })
+        approval = self.approval(
+            "windows.invoke_control", params, "nonce-invoke-00000001"
+        )
+        payload = {
+            "task_id": "task-invoke", "idempotency_key": "idem-invoke",
+            "action": "windows.invoke_control", "parameters": params,
+            "approval": approval,
+        }
+        result = self.node.execute(payload)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            self.automation.invocations,
+            [("invoke", 123, 456, "Notepad", "search-box", "Edit")],
+        )
+        with self.assertRaises(WindowsNodeError):
+            self.node.execute({
+                **payload,
+                "task_id": "task-invoke-replay",
+                "idempotency_key": "idem-invoke-replay",
+            })
 
     def test_write_action_requires_signed_approval(self):
         params = {"app_alias": "notepad"}
@@ -100,9 +142,21 @@ class WindowsNodePolicyTests(unittest.TestCase):
             self.node.execute(two)
         self.assertEqual(len(self.automation.invocations), 1)
 
+
+    def test_approval_resource_binds_exact_untrimmed_ui_selectors(self):
+        base = {
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
+            "automation_id": "search-box", "control_type": "Edit",
+        }
+        padded = {**base, "automation_id": " search-box "}
+        self.assertNotEqual(
+            approval_resource("windows.invoke_control", base),
+            approval_resource("windows.invoke_control", padded),
+        )
+
     def test_typed_text_is_bound_to_approved_exact_payload(self):
         params = {
-            "process_id": 123, "window_title": "Notepad",
+            "process_id": 123, "window_handle": 456, "window_title": "Notepad",
             "automation_id": "search", "control_type": "Edit", "text": "approved text",
         }
         approval = self.approval("windows.type_text", params, "nonce-00000000000003")
@@ -130,6 +184,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
         class FakeWindow:
             def __init__(self, control):
                 self.control = control
+            handle = 456
             def process_id(self):
                 return 123
             def window_text(self):
@@ -150,15 +205,15 @@ class WindowsNodePolicyTests(unittest.TestCase):
         automation._desktop = lambda: FakeDesktop(window)
 
         literal = "{ENTER} + ^ {TAB}"
-        result = automation.type_text(123, "Notepad", "search-box", "Edit", literal)
+        result = automation.type_text(123, 456, "Notepad", "search-box", "Edit", literal)
         self.assertEqual(result["character_count"], len(literal))
         self.assertEqual(control.value, literal)
         self.assertTrue(control.focused)
         self.assertEqual(window.selector, ("search-box", "Edit"))
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "Notepad", "", "Edit", "must not type")
+            automation.type_text(123, 456, "Notepad", "", "Edit", "must not type")
         with self.assertRaises(WindowsNodeError):
-            automation.type_text(123, "Notepad", "search-box", "Button", "must not type")
+            automation.type_text(123, 456, "Notepad", "search-box", "Button", "must not type")
 
     def test_idempotent_ui_action_receipt_survives_worker_restart(self):
         params = {"app_alias": "notepad"}
@@ -210,7 +265,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
             "idempotency_key": "idem-invalid-type-text",
             "action": "windows.type_text",
             "parameters": {
-                "process_id": 123, "window_title": "Notepad",
+                "process_id": 123, "window_handle": 456, "window_title": "Notepad",
                 "automation_id": "search-box", "control_type": "Edit", "text": "literal text",
             },
         }
@@ -235,6 +290,7 @@ class WindowsNodePolicyTests(unittest.TestCase):
     def test_approval_resource_binds_exact_window_title(self):
         base = {
             "process_id": 123,
+            "window_handle": 456,
             "window_title": "Notepad - Notes",
             "automation_id": "search-box",
             "control_type": "Edit",

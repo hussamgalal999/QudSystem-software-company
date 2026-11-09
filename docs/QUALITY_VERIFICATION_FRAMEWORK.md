@@ -194,6 +194,10 @@ Every task in `project_task_registry.json` carries a `verification_profile`. The
 - [ ] `data_privacy_and_retention`
 - [ ] `rollback_and_incident_response`
 - [ ] `owner_risk_acceptance`
+- [ ] `schema_validation`
+- [ ] `coverage_reproducibility`
+- [ ] `auditability`
+- [ ] `fail_closed_on_missing_evidence`
 
 ### Product Engineering
 - [ ] `input_rights_and_source_provenance`
@@ -213,6 +217,31 @@ Every task in `project_task_registry.json` carries a `verification_profile`. The
 - [ ] `backup_and_rollback_drill`
 - [ ] `release_manifest_and_signoff`
 
+
+### Per-task acceptance contract and validation
+
+Every task record must carry all of these fields before a score is published:
+
+- `verification_profile`: one named profile from this document.
+- `mandatory_gates`: a non-empty list of exact gate IDs selected from that profile.
+- `critical_gates`: a list of exact gate IDs; it must be a subset of `mandatory_gates`.
+- `required_maturity`: one of `M0` through `M7`.
+- `gate_weights`: a positive numeric weight for every mandatory gate, with no unknown keys; the weights must sum to 100 (tolerance 0.01).
+
+A registry validator must reject a task as `blocked` and refuse to calculate completion if any field is absent, if a gate ID is not in the selected profile, if a critical gate is not mandatory, if a mandatory gate has no weight, or if the weight sum is invalid. Do not silently apply a profile-wide default after results are known.
+
+Minimum required maturity by area (raise it when the task has higher operational risk):
+
+| Area | Minimum maturity | Reason |
+|---|---:|---|
+| Runtime / Workforce / Continuity / Product Engineering | M3 for code-only acceptance; M4 for connected components | CI is necessary, integration is a separate gate |
+| External Swarm / Manus / Model Supply / Android | M4; M5 for any capability claimed live | Mocks do not prove provider/device access |
+| Capacity / Infrastructure / Release | M6 | Sustained operation, restore, rollback and load evidence are required |
+| Governance / Android Security / CVPen / Commercial / Growth / Communications | M5; M6 for production/customer-facing operation | Authorization, privacy, payment and real-account evidence are required |
+| Portfolio | M4 for inventory automation; M5 for claims about private or inaccessible repositories | An incomplete inventory cannot be reported as full coverage |
+
+The task registry carries these fields and the CI validator enforces their structure. A valid contract is not evidence that its gates have passed; task status still depends on current, exact-scope verification.
+
 ## Scoring model
 
 For each task, evaluate each applicable gate as:
@@ -226,7 +255,7 @@ For each task, evaluate each applicable gate as:
 
 1. Each task may define a `gate_weights` object keyed by the exact gate IDs in its `verification_profile`.
 2. Every weight must be a positive number; weights must sum to **100** (tolerance 0.01).
-3. If `gate_weights` is absent, assign equal weight to every required gate: (w_i = 100/n). Do not invent weights after seeing the results.
+3. `gate_weights` is mandatory and must be committed with the task contract before evaluation. Equal weights may be chosen when the contract is authored, but the validator must reject a missing map; never infer weights after seeing results.
 4. A gate not present in `verification_profile` is not scored. A gate present in the profile cannot be silently omitted.
 5. Mark security, privacy, authorization, payment integrity, data-loss prevention and owner approval gates as **critical** in the task's `critical_gates` list. Critical gates are hard release blockers.
 
@@ -234,20 +263,20 @@ For each task, evaluate each applicable gate as:
 
 Let (s_i) be the gate score (1.0, 0.5 or 0.0) and (w_i) its weight.
 
-[
+$$
 \text{Evidence Coverage} =
 \frac{\sum_{i=1}^{n} w_i s_i}{\sum_{i=1}^{n} w_i}\times 100
-]
+$$
 
 Blocked, not-run and stale gates contribute zero to the numerator and remain in the denominator. Report their counts separately so a high score cannot hide missing access or missing tests.
 
-[
+$$
 \text{Verified Completion} =
 \begin{cases}
 100, & \text{if every mandatory gate passes, all critical gates pass, and the required maturity level is reached}\\
 0, & \text{otherwise}
 \end{cases}
-]
+$$
 
 Evidence Coverage is a diagnostic progress measure; Verified Completion is the acceptance decision. They must never be merged into one percentage.
 

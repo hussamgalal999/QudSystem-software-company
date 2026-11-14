@@ -359,6 +359,79 @@ class WorkflowOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(calls, ["send"])
 
+    def test_consensus_quorum_error_formats_dependency_count(self):
+        with self.assertRaisesRegex(ValueError, "between 1 and 2"):
+            WorkflowNode(
+                "reduce", "Reducer", "Reduce votes",
+                dependencies=("a", "b"),
+                metadata={"reducer": True, "quorum_required": 3},
+            )
+
+    def test_expand_execution_modes_and_validate_dag_rejections(self):
+        pipeline = expand_execution_mode(
+            ExecutionMode.PIPELINE, [("a", "A", "Step A"), ("b", "B", "Step B")]
+        )
+        self.assertEqual(pipeline[1].dependencies, ("a",))
+
+        parallel = expand_execution_mode(
+            ExecutionMode.PARALLEL, [("a", "A", "Do A"), ("b", "B", "Do B")]
+        )
+        self.assertEqual(len(parallel), 2)
+        self.assertEqual(parallel[0].dependencies, ())
+
+        map_reduce = expand_execution_mode(
+            ExecutionMode.MAP_REDUCE, [("a", "A", "Map A"), ("b", "B", "Map B")]
+        )
+        self.assertEqual(map_reduce[-1].node_id, "qudron_reduce")
+        self.assertEqual(set(map_reduce[-1].dependencies), {"a", "b"})
+
+        with self.assertRaises(ValueError):
+            expand_execution_mode(ExecutionMode.HYBRID, [("a", "A", "Do A")])
+        with self.assertRaises(ValueError):
+            expand_execution_mode(ExecutionMode.SEQUENTIAL, [])
+
+        with self.assertRaises(ValueError):
+            validate_dag((
+                WorkflowNode("dup", "One", "Do 1"),
+                WorkflowNode("dup", "Two", "Do 2"),
+            ))
+        with self.assertRaises(ValueError):
+            validate_dag((WorkflowNode("a", "A", "Do A", dependencies=("missing",)),))
+        with self.assertRaises(ValueError):
+            validate_dag((WorkflowNode("a", "A", "Do A", dependencies=("a",)),))
+
+    async def test_consensus_fails_when_quorum_cannot_be_reached(self):
+        nodes = expand_execution_mode(
+            ExecutionMode.CONSENSUS,
+            [("a", "A", "Vote A"), ("b", "B", "Vote B"), ("c", "C", "Vote C")],
+        )
+        definition = WorkflowDefinition(
+            "wf-consensus-fail", "qudron", "idem-consensus-fail",
+            ExecutionMode.CONSENSUS, nodes, max_parallel=3,
+        )
+
+        async def executor(row):
+            if row["node_id"] in {"a", "b"}:
+                return NodeExecutionResult("failed", "vote failed")
+            return NodeExecutionResult("succeeded", "ok")
+
+        result = await self.orchestrator.run(definition, executor)
+        self.assertEqual(result["status"], "failed")
+
+    async def test_persist_output_false_skips_persisting_output(self):
+        node = WorkflowNode("no-persist", "No Persist", "Run only", persist_output=False)
+        definition = WorkflowDefinition(
+            "wf-no-persist", "qudron", "idem-no-persist", ExecutionMode.SEQUENTIAL, (node,)
+        )
+
+        async def executor(_row):
+            return NodeExecutionResult("succeeded", "ephemeral secret summary")
+
+        result = await self.orchestrator.run(definition, executor)
+        self.assertEqual(result["status"], "succeeded")
+        row = self.store.snapshot("wf-no-persist")["nodes"][0]
+        self.assertIsNone(row["output_json"])
+
 
 if __name__ == "__main__":
     unittest.main()

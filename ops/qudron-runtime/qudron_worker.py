@@ -453,6 +453,8 @@ def claim_job() -> sqlite3.Row | None:
 
 
 def mcp_get_job(job_id: str) -> dict[str, Any] | None:
+    if not job_id or not str(job_id).strip():
+        return None
     with connect_db() as db:
         row = db.execute(
             """SELECT id,title,status,attempts,run_after,error,result_path,updated_at
@@ -469,6 +471,8 @@ def mcp_get_job(job_id: str) -> dict[str, Any] | None:
 
 
 def mcp_get_job_result(job_id: str) -> str | None:
+    if not job_id or not str(job_id).strip():
+        return None
     with connect_db() as db:
         row = db.execute(
             "SELECT status,result_path FROM jobs WHERE id=?", (job_id,)

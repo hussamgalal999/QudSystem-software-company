@@ -192,6 +192,9 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
                   max_agents: int | None = None, max_context_chars: int = 12000,
                   max_parallel_reviews: int = 8) -> str:
     """Run the complete configured team with resource-bounded parallel reviews."""
+    if max_parallel_reviews < 1:
+        raise ValueError("max_parallel_reviews must be >= 1")
+    safe_memory = redact_sensitive_text(memory_context) if memory_context else ""
     plan = build_swarm_plan(str(task.get("task_type", "research")), registry, max_agents)
     producer = next((agent for agent in plan if agent["execution_stage"] == "produce"), None)
     reviewers = [agent for agent in plan if agent["execution_stage"] == "review"]
@@ -204,7 +207,7 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
         "Produce the requested deliverable. Be specific, useful, and honest. "
         "Separate verified facts from assumptions and unknowns. Do not claim external actions."
     )
-    draft_output = call_agent(producer, produce_instruction, memory_context)
+    draft_output = call_agent(producer, produce_instruction, safe_memory)
     if not isinstance(draft_output, str) or not draft_output.strip():
         raise RuntimeError(f"Agent returned empty output: {producer['id']}")
     draft_output = draft_output.strip()[-max_context_chars:]
@@ -219,7 +222,7 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
             "of facts unsupported by the source."
         )
         review_context = (
-            memory_context[-3000:] + "\n\nDRAFT TO REVIEW:\n" + draft_output
+            safe_memory[-3000:] + "\n\nDRAFT TO REVIEW:\n" + draft_output
         )[-max_context_chars:]
         worker_count = max(1, min(len(reviewers), max_parallel_reviews))
         results: dict[str, str] = {}
@@ -257,7 +260,7 @@ def execute_swarm(task: dict[str, Any], call_agent: Callable[[dict[str, Any], st
             for agent, note in review_outputs
         ]
         final_context = (
-            "RELEVANT MEMORY:\n" + memory_context[-1500:]
+            "RELEVANT MEMORY:\n" + safe_memory[-1500:]
             + "\n\nINITIAL DRAFT:\n" + draft_output[-2500:]
             + "\n\nINDEPENDENT REVIEW NOTES:\n"
             + ("\n\n".join(review_sections) if review_sections else "[no separate review stage]")

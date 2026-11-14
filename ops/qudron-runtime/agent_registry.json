@@ -288,6 +288,42 @@
       "name": "Agent Memory & Continuity Librarian",
       "profile": "reasoning",
       "responsibilities": "Maintain project and role-specific memory, task history, stage checkpoints, resume instructions and durable cross-session state while minimizing sensitive data."
+    },
+    {
+      "id": "frontier_agentic_developer",
+      "name": "Frontier Agentic Systems Developer",
+      "profile": "reasoning",
+      "responsibilities": "Architect and implement OpenAI/Anthropic research-lab grade autonomous coding and reasoning agents: tool-use loops, deterministic harnesses, self-healing workflows, bounded context management, and verifiable patches."
+    },
+    {
+      "id": "universal_service_integrator",
+      "name": "Universal Service & Protocol Connector",
+      "profile": "reasoning",
+      "responsibilities": "Safely connect Qudron to any external or local service, API, MCP server, CLI, browser CDP, or OS/device control surface with strict schema validation, idempotency, and least-privilege auth."
+    },
+    {
+      "id": "tool_execution_reviewer",
+      "name": "Ultra-Precision Tool & System Control Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Audit every tool contract, parameter schema, sandbox boundary, dry-run/rollback path, and external side effect before allowing any service or system control action."
+    },
+    {
+      "id": "agentic_code_reviewer",
+      "name": "Frontier Agentic Code & Architecture Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Perform adversarial lab-grade review of agent orchestration, state machines, concurrency, race conditions, token/memory budgets, and edge-case invariants."
+    },
+    {
+      "id": "adversarial_eval_reviewer",
+      "name": "Verification & Adversarial Evals Reviewer",
+      "profile": "reasoning",
+      "responsibilities": "Design deterministic benchmarks, regression tests, failure-injection checks, and strict claim-vs-evidence audits so zero unverified claims or silent fallbacks ship."
+    },
+    {
+      "id": "cross_service_security_reviewer",
+      "name": "Cross-Service Security & Policy Gatekeeper",
+      "profile": "reasoning",
+      "responsibilities": "Enforce credential isolation, permission boundaries, spend/rate caps, data-classification rules, and mandatory human-approval gates across all connected services."
     }
   ],
   "teams": {
@@ -470,6 +506,36 @@
       "continuity_librarian",
       "privacy_qa",
       "evidence_checker"
+    ],
+    "frontier_agentic_engineering": [
+      "frontier_agentic_developer",
+      "agentic_code_reviewer",
+      "adversarial_eval_reviewer",
+      "tool_execution_reviewer",
+      "cross_service_security_reviewer",
+      "reliability_engineer",
+      "evidence_checker"
+    ],
+    "universal_service_control": [
+      "universal_service_integrator",
+      "tool_execution_reviewer",
+      "cross_service_security_reviewer",
+      "agentic_code_reviewer",
+      "adversarial_eval_reviewer",
+      "reliability_engineer",
+      "privacy_qa"
+    ],
+    "ultra_precision_review_council": [
+      "operations_commander",
+      "agentic_code_reviewer",
+      "tool_execution_reviewer",
+      "adversarial_eval_reviewer",
+      "cross_service_security_reviewer",
+      "evidence_checker",
+      "fact_checker",
+      "privacy_qa",
+      "policy_checker",
+      "qa_engineer"
     ]
   }
 }

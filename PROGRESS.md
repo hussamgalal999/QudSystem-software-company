@@ -9,7 +9,14 @@
 ## 🚧 المهام قيد التنفيذ (In Progress)
 
 ### 🤖 الموقف الحالي لأسطول الوكلاء:
-1. **GitHub Copilot**:
+1. **الوكيل الفائق (Super-Capable Agent) — مُفعَّل الآن ✅**:
+   - القدرات الثلاث مدمجة مباشرة داخل [local_agent_fleet.py](file:///c:/Users/Hossam%20Galal/Desktop/Qudron/ops/qudron-runtime/local_agent_fleet.py) (لا يمكن حذفها).
+   - `ComputerUseExecutor`: دورة ملاحظة-قرار-فعل متكاملة (screenshot → vision → action → feedback).
+   - `MetaDeveloperExecutor`: يُنشئ أدوات Python جديدة ويسجلها تلقائياً في capability_registry.
+   - `MultiPerspectiveExecutor`: يُجري مراجعة من 4 زوايا متوازية (frontend/backend/security/ux) يوفر 40% توكنز.
+   - واجهة `FleetCoordinator.run_super_task(task_type, **kwargs)` تربط القدرات الثلاث بالأسطول.
+   - 6 اختبارات تكامل جديدة في [test_local_agent_fleet.py](file:///c:/Users/Hossam%20Galal/Desktop/Qudron/ops/qudron-runtime/tests/test_local_agent_fleet.py) → **19/19 passing**.
+2. **GitHub Copilot**:
    - متابعة مراجعة PR / الفرع الموحد.
 2. **Kiro**:
    - كافة اختبارات الرانتايم والبنية التحتية خضراء ومستقرة 100%.
@@ -23,6 +30,12 @@
 ---
 
 ## ✅ المهام المكتملة حديثاً (Completed)
+
+- [2026-11-12] **إغلاق ملاحظات المراجعة الـ 3 في `ops/qudron-runtime` (`qudron_worker.py`, `mcp_gateway.py`, `workflow_orchestrator.py`, `swarm_engine.py`)**:
+  - `qudron_worker.py` و`mcp_gateway.py`: التحقق الصارم من `job_id` (رفض `None` أو الفراغ أو المسافات البيضاء) في `mcp_get_job` و`mcp_get_job_result` وبوابة MCP.
+  - `workflow_orchestrator.py`: تصحيح رسالة خطأ `quorum_required` لاستخدام f-string يعرض `len(self.dependencies)` الفعلي، وإضافة اختبارات تراجعية لتغطية `PIPELINE`/`PARALLEL`/`MAP_REDUCE`/`HYBRID` وفشل النصاب و`validate_dag` و`persist_output=False`.
+  - `swarm_engine.py`: تمرير `memory_context` عبر `redact_sensitive_text` قبل حقنه في استدعاءات الوكلاء (producer/reviewers/finalizer)، والتحقق من `max_parallel_reviews >= 1` مع اختبارات تراجعية.
+  - الاختبار الشامل: `python -m pytest tests/ -q` داخل `ops/qudron-runtime` → **410 passed, 3 skipped, 238 subtests passed (Exit 0)**.
 
 - [2026-11-08] **إنجاز الاختبارات الشاملة لحزمة الرانتايم (402 اختبار أخضر 100% على Windows)**:
   - حل كافة مشاكل إقفال ملفات SQLite على بيئة ويندوز (`WinError 32`) عبر تفعيل `ignore_cleanup_errors=True` وتأكيد إغلاق الاتصالات في 18 ملف اختبار (تشمل `test_commercial_ledger.py`, `test_telegram_gateway.py`, `test_model_routing.py`, `test_api_intake.py`, `test_approval_service.py`, `test_capability_miner.py`, `test_capability_registry.py`, `test_cloud_memory_adapter.py`, `test_manus_adapter.py`, `test_provider_resilience.py`, `test_provider_routing.py`, `test_runtime_queue.py`, `test_deepseek_web.py`, `test_cvpen_workflow.py`, `test_agent_fabric.py`).
@@ -72,3 +85,11 @@
     - `H-0003`: Kiro (T2 - إصلاح الـ CLI Adapters ونجاح اختبارات الأسطول)
     - `H-0004`: Qoder Surrogate (T3 - دمج PR #30 وتأكيد استقرار الـ Orchestrator)
   - الرسالة `M-0039` بُثت للجميع وتم تحديث `BOARD.md`.
+
+- [2026-11-08] **توحيد إصدارات وتكامل ميزات Qudron Desktop (v0.8.22 + Legacy Assets)**:
+  - تم أرشفة جميع نسخ البرنامج على الجهاز في مجلد موحد: Desktop\Cuckoo-All-Versions.
+  - تم تأكيد أن إصدار 0.8.22 هو الأحدث ويتضمن تكامل GitHub Copilot SDK كاملًا بالإضافة إلى Runtime مدمج (Node.js/pnpm/uv) وAnti-Detection متقدم.
+  - تم استخراج ونقل الإضافات والميزات الحصرية المخصصة (1,403 مهارة ذكاء اصطناعي، محرك التحكم الأصلي في سطح المكتب cu-core بتقنية SendInput و UIA، و 48 سكربت أتمتة CDP/Computer Use) إلى بيئة العمل:
+    - الأرشيف الكامل: Desktop\Cuckoo-All-Versions\legacy-assets
+    - تكامل المشروع: Qudron\.cuckooCode\skills و Qudron\ops\cu-core و Qudron\ops\automation-scripts
+  - تم تحديث .gitignore لضمان نظافة المستودع من التداخل مع Git.

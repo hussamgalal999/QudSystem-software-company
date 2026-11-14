@@ -30,15 +30,15 @@ python "%C%" board
 ## 1. First contact (every agent, every session)
 
 ```powershell
-python $C board                      # 1. read the live board
-python $C register --agent copilot ` # 2. identity + branch + worktree + base SHA
+python $C board                             # 1. read the live board
+python $C register --agent github-copilot ` # 2. identity + branch + worktree + base SHA
   --display-name "GitHub Copilot" `
   --branch (git rev-parse --abbrev-ref HEAD) `
   --worktree (git rev-parse --show-toplevel) `
   --base-sha (git rev-parse HEAD)
-python $C plan ack --agent copilot --plan P-0001   # 3. ACK the plan you will work under
-python $C msg send --from copilot --to qoder --subject "identity + scope" --body "..."
-python $C msg inbox --agent copilot  # 4. read the ACK before touching anything
+python $C plan ack --agent github-copilot --plan P-0001   # 3. ACK the plan you will work under
+python $C msg send --from github-copilot --to qoder --subject "identity + scope" --body "..."
+python $C msg inbox --agent github-copilot  # 4. read the ACK before touching anything
 ```
 
 ## 2. Before every edit
@@ -47,21 +47,26 @@ The plan you gate against must declare the paths (`--scope`) and symbols (`--sym
 are about to touch — the gate refuses anything the plan does not cover:
 
 ```powershell
-python $C plan propose --agent copilot --title "my work" --summary "..." `
+python $C plan propose --agent github-copilot --title "my work" --summary "..." `
   --scope path/one.py path/two.py --symbols "Class.method"
-python $C reserve --agent copilot --plan P-0002 --files path/one.py path/two.py --symbols "Class.method"
-python $C gate --agent copilot --plan P-0002 --files path/one.py path/two.py --symbols "Class.method"
+python $C reserve --agent github-copilot --plan P-0002 --files path/one.py path/two.py --symbols "Class.method"
+python $C gate --agent github-copilot --plan P-0002 --files path/one.py path/two.py --symbols "Class.method"
 # ALLOW (exit 0) -> edit.  BLOCK (exit 3) -> resolve, do not edit.
 ```
 
 ## 3. While and after working
 
 ```powershell
-python $C status set --agent copilot --state in_progress --task-id T3 --note "editing parser"
-python $C handoff --agent copilot --task-id T3 --summary "what changed" --files path/one.py --tests "command + result"
-python $C release --agent copilot --reservation R-0002
+python $C status set --agent github-copilot --state in_progress --task-id T3 --note "editing parser"
+python $C handoff --agent github-copilot --task-id T3 --summary "what changed" --files path/one.py --tests "command + result"
+python $C release --agent github-copilot --reservation R-0002
 python $C board --write            # refresh board/BOARD.md
 python $C verify                   # exit 0 = chain intact
+```
+
+To verify whether your outbound plan or message has been acknowledged by a peer, inspect the board state:
+```powershell
+python coord.py --json board       # look under plan['acked_by'] or msg['acked_by']
 ```
 
 ## 4. Tests
@@ -89,17 +94,17 @@ Copy the whole block below into the Copilot chat, verbatim, before it edits any 
    - C:\Users\Hossam Galal\Desktop\Qudron\.agent-coordination\README.md
    - نفّذ: python "C:\Users\Hossam Galal\Desktop\Qudron\.agent-coordination\coord.py" board
 
-2) سجّل هويتك (agent_id = copilot) مع الفرع وworktree وbase SHA الفعلي لمساحة عملك:
-   python "...\.agent-coordination\coord.py" register --agent copilot ^
+2) سجّل هويتك (agent_id = github-copilot) مع الفرع وworktree وbase SHA الفعلي لمساحة عملك:
+   python "...\.agent-coordination\coord.py" register --agent github-copilot ^
      --display-name "GitHub Copilot" --role "<دورك في المهمة>" ^
      --branch "<git rev-parse --abbrev-ref HEAD>" ^
      --worktree "<git rev-parse --show-toplevel>" --base-sha "<git rev-parse HEAD>"
 
 3) أرسل تفاصيلك وخطتك إلى qoder واطلب ACK:
-   python "...\coord.py" msg send --from copilot --to qoder ^
+   python "...\coord.py" msg send --from github-copilot --to qoder ^
      --subject "identity + scope" --body "<المهمة، الملفات التي تنوي لمسها، الرموز>"
 
-4) انتظر ACK: نفّذ python "...\coord.py" msg inbox --agent copilot
+4) انتظر ACK: نفّذ python "...\coord.py" msg inbox --agent github-copilot
    لا تعدّل أي ملف قبل: (أ) وصول ACK على رسالتك، (ب) ACK خطة العمل (plan ack)،
    (ج) حجز ناجح للمسارات والرموز (reserve)، (د) خروج الأمر gate بحالة ALLOW / exit 0.
    ملاحظة: الخطة يجب أن تعلن المسارات عبر --scope والرموز عبر --symbols، وإلا رفض gate التعديل.

@@ -133,6 +133,25 @@ class MCPGatewayTests(unittest.TestCase):
         text = result["result"]["content"][0]["text"]
         self.assertNotIn("/secret/path", text)
 
+    def test_get_job_and_result_reject_empty_whitespace_and_none_job_id(self):
+        for tool_name in ("qudron_get_job", "qudron_get_job_result"):
+            for bad_id in (None, "", "        ", "short", "x" * 65):
+                with self.subTest(tool=tool_name, job_id=bad_id):
+                    result = self.handle({
+                        "jsonrpc": "2.0",
+                        "id": 99,
+                        "method": "tools/call",
+                        "params": {"name": tool_name, "arguments": {"job_id": bad_id}},
+                    })
+                    self.assertTrue(result["result"]["isError"])
+        self.assertEqual(self.calls, [])
+
+    def test_worker_mcp_get_job_and_result_reject_empty_job_id(self):
+        from qudron_worker import mcp_get_job, mcp_get_job_result
+        for bad_id in (None, "", "   "):
+            self.assertIsNone(mcp_get_job(bad_id))
+            self.assertIsNone(mcp_get_job_result(bad_id))
+
 
 if __name__ == "__main__":
     unittest.main()

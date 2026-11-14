@@ -199,6 +199,15 @@ Checks, in order:
 | `NOT_RESERVED` | block | no active reservation of yours covers this path or symbol |
 | `RESERVATION_EXPIRED` | block | your reservation lapsed; renew it |
 | `RESERVED_BY_PEER` | block | peer holds an overlapping path or symbol reservation |
+| `PEER_REQUIRED` | block | peer must be registered before operations can proceed |
+| `BOOTSTRAP_EXEMPTION_DENIED` | block | bootstrap exemption is denied or expired |
+| `SOLO_BOOTSTRAP_EXEMPTION` | warning | solo bootstrap exemption is active but strictly bounded |
+| `LOG_MISSING` | block | event log file is missing or uninitialized |
+| `BOARD_CORRUPT` | block | event log hash chain or anchor is corrupt |
+| `TASK_REFERENCE_AMBIGUOUS` | block | task reference matches multiple tasks across plans |
+| `PATH_INVALID_COMPONENT` | block | path contains invalid or unsafe components |
+| `PATH_ADS_FORBIDDEN` | block | NTFS Alternate Data Streams (colons in paths) are forbidden |
+| `PATH_DRIVE_RELATIVE` | block | drive-relative paths (e.g. C:foo) are forbidden |
 
 Paths **and** symbols are checked identically for reservation coverage, ownership,
 expiry and peer conflicts — a symbol-only edit cannot bypass the gate.

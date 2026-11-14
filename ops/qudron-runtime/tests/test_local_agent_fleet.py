@@ -24,6 +24,7 @@ if str(BASE_DIR) not in sys.path:
 from local_agent_fleet import (
     AgentRole,
     DurableTaskQueue,
+    FleetCoordinator,
     HostSemaphore,
     TaskCapsule,
     ZeroTokenContextBus,
@@ -247,6 +248,73 @@ class TestZeroTokenContextBus(unittest.TestCase):
         self.assertEqual(len(rules), 2)
         self.assertIn("rule: use HostSemaphore max=1", rules)
         self.assertIn("rule: single-writer per component", rules)
+
+
+class TestSuperAgentExecutors(unittest.TestCase):
+    """Integration tests for the three super-agent capabilities."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.db_path = Path(self.temp_dir.name)
+        self.fleet = FleetCoordinator()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_run_super_task_unknown_type(self):
+        result = self.fleet.run_super_task("unknown_type")
+        self.assertFalse(result.get("ok"))
+        self.assertIn("Unknown super task type", result.get("error", ""))
+
+    def test_run_super_task_meta_developer_missing_args(self):
+        result = self.fleet.run_super_task("meta_developer")
+        self.assertFalse(result.get("ok"))
+        self.assertIn("required", result.get("error", ""))
+
+    def test_run_super_task_meta_developer_no_api_call(self):
+        result = self.fleet.run_super_task(
+            "meta_developer",
+            capability_name="System Info Tool",
+            requirements="A tool to get CPU and RAM usage using psutil",
+        )
+        self.assertIn("ok", result)
+        if result.get("ok"):
+            self.assertIn("tool_path", result)
+            self.assertIn("capability_id", result)
+            self.assertTrue(result["capability_id"].startswith("meta:"))
+
+    def test_run_super_task_computer_use_returns_structure(self):
+        result = self.fleet.run_super_task(
+            "computer_use",
+            goal="Take a screenshot and analyze it",
+            max_steps=1,
+        )
+        self.assertIn("ok", result)
+        self.assertIn("steps_executed", result)
+        self.assertIn("last_result", result)
+
+    def test_run_super_task_multi_perspective_requires_capsule(self):
+        result = self.fleet.run_super_task("multi_perspective")
+        self.assertFalse(result.get("ok"))
+        self.assertIn("capsule", result.get("error", "").lower())
+
+    def test_run_super_task_multi_perspective_with_capsule(self):
+        capsule = TaskCapsule(
+            task_id="multi-test-1",
+            task_type="review",
+            owner=AgentRole.COPILOT,
+            reviewer=None,
+            target_files=["ops/qudron-runtime/local_agent_fleet.py"],
+            target_symbols=["FleetCoordinator"],
+            diff_summary="Review the FleetCoordinator class for security issues",
+            learned_rules=[],
+            priority=2,
+        )
+        result = self.fleet.run_super_task("multi_perspective", capsule=capsule, context=[])
+        self.assertIn("ok", result)
+        self.assertIn("perspectives", result)
+        self.assertIn("summary", result)
+        self.assertEqual(4, len(result["perspectives"]))
 
 
 if __name__ == "__main__":

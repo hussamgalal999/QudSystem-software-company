@@ -297,14 +297,14 @@ def handle_mcp_request(
             result = enqueue_batch(arguments)
         elif name == "qudron_get_job":
             job_id = arguments.get("job_id")
-            if not isinstance(job_id, str) or not 8 <= len(job_id) <= 64:
-                raise MCPGatewayError("job_id must be 8-64 characters")
-            result = get_job(job_id)
+            if not isinstance(job_id, str) or not job_id.strip() or not 8 <= len(job_id.strip()) <= 64:
+                raise MCPGatewayError("job_id must be 8-64 non-whitespace characters")
+            result = get_job(job_id.strip())
         elif name == "qudron_get_job_result":
             job_id = arguments.get("job_id")
-            if not isinstance(job_id, str) or not 8 <= len(job_id) <= 64:
-                raise MCPGatewayError("job_id must be 8-64 characters")
-            result = get_job_result(job_id)
+            if not isinstance(job_id, str) or not job_id.strip() or not 8 <= len(job_id.strip()) <= 64:
+                raise MCPGatewayError("job_id must be 8-64 non-whitespace characters")
+            result = get_job_result(job_id.strip())
         elif name == "qudron_get_status":
             result = get_status()
         elif name == "qudron_get_usage":

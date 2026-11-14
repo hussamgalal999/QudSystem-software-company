@@ -201,5 +201,55 @@ class SwarmEngineTests(unittest.TestCase):
         release_id = "release 1.2.3-4567890"
         self.assertEqual(redact_sensitive_text(release_id), release_id)
 
+    def test_ultra_precision_frontier_and_service_control_teams_load_and_plan(self):
+        registry = load_agent_registry("agent_registry.json")
+        expected_roles = {
+            "frontier_agentic_developer",
+            "universal_service_integrator",
+            "tool_execution_reviewer",
+            "agentic_code_reviewer",
+            "adversarial_eval_reviewer",
+            "cross_service_security_reviewer",
+        }
+        registered_ids = {agent["id"] for agent in registry["agents"]}
+        self.assertTrue(expected_roles.issubset(registered_ids))
+        for team_name in (
+            "frontier_agentic_engineering",
+            "universal_service_control",
+            "ultra_precision_review_council",
+        ):
+            with self.subTest(team=team_name):
+                self.assertIn(team_name, registry["teams"])
+                plan = build_swarm_plan(team_name, registry=registry)
+                self.assertEqual(len(plan), 10)
+                self.assertEqual(plan[0]["execution_stage"], "produce")
+                self.assertEqual(sum(a["execution_stage"] == "review" for a in plan), 8)
+                self.assertEqual(plan[-1]["execution_stage"], "finalize")
+
+    def test_execute_swarm_redacts_sensitive_memory_before_agent_calls(self):
+        seen_contexts = []
+        secret_memory = "User email secret@example.com phone 01012345678 api sk-abcdefghijklmnop"
+
+        def fake_call(_agent, _instruction, context):
+            seen_contexts.append(context)
+            return "safe output"
+
+        execute_swarm(
+            {"task_type": "research"},
+            fake_call,
+            memory_context=secret_memory,
+            max_agents=3,
+        )
+        self.assertEqual(len(seen_contexts), 3)
+        for ctx in seen_contexts:
+            self.assertNotIn("secret@example.com", ctx)
+            self.assertNotIn("01012345678", ctx)
+            self.assertNotIn("sk-abcdefghijklmnop", ctx)
+
+    def test_invalid_max_parallel_reviews_rejected(self):
+        with self.assertRaises(ValueError):
+            execute_swarm({"task_type": "research"}, lambda *_: "ok", max_parallel_reviews=0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -248,16 +248,20 @@ def norm_symbol(value):
 
 def symbols_conflict(first, second):
     """Symmetric overlap for symbols; see :func:`paths_conflict`."""
-    if first == second:
+    f = norm_symbol(first)
+    s = norm_symbol(second)
+    if f == s:
         return True
-    return first.startswith(second + ".") or second.startswith(first + ".")
+    return f.startswith(s + ".") or s.startswith(f + ".")
 
 
 def symbol_covers(holder, requested):
     """Directional containment: ``Order`` authorises ``Order.total``, not vice versa."""
-    if holder == requested:
+    h = norm_symbol(holder)
+    r = norm_symbol(requested)
+    if h == r:
         return True
-    return requested.startswith(holder + ".")
+    return r.startswith(h + ".")
 
 
 def split_values(values):

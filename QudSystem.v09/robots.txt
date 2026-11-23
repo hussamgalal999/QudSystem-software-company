@@ -13,3 +13,4 @@ Allow: /*
 User-agent: Mediapartners-Google*
 Disallow:
 Allow: /*
+Sitemap: https://qud-system-software-company-it-solutions-web-application.vercel.app/sitemap.xml

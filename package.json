@@ -1,0 +1,14 @@
+{
+  "name": "qudsystem-website",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests -v",
+    "test:browser": "node tests/browser.cjs",
+    "build": "python3 scripts/build_website.py"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "playwright": "1.65.1"
+  }
+}

@@ -1,0 +1,29 @@
+name: Website verification
+on:
+  pull_request:
+    paths: ['website/**', 'scripts/build_website.py', 'tests/**', 'package*.json', '.github/workflows/website-checks.yml']
+  push:
+    branches: [main]
+    paths: ['website/**', 'scripts/build_website.py', 'tests/**', 'package*.json', '.github/workflows/website-checks.yml']
+permissions:
+  contents: read
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 scripts/build_website.py --site-url https://preview.invalid --preview
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

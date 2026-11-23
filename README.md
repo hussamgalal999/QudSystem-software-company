@@ -1,49 +1,48 @@
-# QudSystem.Ltd | Software, AI & Cybersecurity Ecosystem
+# QudSystem website
 
-Welcome to the official repository of **QudSystem** (`QudSystem.Ltd`). We engineer autonomous AI systems, offensive/defensive cybersecurity platforms, scalable SaaS products, and smart hardware integrations designed to transform and secure modern enterprises.
+A responsive static website for QudSystem's software, AI and cybersecurity practice.
 
-🌐 **Live Web Application:** [QudSystem Portal](https://qud-system-software-company-it-solutions-web-application.vercel.app)
+## Working tree
 
-![QudSystem Preview](./assets/preview.png)
+- `website/`: modern website source. This is the only publishable directory after building.
+- `scripts/build_website.py`: dependency-free Python static build.
+- `tests/`: static regression tests and Chromium/axe browser checks.
+- `QudSystem.v09/`: original website kept unchanged for compatibility with the parallel `seo-standard` PR #42. It is not included in the new deployment output.
+- `ops/revenue-operations/`, `ops/growth-engine/`, `ops/cvpen-growth/`: historical business material retained pending owner review. These are not website assets and are never published by this build.
 
-## 🚀 Core Divisions & Flagship Products
+The Qudron runtime, Cloudflare worker, related workflows and OpenDots submodule have been removed from this website branch. Their history remains in Git. The separate QUDRON repository is not changed. GitHub access used to maintain this repository is independent of its contents; no agent, token or account-control endpoint is needed on a static website.
 
-### 1. Cybersecurity & Autonomous Security Agents
-* **Dragon R1:** Autonomous offensive penetration testing and ethical hacking multi-agent platform.
-* **Dragon B1:** Proactive defensive monitoring, threat detection, and incident response system.
-* **ProtectX & PenRate:** Enterprise vulnerability auditing and continuous security rating tools.
-* **Vision Guard Systems:** Smart surveillance and physical security infrastructure solutions.
+## Build and verify
 
-### 2. Artificial Intelligence & Developer Tooling
-* **QudMind 2.5 Labs & Agent3.5:** Autonomous multi-agent workflows and custom LLM orchestration.
-* **Mimo-cli-max:** Standalone intelligent command-line automation and developer productivity suite.
-* **CVPEN:** AI-powered resume engineering, ATS evaluation, and career optimization micro-SaaS.
-* **Kenzy AI:** Generative AI storytelling and voice-narrated visual media engine.
+Python 3.10+ is required. No production JavaScript packages are needed.
 
-### 3. Enterprise SaaS, EdTech & Digital Platforms
-* **QudSoft & Qud Project:** Custom multi-tenant SaaS architectures and enterprise resource systems.
-* **Qud School & Qudemy:** Next-generation interactive educational and technical training platforms.
-* **MyHowia:** Secure mobile digital identity and personal document wallet.
-* **BuildX:** AI-assisted architectural renovation and spatial planning platform.
-* **DMA & Social Media Forge:** Smart digital marketing automation, interactive invitations, and signage solutions.
-* **Volt Motors:** Smart electric mobility and hardware friction-booster engineering.
+```sh
+python3 -m unittest discover -s tests -v
+# Use the confirmed production HTTPS origin, not a placeholder:
+SITE_URL=https://your-confirmed-domain.example python3 scripts/build_website.py
+```
 
-## 🛠️ Technology Stack
+For a non-indexable local/staging preview:
 
-| Layer | Technologies |
-| :--- | :--- |
-| **AI & Agents** | LangGraph, CrewAI, Ollama, Python, Custom MCP Integrations |
-| **Frontend & Mobile** | Next.js, React, TypeScript, Tailwind CSS, Jetpack Compose, Flutter |
-| **Backend & Data** | Node.js, Python (FastAPI/Django), PostgreSQL, MongoDB, Prisma |
-| **DevOps & Infra** | Docker, Nix, GitHub Actions, Cloudflare Workers, Vercel, Linux |
-| **Cybersecurity** | Autonomous Recon Agents, Wireshark, Splunk, Cisco IDS, Custom Exploits |
+```sh
+python3 scripts/build_website.py --site-url https://preview.invalid --preview
+python3 -m http.server 8080 --directory dist
+```
 
-## 🤝 Connect With QudSystem
+Browser verification (Node 22+, development-only dependencies):
 
-* **Website:** [qud-system-software-company-it-solutions-web-application.vercel.app](https://qud-system-software-company-it-solutions-web-application.vercel.app)
-* **GitHub Organization:** [QudSystem](https://github.com/Qudsystem)
-* **Lead Architect:** [Hussam Galal](https://github.com/hussamgalal999)
+```sh
+npm ci
+npx playwright install chromium
+npm run test:browser
+```
 
-## 📄 License
+The browser test starts its own temporary localhost server. Screenshots go to `/tmp` unless `SCREENSHOT_DIR` is set. Seven viewport widths, WCAG A/AA automated scans, keyboard menu behavior, local response errors and no-JavaScript navigation are checked. Automated tests do not replace manual visual review or prove complete accessibility conformance.
 
-This repository and its contents are licensed under the [MIT License](./LICENSE.md).
+## Deploy safely
+
+Read [deployment notes](docs/DEPLOYMENT.md) and the [20-point verification checklist](docs/WEBSITE_REVIEW.md).
+
+Publish only the **contents of `dist/`**, never the repository root. Confirm the domain, existing website, backup and rollback before any replacement. This change does not deploy itself or activate billing. Canonical, sitemap, social-card and structured-data URLs are generated from the required `SITE_URL`.
+
+Search rankings and inclusion in AI answers cannot be guaranteed. `llms.txt` is a reading aid, not a ranking instruction or an access-control mechanism.

@@ -1,0 +1,13 @@
+# QudSystem
+
+> QudSystem (also written QUD System, QUD or Code System) is a software, AI and cybersecurity project ecosystem.
+
+## Canonical sources
+- [Official website]({{SITE_URL}}/): Expertise, project areas and approach.
+- [Privacy]({{SITE_URL}}/privacy.html): Website data-handling information.
+- [Source repository](https://github.com/hussamgalal999/QudSystem-software-company): Website source and documentation.
+
+## Scope and factual limits
+Focus areas are software engineering, applied AI and cybersecurity. Selected project areas include CVPEN, Qud School, Qudemy, QudSoft, Qud Project and Vision Guard Systems. Maturity and availability vary. A project mention is not evidence of production readiness, certification, customers or commercial availability.
+
+This file is a reading aid, not an indexing or ranking guarantee. Search-engine directives are in robots.txt.

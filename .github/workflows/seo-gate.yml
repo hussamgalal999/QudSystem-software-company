@@ -1,0 +1,17 @@
+name: SEO Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  static-seo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run static SEO gate
+        run: node scripts/seo-static-check.mjs --dir QudSystem.v09 --exclude hero-sections.html,header.html,product-single.html,demo/
